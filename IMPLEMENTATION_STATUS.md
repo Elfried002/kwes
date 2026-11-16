@@ -48,6 +48,13 @@ cd backend && python tests/e2e_check.py    → mission completed 100 %
 1. Aucun Supabase distant · 2. Aucun VPS/domaine · 3. Vercel non authentifié ·
 | Playwright installé et branché (rendu Chromium) · 5. worker in-process
 
+## Déploiement réel 16/11 07:05
+- **Supabase** : 6 migrations appliquées en production (`db push --remote --yes`), 13 tables créées, 3 skills + 3 versions seedés. Correctif 0004 rendu conditionnel (double définition de `priority` selon la version de 0001).
+- **Vercel** : frontend déployé → https://frontend-phi-pied-lzumzbngjw.vercel.app
+- **API** exposée temporairement en HTTPS sur `https://n8n.streetflexs.store/kwes-api/api/v1` (nginx → 127.0.0.1:8000), WebSocket compris. `DEV_ENDPOINTS=false` : plus aucune création de jeton anonyme.
+- **Bout en bout vérifié depuis l'extérieur** : app Vercel → API HTTPS → DeepSeek → réponse affichée. Message « Quel jour sommes-nous ? » → « lundi 16 novembre 2026 » après injection de la date serveur.
+- **Bug corrigé** : le modèle hallucinait la date (réponse « lundi 20 avril 2026 ») faute de contexte temporel → date UTC injectée dans le prompt système.
+
 ## Mise à jour 16/11 07:00 — Playwright et Supabase
 - Playwright 1.56 + Chromium headless installés, `app/skills/render.py` ajouté, `make_browser_fetcher` branché à la place de `make_fetcher`.
 - Preuve de rendu JS : page `quotes.toscrape.com/js` → **10 citations rendues** via Chromium contre **0** via httpx.

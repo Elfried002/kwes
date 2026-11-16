@@ -235,10 +235,15 @@ class Orchestrator:
     async def _direct_reply(
         self, message: str, history: Sequence[dict[str, str]], language: str | None
     ) -> str:
+        # Date/heure injectées côté serveur : le modèle n'a aucune notion du temps
+        # réel et hallucine sinon une date (constaté en production le 16/11).
+        now = datetime.now(timezone.utc)
         system = (
             "Tu es Kwes, un agent personnel autonome. Réponds de façon concise, "
             "utile et honnête. Tu ne prétends jamais avoir exécuté une action que "
-            "tu n'as pas exécutée. Si une mission est nécessaire, propose-la."
+            "tu n'as pas exécutée. Si une mission est nécessaire, propose-la. "
+            f"Date et heure actuelles (UTC) : {now.strftime('%Y-%m-%d %H:%M')}. "
+            "Ne devine jamais la date : utilise celle-ci."
         )
         if language:
             system += f" Langue de réponse : {language}."

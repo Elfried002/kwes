@@ -68,6 +68,12 @@ def app(settings: Settings, fake_fetcher):
 @pytest.fixture
 def client(app):
     with TestClient(app) as test_client:
+        # L'orchestrateur est construit au démarrage et capture son fetcher :
+        # sans ce rebranchement, les tests appelaient le vrai réseau (constaté
+        # le 16/11 — deux requêtes Wikipedia pendant une suite « hors ligne »).
+        orchestrator = app.state.orchestrator
+        orchestrator.fetcher = app.state.fetcher
+        orchestrator.tool_runner.fetcher = app.state.fetcher
         yield test_client
 
 

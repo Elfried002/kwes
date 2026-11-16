@@ -38,7 +38,7 @@ class ChatRequest(BaseModel):
     conversation_id: uuid.UUID | None = None
     message: str = Field(min_length=1, max_length=8000)
     language: str | None = Field(default=None, max_length=16)
-    mode: Literal["auto", "direct", "mission"] = "auto"
+    mode: Literal["auto", "direct", "outil", "mission"] = "auto"
 
 
 @router.post("/chat")

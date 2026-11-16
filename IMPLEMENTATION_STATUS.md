@@ -61,3 +61,40 @@ cd backend && python tests/e2e_check.py    → mission completed 100 %
 - Garde-fous vérifiés : `127.0.0.1` refusé (port), `169.254.169.254` refusé (metadata), domaine hors allowlist refusé.
 - Suite complète : 116 tests passent après intégration. Mission réelle rejouée : `completed 100 %` avec log `render ok ... ms=2597`.
 - Supabase : projet `kwes` (ref `yhgbvyibsvsjpxsnjdzn`, eu-west-2, PG 17.11) lié. 6 migrations prêtes, `db push --dry-run` OK — **poussée en production en attente d'accord explicite**.
+
+
+## Mise à jour 16/11 20:45 — capacité agentique (déployée)
+
+**Ce qui change pour l'utilisateur** : Kwes agit dans la conversation au lieu de répondre
+« je ne peux pas ». Il cherche sur le web, lit une page, retient un fait durable et rédige un
+document téléchargeable depuis la réponse.
+
+| Brique | Statut | Preuve |
+|---|---|---|
+| Boucle d'outils conversationnelle (2 tours max, 3 appels/tour) | TESTED + PROD | LLM réel : `remember` ×2 en un tour, via HTTPS public |
+| Classification d'intention à 3 voies (direct / outil / mission) | TESTED | `Intention` + repli heuristique ; `mode:"outil"` forcé pour les tests |
+| Policy engine par appel d'outil + audit `chat.tool.call` | TESTED | `test_tools.py` : refus hors périmètre, décision `allow` journalisée |
+| Skill `remember` (mémoire persistante, dédoublonnage) | TESTED + PROD | ligne créée en PostgreSQL réel, puis réinjectée dans le prompt |
+| Skill `document_write` + table `documents` + API privée | TESTED + PROD | note de 909 car. téléchargée depuis Chrome (Playwright) |
+| Pastille « ouvrir le document » dans la conversation | TESTED + PROD | capture `.review/chat-document-1440x900.png`, téléchargement réel |
+| PWA installée → connexion directe | TESTED + PROD | mode standalone émulé : écran de connexion, pas la page publique |
+
+**Correctifs d'intégration trouvés par l'exécution réelle**
+1. `memories.source_id` déclaré `String` alors que la colonne est `uuid` → première écriture mémoire en échec (`DatatypeMismatch`). Modèle corrigé.
+2. Contraintes `memories` (category/sensitivity) incompatibles avec le vocabulaire de l'API → migration `0009`.
+3. `skill_offline_mode` déclaré mais jamais appliqué : la suite de tests émettait de vraies requêtes HTTP (2 requêtes Wikipédia observées). Fetcher hors ligne ajouté + rebranchement du fetcher factice dans les tests.
+4. `Content-Disposition` absent des en-têtes CORS exposés → le navigateur nommait le fichier `document.txt`.
+5. `backend/.env` pointait la base sur `127.0.0.1:5432` alors que le service tourne sur le réseau Docker (`172.18.0.2`) : un redémarrage à l'aveugle aurait cassé l'API.
+
+**Preuves du jour** : 153 tests backend · 134 tests frontend · `tsc` exit 0 · build Vite OK ·
+bundle de production vérifié (`turn__document`, `standalone`) · appels réels sur
+`https://n8n.streetflexs.store/kwes-api/api/v1` avec la session Supabase de démonstration.
+
+**Limites assumées**
+- `web_research` dépend de DuckDuckGo (Instant Answer) et de Wikipédia : sur une requête
+  d'actualité ou commerciale, il peut renvoyer 0 source. Un vrai moteur de recherche demande
+  une clé payante (décision d'Elfried).
+- Les domaines hors allowlist sont refusés par la politique (ex. `payoneer.com`) : c'est le
+  comportement voulu, annoncé au modèle, qui le dit à l'utilisateur.
+- Aucun envoi d'e-mail, aucune action R2 depuis la conversation (approbation requise).
+- Upload de fichiers par l'utilisateur non branché (le bouton « Joindre » existe côté UI).

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { downloadDocument, errorMessage } from '../lib/api';
 import { formatTime } from '../lib/format';
 import { isRecord, type Message } from '../lib/types';
 import { Icon } from './Icon';
@@ -12,6 +14,29 @@ interface MessageBubbleProps {
 interface SourceItem {
   title: string;
   url?: string;
+}
+
+interface DocumentItem {
+  id: string;
+  label: string;
+}
+
+/** Documents produits pendant ce tour (outil `document_write` exécuté). */
+function readDocuments(metadata: Record<string, unknown> | null | undefined): DocumentItem[] {
+  if (!metadata) return [];
+  const tools = metadata.tools;
+  if (!Array.isArray(tools)) return [];
+  return tools
+    .map((tool): DocumentItem | null => {
+      if (!isRecord(tool)) return null;
+      if (tool.name !== 'document_write' || tool.status !== 'executed') return null;
+      if (tool.reference_type !== 'document' || typeof tool.reference !== 'string') return null;
+      return {
+        id: tool.reference,
+        label: typeof tool.label === 'string' && tool.label ? tool.label : 'Ouvrir le document',
+      };
+    })
+    .filter((item): item is DocumentItem => item !== null);
 }
 
 function readSources(metadata: Record<string, unknown> | null | undefined): SourceItem[] {
@@ -39,7 +64,28 @@ function readSources(metadata: Record<string, unknown> | null | undefined): Sour
  */
 export function MessageBubble({ message, onCopy, onRetry, streaming = false }: MessageBubbleProps) {
   const sources = readSources(message.metadata ?? null);
+  const documents = readDocuments(message.metadata ?? null);
   const isAssistant = message.role === 'assistant';
+  const [busyDocument, setBusyDocument] = useState<string | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+
+  async function openDocument(id: string): Promise<void> {
+    setBusyDocument(id);
+    setDocumentError(null);
+    try {
+      const file = await downloadDocument(id);
+      const url = URL.createObjectURL(file.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (error) {
+      setDocumentError(errorMessage(error));
+    } finally {
+      setBusyDocument(null);
+    }
+  }
 
   return (
     <article
@@ -63,6 +109,28 @@ export function MessageBubble({ message, onCopy, onRetry, streaming = false }: M
               <span key={source.title}>{source.title}</span>
             ),
           )}
+        </p>
+      ) : null}
+
+      {documents.length > 0 ? (
+        <p className="turn__documents">
+          {documents.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="turn__document"
+              onClick={() => void openDocument(item.id)}
+              disabled={busyDocument === item.id}
+            >
+              <Icon name="file" size={14} />
+              {busyDocument === item.id ? 'Ouverture…' : item.label}
+            </button>
+          ))}
+        </p>
+      ) : null}
+      {documentError ? (
+        <p className="turn__document-error" role="alert">
+          {documentError}
         </p>
       ) : null}
 

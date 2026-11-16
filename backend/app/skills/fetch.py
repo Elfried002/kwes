@@ -300,6 +300,14 @@ async def safe_fetch(
 
 
 def make_fetcher(allowlist: list[str], settings: Any) -> Any:
+    if getattr(settings, "skill_offline_mode", False):
+        # Mode hors ligne (tests / CI) : aucune sortie réseau possible, même par
+        # accident. Un test qui a besoin de contenu fournit un fetcher factice.
+        async def _offline(url: str) -> FetchedPage:
+            raise SkillError("Accès réseau désactivé en mode hors ligne.")
+
+        return _offline
+
     async def _fetch(url: str) -> FetchedPage:
         return await safe_fetch(
             url,

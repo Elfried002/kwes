@@ -129,6 +129,14 @@ def make_browser_fetcher(allowlist: list[str], settings: Any) -> Any:
     timeout = min(20.0, float(getattr(settings, "skill_default_timeout_seconds", 20.0)))
     mode = str(getattr(settings, "browser_render", "auto"))
 
+    if getattr(settings, "skill_offline_mode", False):
+        from app.skills.base import SkillError
+
+        async def _offline(url: str) -> FetchedPage:
+            raise SkillError("Accès réseau désactivé en mode hors ligne.")
+
+        return _offline
+
     async def _fetch(url: str) -> FetchedPage:
         if mode != "httpx" and render_available():
             try:

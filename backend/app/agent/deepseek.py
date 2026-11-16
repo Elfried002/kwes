@@ -442,6 +442,7 @@ class DeepSeekClient:
 
 
 def _classify(text: str) -> str:
+    """Repli heuristique (LLM indisponible) : mission > outil > direct."""
     lowered = text.lower()
     mission_markers = (
         "mission", "prépare", "prepare", "recherche", "étude", "etude", "analyse",
@@ -450,6 +451,14 @@ def _classify(text: str) -> str:
     )
     if any(marker in lowered for marker in mission_markers) and len(text.strip()) > 12:
         return "mission"
+    tool_markers = (
+        "cherche", "trouve", "actualité", "actualités", "nouvelle", "prix",
+        "combien coûte", "note que", "retiens", "souviens", "rédige", "redige",
+        "écris", "ecris", "document", "vérifie", "verifie", "météo", "meteo",
+        "lis cette page", "http://", "https://",
+    )
+    if any(marker in lowered for marker in tool_markers):
+        return "outil"
     return "direct"
 
 
@@ -466,9 +475,17 @@ class IntentClassifier:
                     {
                         "role": "system",
                         "content": (
-                            "Tu classes une demande en 'direct' (réponse conversationnelle) "
-                            "ou 'mission' (travail multi-étapes avec livrable). "
-                            'Réponds uniquement en JSON: {"intent":"direct|mission"}.'
+                            "Tu classes une demande en trois catégories :\n"
+                            "- 'direct' : conversation, explication, avis, reformulation. "
+                            "Aucune donnée à chercher, aucune action à exécuter.\n"
+                            "- 'outil' : la réponse exige un outil tout de suite : recherche "
+                            "web, actualité, prix, comparaison de sources, lecture d'une page "
+                            "précise, mémorisation d'un fait durable sur la personne, production "
+                            "d'un document (note, lettre, plan, compte rendu).\n"
+                            "- 'mission' : travail multi-étapes suivi, avec livrable et "
+                            "avancement (veille récurrente, analyse longue, plusieurs actions "
+                            "enchaînées).\n"
+                            'Réponds uniquement en JSON: {"intent":"direct|outil|mission"}.'
                         ),
                     },
                     {"role": "user", "content": message},
@@ -479,7 +496,7 @@ class IntentClassifier:
                 timeout=10.0,
             )
             intent = str(result.json().get("intent", "")).strip().lower()
-            if intent in ("direct", "mission"):
+            if intent in ("direct", "outil", "mission"):
                 return intent
         except LLMError as exc:
             logger.warning("Classification LLM indisponible (%s), repli heuristique.", exc.code)

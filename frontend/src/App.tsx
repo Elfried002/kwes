@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useAuthReady, usePasswordRecovery, useSession } from './lib/auth';
 import { useDocumentTitle } from './lib/hooks';
-import { useRoute, type Route } from './lib/router';
+import { useRoute, guestScreen, isInstalledApp, type Route } from './lib/router';
 import { KwesProvider } from './state/KwesProvider';
 import { AppShell } from './components/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -54,6 +54,8 @@ function RoutedApp() {
   const ready = useAuthReady();
   const recovery = usePasswordRecovery();
   const route = useRoute();
+  // Application installée : la page publique a déjà été vue, on entre par la connexion.
+  const installed = isInstalledApp();
   useDocumentTitle(
     !ready
       ? 'Chargement'
@@ -61,7 +63,7 @@ function RoutedApp() {
         ? 'Nouveau mot de passe'
         : session
           ? titleFor(route)
-          : route.name === 'auth'
+          : guestScreen(route, installed) === 'login'
             ? 'Connexion'
             : null,
   );
@@ -72,9 +74,11 @@ function RoutedApp() {
 
   if (!session) {
     if (recovery) return <PasswordRecoveryScreen />;
-    if (route.name === 'auth') return <LoginScreen key={route.mode} initialMode={route.mode} />;
-    // Accès direct au mode vocal : on demande la connexion, puis on entre dans la voix.
-    if (route.name === 'voice') return <LoginScreen initialMode="signin" />;
+    if (guestScreen(route, installed) === 'login') {
+      const mode = route.name === 'auth' ? route.mode : 'signin';
+      // Accès direct au mode vocal, ou app installée : on demande la connexion.
+      return <LoginScreen key={route.name === 'auth' ? route.mode : 'installed'} initialMode={mode} />;
+    }
     return <PublicHome />;
   }
 

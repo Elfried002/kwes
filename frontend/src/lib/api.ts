@@ -197,6 +197,37 @@ export function getHealth(signal?: AbortSignal): Promise<Health> {
 
 /* ---------- Conversations ---------- */
 
+export interface DownloadedFile {
+  blob: Blob;
+  filename: string;
+}
+
+/**
+ * Télécharge un document produit par Kwes. Le fichier est privé : la requête
+ * porte le jeton de session, un simple lien ne suffirait pas.
+ */
+export async function downloadDocument(id: string): Promise<DownloadedFile> {
+  const token = getToken();
+  if (!token) {
+    throw new ApiError({
+      message: 'Vous devez être connecté pour ouvrir ce document.',
+      code: 'UNAUTHENTICATED',
+      status: 401,
+    });
+  }
+  const response = await fetch(`${API_BASE_URL}/documents/${id}/download`, {
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: 'omit',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw normalizeError(await parseBody(response), response.status);
+  }
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  return { blob: await response.blob(), filename: match?.[1] ?? 'document.txt' };
+}
+
 export function listConversations(signal?: AbortSignal): Promise<Conversation[]> {
   return request<unknown>('/conversations', { signal }).then((payload) =>
     asArray<Conversation>(payload, 'conversations'),

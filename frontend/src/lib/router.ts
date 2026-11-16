@@ -103,6 +103,46 @@ export function navigateToPath(path: string, options: { replace?: boolean } = {}
   }
 }
 
+/** Requête d'affichage : l'app tourne depuis l'icône installée, hors navigateur. */
+export const STANDALONE_QUERY = '(display-mode: standalone)';
+
+type DisplayScope = {
+  matchMedia?: (query: string) => { matches: boolean };
+  navigator?: { standalone?: boolean };
+};
+
+/**
+ * L'app est-elle ouverte en mode installé (PWA) ?
+ *
+ * Chromium / Android / Windows exposent `(display-mode: standalone)` ; iOS et
+ * iPadOS n'ont que `navigator.standalone`.
+ */
+export function isInstalledApp(scope?: DisplayScope): boolean {
+  const target =
+    scope ?? (typeof window !== 'undefined' ? (window as unknown as DisplayScope) : undefined);
+  if (!target) return false;
+  if (target.navigator?.standalone === true) return true;
+  try {
+    return target.matchMedia?.(STANDALONE_QUERY)?.matches === true;
+  } catch {
+    return false;
+  }
+}
+
+export type GuestScreen = 'login' | 'public';
+
+/**
+ * Écran d'entrée d'une visite sans session.
+ *
+ * Installée, l'app ouvre sur la connexion : la page publique a déjà été vue,
+ * c'est même pour cela que l'utilisateur a installé. Sur le web ouvert, la page
+ * publique reste la porte d'entrée (marketing, référencement).
+ */
+export function guestScreen(route: Route, installed: boolean): GuestScreen {
+  if (route.name === 'auth' || route.name === 'voice') return 'login';
+  return installed ? 'login' : 'public';
+}
+
 function subscribe(onChange: () => void): () => void {
   window.addEventListener('hashchange', onChange);
   return () => window.removeEventListener('hashchange', onChange);

@@ -24,6 +24,7 @@ from app.api import (
     conversations,
     dev,
     devices,
+    documents,
     health,
     memory,
     notifications,
@@ -170,7 +171,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Kwes-Mock", "X-Kwes-Mock-Providers", "X-Request-ID", "X-Total-Count"],
+        expose_headers=[
+            "X-Kwes-Mock",
+            "X-Kwes-Mock-Providers",
+            "X-Request-ID",
+            "X-Total-Count",
+            # Sans cela le navigateur masque le nom du fichier téléchargé.
+            "Content-Disposition",
+        ],
         max_age=600,
     )
 
@@ -187,6 +195,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks.router, prefix=prefix, dependencies=private_deps)
     app.include_router(skills.router, prefix=prefix, dependencies=private_deps)
     app.include_router(memory.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(documents.router, prefix=prefix, dependencies=private_deps)
     app.include_router(approvals.router, prefix=prefix, dependencies=private_deps)
     app.include_router(notifications.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice.router, prefix=prefix, dependencies=private_deps)

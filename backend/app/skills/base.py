@@ -34,6 +34,13 @@ class SkillContext:
     task_id: uuid.UUID | None = None
     step_id: uuid.UUID | None = None
     timeout_seconds: float = 60.0
+    # Accès base borné à l'utilisateur du contexte : seuls les skills qui
+    # déclarent `local.write` et écrivent sous `user_id` l'utilisent (mémoire,
+    # documents). Absent des contextes sans base (tests unitaires de skill).
+    # `session` est la transaction de l'appelant quand elle existe (chat) : la
+    # réutiliser évite une seconde transaction concurrente sur la même ligne.
+    session: Any | None = None
+    db: Any | None = None
     logger: logging.Logger = field(default_factory=lambda: logging.getLogger("kwes.skills"))
 
 

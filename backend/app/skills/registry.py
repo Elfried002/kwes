@@ -36,6 +36,8 @@ SKILL_PERMISSION_ALLOWLIST: dict[str, frozenset[str]] = {
     "web_research": frozenset({"web.search", "web.read"}),
     "business_planning": frozenset({"local.write"}),
     "browser_readonly": frozenset({"browser.read", "web.read"}),
+    "remember": frozenset({"local.write"}),
+    "document_write": frozenset({"local.write"}),
 }
 
 

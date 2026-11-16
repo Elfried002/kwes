@@ -34,9 +34,15 @@ def make_ctx(settings, fetcher, *, granted=None, timeout=5.0) -> SkillContext:
     )
 
 
-def test_registry_loads_three_skills(app) -> None:
+def test_registry_loads_expected_skills(app) -> None:
     registry: SkillRegistry = app.state.registry
-    assert registry.names == ["browser_readonly", "business_planning", "web_research"]
+    assert registry.names == [
+        "browser_readonly",
+        "business_planning",
+        "document_write",
+        "remember",
+        "web_research",
+    ]
     assert registry.load_errors == {}
     for manifest in registry.manifests():
         assert len(manifest["artifact_hash"]) == 64

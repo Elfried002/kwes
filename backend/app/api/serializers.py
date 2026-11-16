@@ -8,6 +8,7 @@ from app.core.utils import iso_utc
 from app.db.models import (
     Approval,
     Conversation,
+    Document,
     Message,
     Memory,
     Notification,
@@ -116,6 +117,23 @@ def skill_dict(row: Skill) -> dict[str, Any]:
     }
 
 
+def document_dict(row: Document, *, include_content: bool = False) -> dict[str, Any]:
+    data = {
+        "id": str(row.id),
+        "title": row.title,
+        "format": row.format,
+        "chars": row.chars,
+        "source": row.source,
+        "created_at": iso_utc(row.created_at),
+        "updated_at": iso_utc(row.updated_at),
+    }
+    if include_content:
+        data["content"] = row.content
+    else:
+        data["preview"] = " ".join((row.content or "").split())[:200]
+    return data
+
+
 def memory_dict(row: Memory) -> dict[str, Any]:
     return {
         "id": str(row.id),
@@ -123,7 +141,7 @@ def memory_dict(row: Memory) -> dict[str, Any]:
         "category": row.category,
         "content": row.content,
         "source_type": row.source_type,
-        "source_id": row.source_id,
+        "source_id": str(row.source_id) if row.source_id else None,
         "confidence": row.confidence,
         "sensitivity": row.sensitivity,
         "expires_at": iso_utc(row.expires_at),

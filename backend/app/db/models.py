@@ -215,7 +215,9 @@ class Memory(TimestampMixin, Base):
     category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     source_type: Mapped[str] = mapped_column(String(32), default="user", nullable=False)
-    source_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # La colonne est `uuid` en base (migration 0001) : la déclarer en String
+    # provoquait un DatatypeMismatch PostgreSQL à la première écriture réelle.
+    source_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.8, nullable=False)
     sensitivity: Mapped[str] = mapped_column(String(24), default="normal", nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -339,6 +341,27 @@ class DeviceCommand(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class Document(TimestampMixin, Base):
+    """Document produit par l'agent (ou déposé par l'utilisateur), texte intégral.
+
+    Stockage en base plutôt que sur disque : une seule source de vérité, la
+    suppression du profil efface le document, et aucune donnée privée ne traîne
+    dans un répertoire partagé.
+    """
+
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    format: Mapped[str] = mapped_column(String(16), nullable=False, default="markdown")
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    chars: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source: Mapped[str] = mapped_column(String(24), nullable=False, default="agent")
+
+
 ALL_MODELS = [
     Profile,
     Conversation,
@@ -355,4 +378,5 @@ ALL_MODELS = [
     Notification,
     DeviceConnector,
     DeviceCommand,
+    Document,
 ]

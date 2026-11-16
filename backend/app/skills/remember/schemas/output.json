@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "remember.output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["created", "updated"] },
+    "memory_id": { "type": "string" },
+    "category": { "type": "string" },
+    "sensitivity": { "type": "string" },
+    "chars": { "type": "integer" }
+  },
+  "required": ["status", "memory_id", "category", "sensitivity", "chars"]
+}

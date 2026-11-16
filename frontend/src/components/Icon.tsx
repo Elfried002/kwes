@@ -36,6 +36,7 @@ export type IconName =
   | 'share'
   | 'edit'
   | 'more'
+  | 'file'
   | 'waveform';
 
 const PATHS: Record<IconName, ReactNode> = {
@@ -150,6 +151,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <path d="M4 20h4.2L19 9.2a2.1 2.1 0 0 0-3-3L5.2 17z" />
       <path d="m14.5 7.7 2.8 2.8" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M6.5 3.5h7l4.5 4.5v12.5h-11.5z" />
+      <path d="M13.5 3.5v4.5H18" />
     </>
   ),
   more: (

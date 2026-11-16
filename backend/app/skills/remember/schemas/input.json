@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "remember.input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fact": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 2000,
+      "description": "Le fait à retenir, formulé à la troisième personne (ex. « Préfère être appelé Elfried, pas Elfried Yobouet. »)."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["working", "episodic", "semantic", "procedural"],
+      "description": "semantic = fait stable sur la personne ; episodic = événement daté ; working = contexte en cours ; procedural = façon de travailler."
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": ["normal", "personal", "sensitive"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": ["fact"]
+}

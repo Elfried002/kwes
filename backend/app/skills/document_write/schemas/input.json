@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "document_write.input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "description": "Titre lisible du document, sans date technique ni identifiant."
+    },
+    "content": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200000,
+      "description": "Contenu complet du document, rédigé pour être lu tel quel."
+    },
+    "format": {
+      "type": "string",
+      "enum": ["markdown", "text"]
+    }
+  },
+  "required": ["title", "content"]
+}

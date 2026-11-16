@@ -57,6 +57,10 @@ SKILL_POLICIES: dict[str, SkillPolicy] = {
     "web_research": SkillPolicy("R0", frozenset({"web.search", "web.read"}), network=True),
     "business_planning": SkillPolicy("R1", frozenset({"local.write"}), network=False),
     "browser_readonly": SkillPolicy("R0", frozenset({"browser.read", "web.read"}), network=True),
+    # Capacités conversationnelles : écriture locale réversible, jamais d'action
+    # externe. Le policy engine les autorise sans approbation, comme toute R1.
+    "remember": SkillPolicy("R1", frozenset({"local.write"}), network=False),
+    "document_write": SkillPolicy("R1", frozenset({"local.write"}), network=False),
 }
 
 ACTION_POLICIES: dict[str, ActionPolicy] = {

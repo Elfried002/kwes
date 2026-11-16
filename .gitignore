@@ -43,3 +43,6 @@ pnpm-debug.log*
 .supabase_service_key
 .last_supabase_token
 .frontend/.env.production
+# sessions et jetons de test (contiennent des jetons Supabase réels)
+.sb_session.json
+.sb_bearer

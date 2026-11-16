@@ -63,12 +63,6 @@ class Settings(BaseSettings):
     deepseek_max_retries: int = 2
     deepseek_temperature: float = 0.2
 
-    elevenlabs_api_key: str = ""
-    elevenlabs_voice_id: str = ""
-    elevenlabs_base_url: str = "https://api.elevenlabs.io"
-    elevenlabs_model_id: str = "eleven_multilingual_v2"
-    elevenlabs_timeout_seconds: float = 20.0
-
     # --- API -------------------------------------------------------------
     cors_origins: str = DEFAULT_CORS_ORIGINS
     max_request_body_bytes: int = 1_500_000
@@ -105,6 +99,17 @@ class Settings(BaseSettings):
     ws_heartbeat_seconds: float = 30.0
     ws_require_origin: bool = False  # True en prod : Origin obligatoire
 
+    # --- Voix : Gemini Live ----------------------------------------------
+    # La clé n'est jamais en clair dans .env : GOOGLE_API_KEY_ENC est déchiffrée
+    # à la demande par app.core.secrets (fichier local 600).
+    google_api_key: str = ""
+    google_live_model: str = "gemini-3.8-live"
+    google_voice: str = "Charon"
+    google_live_max_session_seconds: int = 900      # fermeture dure d'une session vocale
+    google_live_idle_seconds: int = 45              # inactivité avant fermeture
+    google_live_daily_budget_eur: float = 3.0       # estimation, jamais une facture
+    google_live_reconnect_attempts: int = 2
+
     # --- Skills -----------------------------------------------------------
     browser_allowlist: str = DEFAULT_BROWSER_ALLOWLIST
     web_extra_allowlist: str = ""
@@ -123,6 +128,28 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip().lower()
         return value
+
+    @property
+    def gemini_api_key(self) -> str:
+        """Clé Google en clair, uniquement en mémoire process.
+
+        En environnement `test`, aucune résolution de fichier : la suite ne doit
+        jamais appeler un fournisseur payant (constaté le 16/11 — la synthèse
+        partait réellement vers Google pendant les tests).
+        """
+        explicit = (self.google_api_key or "").strip()
+        if explicit:
+            return explicit
+        if self.app_env == "test":
+            return ""
+        from app.core.secrets import resolve_secret
+
+        return resolve_secret("GOOGLE_API_KEY")
+
+    @property
+    def voice_backend(self) -> str:
+        """Fournisseur vocal actif, sans ambiguïté : gemini ou dégradé."""
+        return "gemini" if self.gemini_api_key else "indisponible"
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -150,14 +177,15 @@ class Settings(BaseSettings):
 
     @property
     def voice_is_mock(self) -> bool:
-        return not bool(self.elevenlabs_api_key.strip())
+        """La voix est indisponible tant qu'aucune clé Google n'est résolue."""
+        return not bool(self.gemini_api_key)
 
     def mock_providers(self) -> list[str]:
         providers: list[str] = []
         if self.llm_is_mock:
             providers.append("deepseek")
         if self.voice_is_mock:
-            providers.append("elevenlabs")
+            providers.append("gemini")
         return providers
 
 

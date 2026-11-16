@@ -9,7 +9,7 @@
  *
  * La parole vient de `use-kwes-speech` : même moteur que l'écran vocal (file
  * séquentielle, une seule voix à la fois, repli voix de l'appareil quand
- * ElevenLabs ne renvoie pas d'audio). Interruption : bouton « Arrêter », appui
+ * le service vocal ne renvoie pas d'audio). Interruption : bouton « Arrêter », appui
  * sur le personnage, ou prise de parole au micro — la lecture est coupée net,
  * jamais reprise.
  */

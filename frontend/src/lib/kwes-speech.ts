@@ -59,7 +59,7 @@ export function estimateSpeechMs(text: string): number {
  * Cadence visuelle de la bouche quand la voix de l'appareil parle.
  *
  * `speechSynthesis` ne donne pas accès à son signal : impossible de mesurer
- * une amplitude réelle comme pour l'audio ElevenLabs. Cette oscillation ne
+ * une amplitude réelle comme pour l'audio du service vocal. Cette oscillation ne
  * prétend pas décrire le son — elle anime la bouche pendant que le moteur
  * *parle réellement* (fait vérifié par `speechSynthesis.speaking`), et
  * s'arrête avec lui. Aucun contenu n'est inventé.

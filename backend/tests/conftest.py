@@ -44,7 +44,6 @@ def settings(tmp_path: Path) -> Settings:
         rate_limit_enabled=False,
         log_level="CRITICAL",
         deepseek_api_key="",
-        elevenlabs_api_key="",
         skill_offline_mode=True,
         ws_heartbeat_seconds=30,
         max_task_steps=6,

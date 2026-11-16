@@ -4,6 +4,7 @@ import {
   errorMessage,
   isApiError,
   listIntegrations,
+  getVoiceConfig,
   listVoices,
   synthesizeSpeech,
   type VoiceOption,
@@ -81,6 +82,7 @@ export function SettingsScreen() {
 
   const integrations = useApi((signal) => listIntegrations(signal), []);
   const voices = useApi((signal) => listVoices(signal), []);
+  const runtime = useApi((signal) => getVoiceConfig(signal), []);
 
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewingId, setPreviewingId] = useState<string | null>(null);
@@ -272,18 +274,13 @@ export function SettingsScreen() {
             </dd>
             <dt>Langue</dt>
             <dd>
-              <label className="sr-only" htmlFor="settings-language">
-                Langue de l’interface et des messages
-              </label>
-              <select
-                id="settings-language"
-                className="select"
-                value={prefs.language}
-                onChange={(event) => setPreference('language', event.target.value === 'en' ? 'en' : 'fr')}
-              >
-                <option value="fr">Français</option>
-                <option value="en">English</option>
-              </select>
+              <span>
+                {(runtime.data?.languages ?? []).find((item) => item.code === prefs.language)?.label ??
+                  'Français'}
+              </span>
+              <span className="muted-line" style={{ display: 'block', fontSize: '0.75rem' }}>
+                Se règle dans « Langues de la voix », plus bas.
+              </span>
             </dd>
           </dl>
           <p className="meta" style={{ marginTop: 10 }}>
@@ -416,7 +413,7 @@ export function SettingsScreen() {
 
               <p className="meta" style={{ marginTop: 10 }}>
                 {selectedVoice
-                  ? `${selectedVoice.name} — ${voiceSummary(selectedVoice) || 'voix ElevenLabs'}.`
+                  ? `${selectedVoice.name} — ${voiceSummary(selectedVoice) || 'voix par défaut'}.`
                   : 'Voix par défaut du service vocal.'}
               </p>
 
@@ -433,6 +430,51 @@ export function SettingsScreen() {
                 </p>
               ) : null}
             </>
+          )}
+        </section>
+
+        <section className="card card--pad" aria-labelledby="languages-title">
+          <div className="panel-title">
+            <h2 id="languages-title">Langues de la voix</h2>
+            {runtime.data ? <span className="badge">{runtime.data.languages.length}</span> : null}
+          </div>
+
+          <p className="notice notice--info">
+            <Icon name="alert" size={16} />
+            <span>
+              « Support validé » signifie qu’une phrase de référence a été prononcée, relue par le
+              modèle et validée par un locuteur natif. « Expérimental » signifie que le moteur produit
+              et comprend quelque chose, sans que la qualité soit établie.
+            </span>
+          </p>
+
+          {runtime.loading && !runtime.data ? (
+            <p className="muted-line">Chargement des langues…</p>
+          ) : (
+            <ul className="language-list">
+              {(runtime.data?.languages ?? []).map((language) => (
+                <li key={language.code} className="language-row">
+                  <div className="language-row__text">
+                    <strong>
+                      {language.label} <span className="language-row__code">{language.code}</span>
+                    </strong>
+                    <span className={`language-status language-status--${language.status}`}>
+                      {language.status_label}
+                    </span>
+                    <span className="language-row__evidence">{language.evidence}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    aria-pressed={prefs.language === language.code}
+                    disabled={language.status === 'unavailable'}
+                    onClick={() => setPreference('language', language.code)}
+                  >
+                    {prefs.language === language.code ? 'Choisie' : 'Utiliser'}
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 

@@ -31,6 +31,7 @@ from app.api import (
     skills,
     tasks,
     voice,
+    voice_live,
 )
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
@@ -203,6 +204,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(approvals.router, prefix=prefix, dependencies=private_deps)
     app.include_router(notifications.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(voice_live.router, prefix=prefix)
     app.include_router(devices.router, prefix=prefix)
     if settings.app_env in ("dev", "test") and settings.dev_endpoints:
         app.include_router(dev.router, prefix=prefix)

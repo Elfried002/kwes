@@ -1,0 +1,13 @@
+{
+ "le": "2026-11-16T21:19:21",
+ "checks": {
+  "Clé reçue": "oui (non affichée, non journalisée)",
+  "Liste des modèles": "ok",
+  "Jeton Live éphémère": "ok",
+  "Modèle vocal": "gemini-3.8-live"
+ },
+ "env_path": "/home/babayaga/business/kwes/backend/.env",
+ "mode": "0600",
+ "encrypted": true,
+ "model": "gemini-3.8-live"
+}

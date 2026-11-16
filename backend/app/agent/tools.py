@@ -299,6 +299,29 @@ class ChatToolRunner:
             answer = TOOL_USAGE_ANSWER_FALLBACK
         return ToolRun(answer=answer, invocations=invocations, rounds=rounds)
 
+    async def execute_named(
+        self, db: Any, user_id: uuid.UUID, name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Exécute un outil hors conversation écrite (voix), même policy, même audit.
+
+        Ouvre sa propre transaction : une session vocale vit plus longtemps que
+        la requête HTTP qui l'a créée.
+        """
+        async with db.session() as session:
+            invocation = await self._execute(
+                session, user_id, {"id": "", "name": name, "arguments": arguments or {}}
+            )
+            await session.commit()
+        payload: dict[str, Any] = {
+            "status": invocation.status,
+            "summary": invocation.summary,
+            "output": invocation.output,
+        }
+        reference = invocation.as_dict().get("reference")
+        if reference:
+            payload["reference"] = reference
+        return payload
+
     async def _execute(
         self, session: AsyncSession, user_id: uuid.UUID, call: dict[str, Any]
     ) -> ToolInvocation:

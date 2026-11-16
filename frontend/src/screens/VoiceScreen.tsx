@@ -1,21 +1,19 @@
 /**
  * Écran vocal plein écran : noir, un seul dot vivant, chrome minimal.
  *
- * Rien n'est simulé ici : le dot lit la phase réelle de `useVoiceConversation`
- * (machine à états `voice-session`), qui elle-même ne change que sur des faits
- * observables (micro démarré, flux SSE ouvert, audio réellement en lecture).
- * L'écran ne fait que brancher l'interface sur ce moteur :
+ * Rien n'est simulé ici : le dot lit la phase réelle de `useGeminiLive`, qui ne
+ * change que sur des faits observables (micro ouvert, audio réellement reçu du
+ * flux Gemini, interruption signalée par le serveur).
  *   - appui sur le dot = démarrer l'écoute ;
- *   - la réponse part en synthèse dès la première phrase (moteur) ;
- *   - parler pendant la réponse interrompt (barge-in, moteur) ;
- *   - après la réponse, retour automatique en écoute (mode continu, moteur) ;
+ *   - Gemini répond en audio natif, sans étape de synthèse séparée ;
+ *   - parler pendant la réponse interrompt (barge-in côté modèle) ;
+ *   - après la réponse, retour automatique en écoute ;
  *   - bouton fermer = retour à l'accueil.
  */
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { href, navigate, type Route } from '../lib/router';
-import { usePreferences } from '../lib/prefs';
-import { useVoiceConversation } from '../lib/use-voice-conversation';
+import { useGeminiLive } from '../lib/use-gemini-live';
 import { useAudioLevel } from '../lib/use-audio-level';
 import { stripMarkdownForSpeech, voiceAnnouncement } from '../lib/voice-session';
 import { Icon, type IconName } from '../components/Icon';
@@ -50,7 +48,6 @@ function captionFromAnswer(answer: string): string {
 }
 
 export function VoiceScreen() {
-  const prefs = usePreferences();
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [captionVisible, setCaptionVisible] = useState(false);
@@ -60,14 +57,12 @@ export function VoiceScreen() {
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  const voice = useVoiceConversation({
-    language: prefs.language,
-    voiceId: prefs.voiceId,
-    onUserMessage: () => undefined,
-    onAssistantMessage: () => undefined,
-  });
+  const voice = useGeminiLive();
 
-  const { levelRef, pulse, prime } = useAudioLevel(voice.phase === 'speaking');
+  // `pulse` anime le dot sur la parole reconnue ; le niveau réel vient de
+  // l'analyseur branché sur la sortie audio de Gemini (aucun élément <audio>).
+  const { pulse, prime } = useAudioLevel(voice.phase === 'speaking');
+  const levelRef = voice.levelRef;
 
   const dotPhase: DotPhase = voice.error ? 'error' : voice.phase;
   const captionText = voice.error ?? (voice.pending || captionFromAnswer(voice.answer));

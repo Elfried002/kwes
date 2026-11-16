@@ -5,10 +5,11 @@ import { useSyncExternalStore } from 'react';
 const KEY = 'kwes.prefs.v1';
 
 export interface Preferences {
-  language: 'fr' | 'en';
+  /** Code de langue vocale (fr, en, sw, yo, ha, wo, tw, bci, dyu, bet, nouchi). */
+  language: string;
   voiceEnabled: boolean;
   notificationsEnabled: boolean;
-  /** Voix ElevenLabs choisie (`null` = voix par défaut du serveur). */
+  /** Voix Gemini choisie (`null` = voix par défaut du serveur). */
   voiceId: string | null;
 }
 
@@ -27,7 +28,10 @@ function read(): Preferences {
     if (typeof parsed !== 'object' || parsed === null) return DEFAULTS;
     const candidate = parsed as Partial<Preferences>;
     return {
-      language: candidate.language === 'en' ? 'en' : 'fr',
+      language:
+        typeof candidate.language === 'string' && candidate.language.trim()
+          ? candidate.language.trim().slice(0, 16)
+          : DEFAULTS.language,
       voiceEnabled: typeof candidate.voiceEnabled === 'boolean' ? candidate.voiceEnabled : DEFAULTS.voiceEnabled,
       notificationsEnabled:
         typeof candidate.notificationsEnabled === 'boolean'

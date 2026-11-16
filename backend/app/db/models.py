@@ -362,6 +362,32 @@ class Document(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(24), nullable=False, default="agent")
 
 
+class VoiceSession(Base):
+    """Une session vocale Gemini : durée réelle, volume audio, coût estimé.
+
+    Les montants sont des estimations calculées aux tarifs publiés au moment de
+    la mesure (voir `app/voice_cost.py`) ; ce n'est jamais une facture.
+    """
+
+    __tablename__ = "voice_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    model: Mapped[str] = mapped_column(String(48), nullable=False)
+    voice: Mapped[str] = mapped_column(String(32), nullable=False)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    audio_in_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    audio_out_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    turns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    close_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
 ALL_MODELS = [
     Profile,
     Conversation,
@@ -379,4 +405,5 @@ ALL_MODELS = [
     DeviceConnector,
     DeviceCommand,
     Document,
+    VoiceSession,
 ]

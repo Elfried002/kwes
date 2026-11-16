@@ -197,6 +197,59 @@ export function getHealth(signal?: AbortSignal): Promise<Health> {
 
 /* ---------- Conversations ---------- */
 
+export interface VoiceTicket {
+  ticket: string;
+  expires_in: number;
+}
+
+/** Ticket à usage unique pour ouvrir la WebSocket vocale (aucun jeton dans l'URL). */
+export function createVoiceTicket(language?: string | null): Promise<VoiceTicket> {
+  return request<VoiceTicket>('/voice/ticket', {
+    method: 'POST',
+    body: language ? { language } : {},
+  });
+}
+
+/** URL de la WebSocket vocale, construite sur la même base que l'API. */
+export function buildVoiceUrl(ticket: string): string {
+  const base = new URL(API_BASE_URL);
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  base.pathname = `${base.pathname.replace(/\/+$/, '')}/voice/live`;
+  base.search = '';
+  base.searchParams.set('ticket', ticket);
+  return base.toString();
+}
+
+export interface VoiceLanguage {
+  code: string;
+  label: string;
+  family: string;
+  status: 'validated' | 'experimental' | 'unavailable';
+  status_label: string;
+  asr: boolean;
+  tts: boolean;
+  phrase: string | null;
+  evidence: string;
+  native_review: boolean;
+}
+
+export interface VoiceRuntimeConfig {
+  provider: string;
+  model: string;
+  voice: string;
+  available: boolean;
+  input_rate: number;
+  output_rate: number;
+  max_session_seconds: number;
+  idle_seconds: number;
+  daily_budget_eur: number;
+  languages: VoiceLanguage[];
+}
+
+export function getVoiceConfig(signal?: AbortSignal): Promise<VoiceRuntimeConfig> {
+  return request<VoiceRuntimeConfig>('/voice/config', { signal });
+}
+
 export interface DownloadedFile {
   blob: Blob;
   filename: string;
@@ -443,7 +496,7 @@ export interface SynthesizedSpeech {
   mock: boolean;
 }
 
-/** POST /voice/synthesize — audio base64 ElevenLabs, repli texte explicite. */
+/** POST /voice/synthesize — audio base64 Gemini, repli texte explicite. */
 export async function synthesizeSpeech(
   text: string,
   signal?: AbortSignal,

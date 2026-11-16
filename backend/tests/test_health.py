@@ -31,7 +31,7 @@ def test_mock_headers_present_without_api_keys(client: TestClient) -> None:
     response = client.get("/api/v1/health")
     assert response.headers.get("X-Kwes-Mock") == "1"
     providers = response.headers.get("X-Kwes-Mock-Providers", "")
-    assert "deepseek" in providers and "elevenlabs" in providers
+    assert "deepseek" in providers and "gemini" in providers
 
 
 def test_request_id_header_present(client: TestClient) -> None:

@@ -287,7 +287,7 @@ export function orbStateFor(phase: VoicePhase): 'idle' | 'listening' | 'thinking
 
 /**
  * Nettoie le markdown avant synthèse : le modèle répond en markdown et
- * ElevenLabs lirait « astérisque astérisque ». On garde le texte, pas la mise en forme.
+ * le moteur vocal lirait « astérisque astérisque ». On garde le texte, pas la mise en forme.
  */
 export function stripMarkdownForSpeech(text: string): string {
   return (text ?? '')

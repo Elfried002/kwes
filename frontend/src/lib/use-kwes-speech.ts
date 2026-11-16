@@ -5,7 +5,7 @@
  * Il possède la file de synthèse et la lecture, et rien d'autre :
  *   - chaque phrase complète part en synthèse dès sa réception (`enqueue`) ;
  *   - la file est séquentielle : jamais deux voix superposées ;
- *   - si ElevenLabs ne renvoie pas d'audio (`audioBase64` vide : quota épuisé,
+ *   - si le service vocal ne renvoie pas d'audio (`audioBase64` vide : quota épuisé,
  *     panne, coupure), la phrase est prononcée par la voix de l'appareil
  *     (`speechSynthesis`, fr-FR) — la conversation reste possible ;
  *   - `stop()` coupe net : génération invalidée, file vidée, élément audio
@@ -187,7 +187,7 @@ export function useKwesSpeech(options: SpeechEngineOptions): SpeechEngine {
     [],
   );
 
-  /** Audio ElevenLabs : une seule lecture à la fois, progression réelle. */
+  /** Audio du service vocal : une seule lecture à la fois, progression réelle. */
   const playAudio = useCallback(
     (speech: SynthesizedSpeech, text: string, epochOfTurn: number): Promise<void> =>
       new Promise<void>((resolve) => {

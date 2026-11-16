@@ -1,26 +1,46 @@
-"""VoiceProvider : ElevenLabs + repli texte explicite (ADR-002).
+"""Synthèse vocale Gemini (hors conversation temps réel).
 
-Aucune clé en dur. Si ELEVENLABS_API_KEY est absente : mode MOCK (pas d'audio,
-repli texte, log WARNING, en-tête X-Kwes-Mock: 1). Si l'API échoue : repli
-texte sans perdre la conversation ni prétendre qu'un audio a été produit.
+Deux usages dans Kwes :
+- la conversation vocale passe par l'API Live (`app/agent/gemini_live.py`) ;
+- l'accueil et la prévisualisation des réglages demandent la synthèse ponctuelle
+  d'un texte : c'est ce module (`gemini-3.8-flash-tts`).
+
+Aucune clé en dur : la clé Google est résolue par `app/core/secrets.py`, qui la
+déchiffre depuis `.env` (`GOOGLE_API_KEY_ENC`) au démarrage du processus.
 """
 
 from __future__ import annotations
 
+import asyncio
+import io
 import logging
-import time
-from dataclasses import dataclass, field, replace
+import wave
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-import httpx
+from google import genai
+from google.genai import types
 
 from app.core.config import Settings
 
 logger = logging.getLogger("kwes.voice")
 
-# Choix de la voix : le catalogue change rarement, une requête toutes les
-# cinq minutes suffit et évite de marteler l'API à chaque ouverture des réglages.
-VOICES_CACHE_TTL_SECONDS = 300.0
+TTS_MODEL = "gemini-3.8-flash-tts"
+SAMPLE_RATE = 24000
+MAX_TTS_CHARS = 1800
+
+# Catalogue figé (aucun appel réseau pour l'afficher). Le choix final se fait à
+# l'oreille : les libellés décrivent un timbre, pas une garantie de genre.
+VOICE_CATALOGUE: tuple[tuple[str, str, str], ...] = (
+    ("Charon", "Grave, posée", "Timbre profond, débit calme — choix par défaut de Kwes."),
+    ("Orus", "Ferme, nette", "Articulation marquée, ton professionnel."),
+    ("Fenrir", "Vive, engagée", "Plus énergique, à réserver aux échanges courts."),
+    ("Enceladus", "Soufflée, douce", "Timbre plus léger, moins affirmé."),
+    ("Iapetus", "Claire, neutre", "Proche d'une lecture d'information."),
+    ("Algenib", "Rauque", "Grain marqué, moins institutionnel."),
+    ("Puck", "Jeune, légère", "Débit rapide, peu adapté à un ton posé."),
+    ("Kore", "Claire, posée", "Voix alternative pour comparer."),
+)
 
 
 @dataclass
@@ -28,7 +48,7 @@ class VoiceResult:
     text: str
     audio: bytes | None = None
     mime_type: str | None = None
-    provider: str = "elevenlabs"
+    provider: str = "gemini"
     mock: bool = False
     fallback: bool = True
     reason: str | None = None
@@ -37,8 +57,6 @@ class VoiceResult:
 
 @dataclass(frozen=True)
 class VoiceOption:
-    """Une voix proposable à l'utilisateur (aucune clé fournisseur dedans)."""
-
     id: str
     name: str
     gender: str | None = None
@@ -73,194 +91,114 @@ class VoiceProvider(Protocol):
     async def list_voices(self, *, force: bool = False) -> VoicesResult: ...
 
 
-def _text(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    cleaned = value.strip()
-    return cleaned or None
+def catalogue() -> list[VoiceOption]:
+    return [
+        VoiceOption(id=name, name=name, description=f"{label} — {detail}", language="fr, en")
+        for name, label, detail in VOICE_CATALOGUE
+    ]
 
 
-def _parse_voice(raw: dict[str, Any]) -> VoiceOption | None:
-    """Normalise une voix ElevenLabs ; ignore une entrée sans identifiant."""
-    voice_id = _text(raw.get("voice_id"))
-    if not voice_id:
-        return None
-    raw_labels = raw.get("labels")
-    labels: dict[str, Any] = raw_labels if isinstance(raw_labels, dict) else {}
-    raw_name = _text(raw.get("name")) or voice_id
-    # ElevenLabs concatène le descriptif au nom : « George - Warm, Captivating ».
-    head, separator, tail = raw_name.partition(" - ")
-    name = head.strip() or raw_name
-    descriptor = tail.strip() if separator else None
-    description = _text(labels.get("descriptive")) or descriptor or _text(raw.get("description"))
-
-    language = _text(labels.get("language"))
-    if not language:
-        verified = raw.get("verified_languages")
-        if isinstance(verified, list):
-            for item in verified:
-                if isinstance(item, dict) and _text(item.get("language")):
-                    language = _text(item.get("language"))
-                    break
-
-    return VoiceOption(
-        id=voice_id,
-        name=name,
-        gender=_text(labels.get("gender")),
-        language=language,
-        accent=_text(labels.get("accent")),
-        description=description[:200] if description else None,
-        preview_url=_text(raw.get("preview_url")),
-    )
+def pcm_to_wav(pcm: bytes, rate: int = SAMPLE_RATE) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(pcm)
+    return buffer.getvalue()
 
 
-class ElevenLabsVoiceProvider:
-    def __init__(
-        self,
-        settings: Settings,
-        *,
-        transport: httpx.AsyncBaseTransport | None = None,
-        voices_ttl_seconds: float = VOICES_CACHE_TTL_SECONDS,
-    ) -> None:
+class GeminiVoiceProvider:
+    def __init__(self, settings: Settings, *, client: Any | None = None) -> None:
         self.settings = settings
-        self._transport = transport
-        self._voices_ttl_seconds = voices_ttl_seconds
-        self._voices_cache: tuple[float, VoicesResult] | None = None
-        if settings.voice_is_mock:
-            logger.warning(
-                "ELEVENLABS_API_KEY absente : VoiceProvider en mode MOCK "
-                "(aucun audio généré, repli texte, X-Kwes-Mock: 1)."
-            )
+        self._client = client
+        if not settings.gemini_api_key:
+            logger.warning("Clé Google absente : synthèse vocale indisponible (repli texte).")
 
     @property
     def mock(self) -> bool:
-        return self.settings.voice_is_mock
+        return not bool(self.settings.gemini_api_key)
+
+    def _client_or_raise(self) -> Any:
+        if self._client is not None:
+            return self._client
+        return genai.Client(
+            api_key=self.settings.gemini_api_key,
+            http_options={"api_version": "v1beta"},
+        )
 
     async def synthesize(self, text: str, *, voice_id: str | None = None) -> VoiceResult:
         cleaned = (text or "").strip()
         if not cleaned:
             return VoiceResult(text="", fallback=True, reason="Texte vide.", mock=self.mock)
 
-        resolved_voice = voice_id or self.settings.elevenlabs_voice_id
+        known = {item[0] for item in VOICE_CATALOGUE}
+        voice = (voice_id or self.settings.google_voice or "Charon").strip()
+        if voice not in known:
+            voice = self.settings.google_voice or "Charon"
+
         if self.mock:
             return VoiceResult(
                 text=cleaned,
-                audio=None,
                 mock=True,
                 fallback=True,
-                reason="ElevenLabs non configuré : réponse en texte uniquement.",
-                voice_id=None,
-            )
-        if not resolved_voice:
-            return VoiceResult(
-                text=cleaned,
-                audio=None,
-                mock=False,
-                fallback=True,
-                reason="Aucune voix ElevenLabs configurée (ELEVENLABS_VOICE_ID absente).",
+                reason="Service vocal non configuré : réponse en texte uniquement.",
             )
 
-        url = f"{self.settings.elevenlabs_base_url.rstrip('/')}/v1/text-to-speech/{resolved_voice}"
-        params = {"output_format": "mp3_44100_128"}
-        headers = {
-            "xi-api-key": self.settings.elevenlabs_api_key,
-            "Accept": "audio/mpeg",
-            "Content-Type": "application/json",
-        }
-        body = {
-            "text": cleaned[:4500],
-            "model_id": self.settings.elevenlabs_model_id,
-        }
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(self.settings.elevenlabs_timeout_seconds),
-                transport=self._transport,
-            ) as client:
-                response = await client.post(url, json=body, params=params, headers=headers)
-        except httpx.HTTPError as exc:
-            logger.warning("ElevenLabs indisponible (%s) : repli texte.", type(exc).__name__)
+            client = self._client_or_raise()
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=TTS_MODEL,
+                contents=cleaned[:MAX_TTS_CHARS],
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+                        )
+                    ),
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Synthèse Gemini indisponible (%s).", type(exc).__name__)
             return VoiceResult(
                 text=cleaned,
                 fallback=True,
                 reason="Service vocal indisponible : réponse en texte.",
-                voice_id=resolved_voice,
+                voice_id=voice,
             )
 
-        if response.status_code >= 400 or not response.content:
-            logger.warning("ElevenLabs status=%s : repli texte.", response.status_code)
+        audio = b""
+        for candidate in getattr(response, "candidates", None) or []:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    audio += inline.data
+        if not audio:
             return VoiceResult(
                 text=cleaned,
                 fallback=True,
-                reason="Service vocal indisponible : réponse en texte.",
-                voice_id=resolved_voice,
+                reason="Le service vocal n'a renvoyé aucun audio.",
+                voice_id=voice,
             )
 
         return VoiceResult(
             text=cleaned,
-            audio=response.content,
-            mime_type=response.headers.get("content-type", "audio/mpeg"),
+            audio=pcm_to_wav(audio),
+            mime_type="audio/wav",
             fallback=False,
-            voice_id=resolved_voice,
+            voice_id=voice,
         )
 
     async def list_voices(self, *, force: bool = False) -> VoicesResult:
-        """Catalogue des voix du compte, avec cache court.
-
-        Jamais d'exception et jamais de clé dans la réponse : en cas d'échec on
-        rend ce qu'on a (cache éventuel) et une raison lisible. L'appelant ne
-        peut donc pas confondre « aucune voix » et « panne du fournisseur ».
-        """
-        if self.mock:
-            return VoicesResult(
-                mock=True,
-                reason="ElevenLabs non configuré : aucune voix n'est disponible.",
-            )
-
-        cached = self._voices_cache
-        if not force and cached and (time.monotonic() - cached[0]) < self._voices_ttl_seconds:
-            return replace(cached[1], cached=True)
-
-        url = f"{self.settings.elevenlabs_base_url.rstrip('/')}/v1/voices"
-        headers = {"xi-api-key": self.settings.elevenlabs_api_key, "Accept": "application/json"}
-        failure = "Catalogue des voix indisponible pour le moment."
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(min(self.settings.elevenlabs_timeout_seconds, 10.0)),
-                transport=self._transport,
-            ) as client:
-                response = await client.get(url, headers=headers)
-        except httpx.HTTPError as exc:
-            logger.warning("ElevenLabs /v1/voices indisponible (%s).", type(exc).__name__)
-            if cached:
-                return replace(cached[1], cached=True, reason=failure)
-            return VoicesResult(reason=failure)
-
-        if response.status_code >= 400:
-            logger.warning("ElevenLabs /v1/voices status=%s.", response.status_code)
-            if cached:
-                return replace(cached[1], cached=True, reason=failure)
-            return VoicesResult(reason=failure)
-
-        try:
-            payload = response.json()
-        except ValueError:
-            logger.warning("ElevenLabs /v1/voices : réponse illisible.")
-            return VoicesResult(reason=failure)
-
-        raw_voices = payload.get("voices") if isinstance(payload, dict) else None
-        voices: list[VoiceOption] = []
-        if isinstance(raw_voices, list):
-            for item in raw_voices:
-                if not isinstance(item, dict):
-                    continue
-                parsed = _parse_voice(item)
-                if parsed is not None:
-                    voices.append(parsed)
-
-        result = VoicesResult(voices=voices, reason=None if voices else "Aucune voix dans ce compte.")
-        self._voices_cache = (time.monotonic(), result)
-        return result
+        return VoicesResult(
+            voices=catalogue(),
+            mock=self.mock,
+            reason="Service vocal non configuré." if self.mock else None,
+        )
 
 
 def build_voice_provider(settings: Settings) -> VoiceProvider:
-    return ElevenLabsVoiceProvider(settings)
+    return GeminiVoiceProvider(settings)

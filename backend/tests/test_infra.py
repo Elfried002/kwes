@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.agent.deepseek import DeepSeekClient, MOCK_MARKER
-from app.agent.voice import ElevenLabsVoiceProvider
+from app.agent.voice import GeminiVoiceProvider
 from app.core.config import Settings
 from app.core.utils import utcnow
 from app.db.base import Database
@@ -37,9 +37,10 @@ def test_all_tables_exist_with_expected_names() -> None:
         "device_connectors",
         "device_commands",
         "documents",
+        "voice_sessions",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 16  # 13 métier + device_connectors + device_commands + documents
+    assert len(ALL_MODELS) == 17  # 13 métier + device + documents + voice_sessions
 
 
 def test_task_columns_match_data_model() -> None:
@@ -151,7 +152,7 @@ async def test_deepseek_timeout_normalised(settings: Settings) -> None:
 
 
 async def test_voice_mock_falls_back_to_text(settings: Settings) -> None:
-    provider = ElevenLabsVoiceProvider(settings)
+    provider = GeminiVoiceProvider(settings)
     result = await provider.synthesize("Bonjour")
     assert result.mock is True
     assert result.audio is None
@@ -206,7 +207,7 @@ def test_mock_header_absent_when_keys_configured(settings: Settings, fake_fetche
     from app.main import create_app
 
     configured = settings.model_copy(
-        update={"deepseek_api_key": "configured", "elevenlabs_api_key": "configured"}
+        update={"deepseek_api_key": "configured", "google_api_key": "configured"}
     )
     application = create_app(configured)
     application.state.fetcher = fake_fetcher

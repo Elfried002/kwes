@@ -98,3 +98,29 @@ bundle de production vérifié (`turn__document`, `standalone`) · appels réels
   comportement voulu, annoncé au modèle, qui le dit à l'utilisateur.
 - Aucun envoi d'e-mail, aucune action R2 depuis la conversation (approbation requise).
 - Upload de fichiers par l'utilisateur non branché (le bouton « Joindre » existe côté UI).
+
+
+## Mise à jour 16/11 22:05 — voix migrée de ElevenLabs vers Gemini Live
+
+**Décision** : `gemini-3.8-live` porte la conversation vocale (audio bidirectionnel natif),
+`gemini-3.8-flash-tts` la synthèse ponctuelle. DeepSeek reste le moteur de raisonnement.
+ElevenLabs n'est plus instancié, configuré, ni appelé.
+
+| Brique | Statut | Preuve |
+|---|---|---|
+| Clé Google chiffrée au repos | FAIT | `.env` ne contient que `GOOGLE_API_KEY_ENC` (Fernet), clé locale `.secrets/gemini.key` en 600 |
+| Page de saisie protégée | FAIT | jeton 32 octets + code 6 chiffres, usage unique, 60 min, 5 essais, `access_log off` |
+| Validation réelle de la clé | FAIT | `GET /v1beta/models` puis `POST /v1beta/auth_tokens` → « ok / ok » |
+| Conversation vocale temps réel | TESTÉ + PROD | navigateur (micro simulé Chromium) → 8-9 buffers audio joués ; WSS public → 4,2 s de réponse |
+| Tour de parole explicite | TESTÉ | VAD local → `activity_start`/`activity_end` (la VAD serveur ne clôt pas un tour sur flux continu) |
+| Barge-in | TESTÉ | événement `interrupted` → file audio vidée, retour en écoute |
+| Outils à la voix | TESTÉ | 4 outils du registre exposés en `function_declarations`, exécutés via le policy engine |
+| Prononciation « Kwes » /kwɛs/ | MESURÉ | 3 échantillons isolés : fricative finale 130–230 ms ; transcription du modèle « Kwes » |
+| Langues | MESURÉ | 11 langues testées, statuts dans `app/voice_languages.py` et `docs/LANGUES_VOIX.md` |
+| Coût et quotas | TESTÉ | table `voice_sessions`, `GET /voice/usage`, budget quotidien 3 € bloquant |
+| Suppression d'ElevenLabs | FAIT | provider remplacé, routes conservées côté Gemini, `ELEVENLABS_*` retiré du `.env`, hooks morts supprimés |
+
+**Ce qui n'est pas prouvé** : la qualité perçue de la voix (choix à l'oreille), une conversation
+avec un vrai micro physique, la prononciation dans une phrase longue (mesurée seulement sur le
+mot isolé), et le palier de facturation Google (libre ou payant) — l'estimation de coût est au
+tarif payant publié.

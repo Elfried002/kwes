@@ -1,10 +1,10 @@
-"""Synthèse vocale (route additive, hors P0) : ElevenLabs avec repli texte.
+"""Synthèse vocale ponctuelle (Gemini) avec repli texte explicite.
 
-Le contrat P0 ne liste pas cette route ; elle est ajoutée pour exposer le
-VoiceProvider et reste sans effet de bord (aucun stockage d'audio).
+La conversation temps réel ne passe pas par ici : elle utilise l'API Live
+(`app/api/voice_live.py`). Cette route sert l'accueil et la prévisualisation des
+réglages, sans effet de bord (aucun stockage d'audio).
 
-GET /voice/voices — catalogue des voix du compte, pour le sélecteur des
-réglages. Même fournisseur, même cache court, aucune clé renvoyée.
+GET /voice/voices — catalogue figé des voix Gemini, aucune clé renvoyée.
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from app.api.deps import SettingsDep, UserDep, VoiceDep
 
 router = APIRouter(tags=["voice"])
 
-# Un identifiant ElevenLabs est alphanumérique ; on refuse tout le reste plutôt
-# que de l'injecter dans le chemin de l'URL du fournisseur.
-VOICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Nom de voix Gemini : alphanumérique, court. On refuse tout le reste plutôt que
+# de l'injecter dans la requête au fournisseur.
+VOICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 
 
 class VoiceRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=4500)
+    text: str = Field(min_length=1, max_length=1800)
     voice_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("voice_id")
@@ -62,7 +62,7 @@ async def synthesize(
 @router.get("/voice/voices")
 async def list_voices(user: UserDep, voice: VoiceDep, settings: SettingsDep) -> dict[str, Any]:
     result = await voice.list_voices()
-    default_voice = settings.elevenlabs_voice_id.strip() or None
+    default_voice = settings.google_voice.strip() or None
     return {
         "voices": [option.as_dict() for option in result.voices],
         "mock": result.mock,

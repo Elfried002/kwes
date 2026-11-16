@@ -46,4 +46,11 @@ cd backend && python tests/e2e_check.py    → mission completed 100 %
 
 ## Blocages
 1. Aucun Supabase distant · 2. Aucun VPS/domaine · 3. Vercel non authentifié ·
-4. Playwright absent (`browser_readonly` sans JS) · 5. worker in-process
+| Playwright installé et branché (rendu Chromium) · 5. worker in-process
+
+## Mise à jour 16/11 07:00 — Playwright et Supabase
+- Playwright 1.56 + Chromium headless installés, `app/skills/render.py` ajouté, `make_browser_fetcher` branché à la place de `make_fetcher`.
+- Preuve de rendu JS : page `quotes.toscrape.com/js` → **10 citations rendues** via Chromium contre **0** via httpx.
+- Garde-fous vérifiés : `127.0.0.1` refusé (port), `169.254.169.254` refusé (metadata), domaine hors allowlist refusé.
+- Suite complète : 116 tests passent après intégration. Mission réelle rejouée : `completed 100 %` avec log `render ok ... ms=2597`.
+- Supabase : projet `kwes` (ref `yhgbvyibsvsjpxsnjdzn`, eu-west-2, PG 17.11) lié. 6 migrations prêtes, `db push --dry-run` OK — **poussée en production en attente d'accord explicite**.

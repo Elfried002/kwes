@@ -27,6 +27,7 @@ from app.db.base import Database
 from app.db.models import Skill, SkillVersion
 from app.core.utils import utcnow
 from app.skills.fetch import make_fetcher
+from app.skills.render import make_browser_fetcher, render_available
 from app.skills.registry import SkillRegistry
 from app.worker.queue import build_queue
 from app.worker.worker import TaskWorker
@@ -145,7 +146,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     registry = SkillRegistry(SKILLS_DIR, settings)
     registry.load()
     app.state.registry = registry
-    app.state.fetcher = make_fetcher(settings.browser_domain_allowlist, settings)
+    # Rendu Chromium quand Playwright est disponible, repli httpx sinon.
+    app.state.fetcher = make_browser_fetcher(settings.browser_domain_allowlist, settings)
+    logger.info("Fetcher des skills : rendu Chromium=%s (mode=%s)", render_available(), settings.browser_render)
     app.state.voice = build_voice_provider(settings)
 
     app.add_middleware(KwesHttpMiddleware, settings=settings)

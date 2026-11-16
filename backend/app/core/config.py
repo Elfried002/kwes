@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     max_request_body_bytes: int = 1_500_000
     max_message_chars: int = 8000
     dev_endpoints: bool = False  # active POST /dev/token — dev uniquement
+    browser_render: Literal["auto", "playwright", "httpx"] = "auto"  # rendu des pages lues par browser_readonly
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 180
     rate_limit_chat_per_minute: int = 40

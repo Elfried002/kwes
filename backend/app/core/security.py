@@ -1,7 +1,14 @@
-"""Authentification JWT HS256 et résolution de l'utilisateur courant.
+"""Authentification JWT et résolution de l'utilisateur courant.
 
-Dev  : jeton signé avec DEV_JWT_SECRET (défaut `dev-secret-change-me`).
-Prod : jeton Supabase vérifié avec SUPABASE_JWT_SECRET.
+Règles par environnement (P0.1) :
+
+* **production** : seul ES256 est accepté, clé résolue par JWKS Supabase, avec
+  vérification de la signature, de l'expiration, de l'émetteur (`<supabase>/auth/v1`),
+  de l'audience (`authenticated`) et du sujet. Aucun jeton symétrique n'est
+  accepté : un HS256 signé avec un secret local est refusé.
+* **dev / test** : HS256 avec `DEV_JWT_SECRET`, uniquement pour les outils locaux
+  et la suite de tests.
+
 Le profil applicatif est créé automatiquement s'il n'existe pas.
 """
 
@@ -64,6 +71,10 @@ def _jwks_cache(settings: Settings) -> dict[str, Any]:
 _JWKS: dict[str, Any] = {}
 
 
+PRODUCTION_ALGORITHMS = frozenset({"ES256"})
+SUPABASE_AUDIENCE = "authenticated"
+
+
 def _decode_supabase_es256(token: str, settings: Settings) -> dict[str, Any]:
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
@@ -79,14 +90,26 @@ def _decode_supabase_es256(token: str, settings: Settings) -> dict[str, Any]:
         token,
         jwk,
         algorithms=["ES256"],
-        audience="authenticated",
-        options={"verify_aud": True, "verify_exp": True},
+        audience=SUPABASE_AUDIENCE,
+        issuer=settings.jwt_issuer or None,
+        options={
+            "verify_aud": True,
+            "verify_exp": True,
+            "verify_iss": bool(settings.jwt_issuer),
+            "require_exp": True,
+            "require_sub": True,
+            "require_aud": True,
+        },
     )
     return payload
 
 
 def decode_token(token: str, settings: Settings) -> dict[str, Any]:
-    """Vérifie un JWT : ES256 via JWKS Supabase, sinon HS256 (dev/tests)."""
+    """Vérifie un JWT selon l'environnement, sans repli permissif.
+
+    Production : ES256 uniquement, JWKS Supabase, émetteur et audience vérifiés.
+    Dev/test   : HS256 uniquement, avec le secret local.
+    """
     try:
         header = jwt.get_unverified_header(token)
     except JWTError as exc:
@@ -94,14 +117,26 @@ def decode_token(token: str, settings: Settings) -> dict[str, Any]:
 
     alg = str(header.get("alg") or "")
 
-    if alg == "ES256" and settings.supabase_url:
+    if settings.is_production:
+        if alg not in PRODUCTION_ALGORITHMS:
+            logger.warning("auth.refus raison=algorithme_non_autorise alg=%s", alg or "absent")
+            raise Unauthenticated("Algorithme de signature non autorisé.")
+        if not settings.supabase_url or not settings.jwt_issuer:
+            logger.error("auth.refus raison=configuration_incomplete (SUPABASE_URL absent)")
+            raise Unauthenticated("Configuration d'authentification incomplète.")
         try:
             payload = _decode_supabase_es256(token, settings)
         except ExpiredSignatureError as exc:
+            logger.warning("auth.refus raison=jeton_expire")
             raise Unauthenticated("Session expirée.") from exc
         except JWTError as exc:
+            logger.warning("auth.refus raison=signature_ou_claims_invalides")
             raise Unauthenticated("Jeton invalide.") from exc
     else:
+        # Aucun repli : l'algorithme doit être exactement celui du mode courant.
+        if alg != settings.jwt_algorithm:
+            logger.warning("auth.refus raison=algorithme_inattendu alg=%s", alg or "absent")
+            raise Unauthenticated("Algorithme de signature non autorisé.")
         secret = settings.jwt_secret
         if not secret:
             logger.error("JWT secret manquant pour app_env=%s", settings.app_env)
@@ -215,6 +250,10 @@ def create_dev_token(
 ) -> str:
     """Utilitaire dev/démo et tests. Jamais utilisé par les routes de production."""
     settings = settings or Settings(app_env="dev")
+    if settings.is_production:
+        # Ceinture et bretelles : même appelé par erreur, aucun jeton de
+        # développement ne peut être forgé lorsque l'application est en prod.
+        raise RuntimeError("create_dev_token est interdit en production.")
     key = secret or settings.jwt_secret
     now = datetime.now(timezone.utc)
     payload = {

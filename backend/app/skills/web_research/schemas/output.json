@@ -13,7 +13,11 @@
           "url": { "type": "string" },
           "title": { "type": "string" },
           "snippet": { "type": "string" },
-          "domain": { "type": "string" }
+          "domain": { "type": "string" },
+          "score": { "type": "number" },
+          "category": { "type": "string" },
+          "status": { "type": "string" },
+          "evidence_id": { "type": "string" }
         },
         "required": ["url", "title"]
       }
@@ -21,7 +25,10 @@
     "facts": { "type": "array", "items": { "type": "string" } },
     "synthesis": { "type": "string" },
     "limits": { "type": "array", "items": { "type": "string" } },
-    "skipped_sources": { "type": "array", "items": { "type": "string" } }
+    "skipped_sources": { "type": "array", "items": { "type": "string" } },
+    "evidence_ids": { "type": "array", "items": { "type": "string" } },
+    "providers_used": { "type": "array", "items": { "type": "string" } },
+    "queries": { "type": "array", "items": { "type": "string" } }
   },
   "required": ["sources", "facts", "synthesis", "limits"]
 }

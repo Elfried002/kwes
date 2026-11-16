@@ -42,6 +42,8 @@ ALLOWED_PORTS = {None, 80, 443}
 _INJECTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"ignore[rz]?\s+(all\s+|les\s+|toutes\s+)?(previous\s+|pr[ée]c[ée]dentes?\s+)?instructions", re.I), "instruction_override"),
     (re.compile(r"disregard\s+(all\s+)?(previous|prior)\s+instructions", re.I), "instruction_override"),
+    # Ordre français : « ignore toutes les instructions » (sans « précédentes »).
+    (re.compile(r"ignore[rz]?\s+(toutes?\s+)?(les\s+|vos\s+|tes\s+)?instructions?", re.I), "instruction_override"),
     (re.compile(r"(system|developer)\s*prompt|prompt\s*syst[èe]me", re.I), "system_prompt_probe"),
     (re.compile(r"you\s+are\s+now\s+|tu\s+es\s+maintenant\s+", re.I), "role_hijack"),
     (re.compile(r"(send|reveal|give|expose|envoie|r[ée]v[èe]le|donne)[^.\n]{0,40}(api[_\s-]?key|secret|token|password|mot de passe)", re.I), "secret_request"),
@@ -222,12 +224,9 @@ class _Extractor(HTMLParser):
         lines = raw_text.splitlines()
         sanitized_lines: list[str] = []
         for line in lines:
-            matched = [label for pattern, label in _INJECTION_PATTERNS if pattern.search(line)]
-            if matched:
-                findings.extend(matched)
-                sanitized_lines.append("[CONTENU NON FIABLE SUPPRIMÉ]")
-            else:
-                sanitized_lines.append(line)
+            cleaned, matched = _sanitize_line(line)
+            findings.extend(matched)
+            sanitized_lines.append(cleaned)
         text = "\n".join(sanitized_lines)[:MAX_TEXT_CHARS]
         links = []
         for link in self.links:
@@ -241,6 +240,43 @@ class _Extractor(HTMLParser):
             injection_findings=sorted(set(findings)),
             sanitized=bool(findings),
         )
+
+
+def _sanitize_line(line: str) -> tuple[str, list[str]]:
+    """Neutralise une ligne, phrase par phrase.
+
+    Un texte extrait arrive souvent sur une seule ligne : remplacer la ligne
+    entière effacerait le contenu légitime autour de la phrase hostile. On isole
+    donc les phrases fautives.
+    """
+    if not any(pattern.search(line) for pattern, _ in _INJECTION_PATTERNS):
+        return line, []
+    sentences = re.split(r"(?<=[.!?])\s+", line)
+    findings: list[str] = []
+    kept: list[str] = []
+    for sentence in sentences:
+        matched = [label for pattern, label in _INJECTION_PATTERNS if pattern.search(sentence)]
+        if matched:
+            findings.extend(matched)
+            kept.append("[CONTENU NON FIABLE SUPPRIMÉ]")
+        else:
+            kept.append(sentence)
+    return " ".join(kept), findings
+
+
+def sanitize_text(text: str) -> tuple[str, list[str]]:
+    """Neutralise les tentatives d'injection dans un texte déjà extrait (PDF).
+
+    Le contenu reste une donnée : aucune ligne n'est interprétée comme une
+    instruction, les phrases suspectes sont remplacées et signalées.
+    """
+    findings: list[str] = []
+    lines: list[str] = []
+    for line in text.splitlines():
+        cleaned, matched = _sanitize_line(line)
+        findings.extend(matched)
+        lines.append(cleaned)
+    return "\n".join(lines)[:MAX_TEXT_CHARS], sorted(set(findings))
 
 
 def extract_readable(html: str, base_url: str) -> ReadableContent:
@@ -307,13 +343,16 @@ async def safe_fetch(
             except LookupError:
                 text = body.decode("utf-8", errors="replace")
             elapsed = int((asyncio.get_running_loop().time() - started) * 1000)
+            content_type = response.headers.get("content-type", "")
+            is_document = body[:5] == b"%PDF-" or "application/pdf" in content_type.lower()
             return FetchedPage(
                 url=url,
                 final_url=str(response.url),
                 status=response.status_code,
-                content_type=response.headers.get("content-type", ""),
+                content_type=content_type,
                 text=text,
                 elapsed_ms=elapsed,
+                raw=body if is_document else None,
             )
 
     raise SkillProviderError("Trop de redirections.")

@@ -138,3 +138,16 @@ tarif payant publié.
 - Tests : 163 backend (+15), 134 frontend, build OK.
 - Rapport : `docs/KWES_P0_IMPLEMENTATION_REPORT.md` ; contrats : `docs/CONTRATS_COMPETENCES.md` ;
   rollback : `docs/ROLLBACK_P0.md`.
+
+## P0.1 + P1 — 17/11 00:35 — authentification stricte, moteur de recherche
+
+- `APP_ENV=production` : seul ES256 Supabase est accepté (JWKS, issuer, audience, exp, sub) ;
+  HS256 de dev refusé avant vérification de signature. 15 tests dédiés.
+- Moteur de recherche `app/research/` : plan → SearXNG → DDG → Wikipédia, déduplication,
+  classement par catégorie de source, extraction HTML/PDF (pypdf), registre de preuves.
+- SearXNG auto-hébergé (`kwes-searxng`, 127.0.0.1:8888, 0 FCFA, healthcheck, 185 Mo).
+- Migration `0012_evidence.sql` : table `evidence`, 4 index, 3 politiques RLS (42 au total).
+- `GET /api/v1/evidence` (privé) ; le skill `web_research` passe en 1.1.0.
+- Correctif : montée de version d'un skill rétrograde l'ancienne version (incident de démarrage).
+- Tests : 235 backend (+72), 134 frontend, build OK.
+- Rapport : `docs/KWES_P0_1_P1_IMPLEMENTATION_REPORT.md`.

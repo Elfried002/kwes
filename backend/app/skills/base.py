@@ -19,6 +19,9 @@ class FetchedPage:
     content_type: str
     text: str
     elapsed_ms: int = 0
+    # Octets d'origine, conservés uniquement pour les binaires documentaires
+    # (PDF) : l'extraction PDF (P1) ne peut pas travailler sur du texte décodé.
+    raw: bytes | None = None
 
 
 FetchFn = Callable[[str], Awaitable[FetchedPage]]

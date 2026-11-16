@@ -38,9 +38,10 @@ def test_all_tables_exist_with_expected_names() -> None:
         "device_commands",
         "documents",
         "voice_sessions",
+        "evidence",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 17  # 13 métier + device + documents + voice_sessions
+    assert len(ALL_MODELS) == 18  # 13 métier + device + documents + voice_sessions + evidence
 
 
 def test_task_columns_match_data_model() -> None:

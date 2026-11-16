@@ -13,7 +13,7 @@ from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.agent.deepseek import DeepSeekClient
 from app.agent.orchestrator import build_orchestrator
@@ -25,6 +25,7 @@ from app.api import (
     dev,
     devices,
     documents,
+    evidence,
     health,
     memory,
     notifications,
@@ -93,6 +94,16 @@ async def seed_skills(db: Database, registry: SkillRegistry) -> None:
                     )
                 ).scalar_one_or_none()
                 if version_row is None:
+                    # Une seule version active par skill (contrainte en base) :
+                    # l'ancienne est conservée mais rétrogradée avant insertion.
+                    await session.execute(
+                        update(SkillVersion)
+                        .where(
+                            SkillVersion.skill_id == row.id,
+                            SkillVersion.status == "active",
+                        )
+                        .values(status="deprecated")
+                    )
                     session.add(
                         SkillVersion(
                             skill_id=row.id,
@@ -207,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(skills.router, prefix=prefix, dependencies=private_deps)
     app.include_router(memory.router, prefix=prefix, dependencies=private_deps)
     app.include_router(documents.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(evidence.router, prefix=prefix, dependencies=private_deps)
     app.include_router(approvals.router, prefix=prefix, dependencies=private_deps)
     app.include_router(notifications.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice.router, prefix=prefix, dependencies=private_deps)

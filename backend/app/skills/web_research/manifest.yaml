@@ -1,6 +1,6 @@
 name: web_research
-version: 1.0.0
-description: Recherche et synthèse de sources web accessibles
+version: 1.1.0
+description: Recherche web multi-fournisseurs (SearXNG, DuckDuckGo, Wikipédia), extraction HTML/PDF et registre de preuves
 entrypoint: skill.py
 permissions:
   - web.search

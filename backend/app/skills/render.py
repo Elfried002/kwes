@@ -98,6 +98,10 @@ async def render_fetch(
         raise
     except Exception as exc:  # noqa: BLE001
         logger.warning("rendu Playwright impossible url=%s err=%s", validated[:120], exc)
+        # Un téléchargement (PDF servi sans extension) n'est pas une page : on le
+        # signale pour que l'appelant bascule sur une récupération binaire.
+        if "download is starting" in str(exc).lower():
+            raise SkillProviderError("Téléchargement détecté.") from exc
         raise SkillProviderError("Page inaccessible par le navigateur.") from exc
 
     if len(html) > MAX_HTML_BYTES:
@@ -138,7 +142,20 @@ def make_browser_fetcher(allowlist: list[str], settings: Any) -> Any:
 
         return _offline
 
+    pdf_max_bytes = int(getattr(settings, "fetch_pdf_max_bytes", settings.fetch_max_bytes))
+
     async def _fetch(url: str) -> FetchedPage:
+        # Un PDF ne se rend pas : Chromium afficherait une visionneuse vide.
+        # On le récupère en binaire pour que l'extraction PDF s'applique.
+        if urlsplit(url).path.lower().endswith(".pdf"):
+            return await safe_fetch(
+                url,
+                allowlist=allowlist,
+                enforce_allowlist=not getattr(settings, "browser_open_web", False),
+                timeout=timeout,
+                max_bytes=pdf_max_bytes,
+                max_redirects=settings.fetch_max_redirects,
+            )
         if mode != "httpx" and render_available():
             try:
                 return await render_fetch(
@@ -147,7 +164,17 @@ def make_browser_fetcher(allowlist: list[str], settings: Any) -> Any:
                     timeout=timeout,
                     enforce_allowlist=not getattr(settings, "browser_open_web", False),
                 )
-            except SkillProviderError:
+            except SkillProviderError as exc:
+                if "téléchargement" in str(exc).lower():
+                    logger.info("Ressource binaire détectée, récupération directe : %s", url[:120])
+                    return await safe_fetch(
+                        url,
+                        allowlist=allowlist,
+                        enforce_allowlist=not getattr(settings, "browser_open_web", False),
+                        timeout=timeout,
+                        max_bytes=pdf_max_bytes,
+                        max_redirects=settings.fetch_max_redirects,
+                    )
                 if mode == "playwright":
                     raise
                 logger.warning("Repli httpx après échec du rendu pour %s", url[:120])

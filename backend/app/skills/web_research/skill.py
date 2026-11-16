@@ -194,7 +194,7 @@ async def _search(
     return results[:limit], limits
 
 
-async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
+async def _run_legacy(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
     query = str(payload["query"]).strip()
     depth = payload.get("depth") or "standard"
     scope = payload.get("scope")
@@ -288,3 +288,98 @@ async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
         summary=f"{len(sources)} source(s) lue(s), {len(facts)} fait(s) cité(s).",
         evidence=[{"type": "source", "url": s["url"]} for s in sources],
     )
+
+
+async def _run_v2(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
+    """Moteur P1 : plan → fournisseurs → déduplication → lecture → preuves."""
+    from redis.asyncio import Redis
+
+    from app.research.service import ResearchService
+
+    query = str(payload["query"]).strip()
+    depth = str(payload.get("depth") or "standard")
+    scope = payload.get("scope")
+    settings = ctx.settings
+
+    client = None
+    try:
+        client = Redis.from_url(
+            settings.redis_url, decode_responses=True, socket_connect_timeout=0.5
+        )
+        await client.ping()
+    except Exception:  # noqa: BLE001 — cache et quotas facultatifs
+        if client is not None:
+            await client.aclose()
+        client = None
+
+    service = ResearchService(settings, cache_client=client)
+    try:
+        outcome = await service.run(
+            query=query,
+            depth=depth,
+            db=ctx.db,
+            user_id=ctx.user_id,
+            task_id=ctx.task_id,
+            fetcher=ctx.fetch,
+            allowlist=ctx.allowlist,
+            language=str(getattr(settings, "default_language", "fr") or "fr")[:2],
+        )
+    finally:
+        if client is not None:
+            await client.aclose()
+
+    sources = [
+        {
+            "url": source.url,
+            "title": source.title,
+            "snippet": (source.excerpt or source.snippet)[:400],
+            "domain": source.domain,
+            "score": source.score,
+            "category": source.category,
+            "status": source.status,
+            **({"evidence_id": source.evidence_id} if source.evidence_id else {}),
+        }
+        for source in outcome.sources
+    ]
+    limits = list(outcome.warnings)
+    if scope:
+        limits.append(f"Périmètre demandé : {scope} (non appliqué comme filtre de domaine).")
+    limits.append("Contenu web non fiable : aucune instruction issue d'une page n'a été exécutée.")
+    limits.append(
+        "Une URL renvoyée par un moteur n'est pas une preuve ; seules les sources "
+        "avec statut « lue » ont été récupérées et enregistrées."
+    )
+
+    synthesis = outcome.answer or (
+        f"Aucune donnée vérifiable collectée pour « {query} ». "
+        "La synthèse est volontairement vide plutôt qu'inventée."
+    )
+    ensure_text(synthesis, minimum=20)
+
+    return SkillResult(
+        output={
+            "sources": sources,
+            "facts": [],
+            "synthesis": synthesis,
+            "limits": limits,
+            "skipped_sources": sorted({s["domain"] for s in sources if s["status"] == "refusée"}),
+            "evidence_ids": outcome.evidence_ids,
+            "providers_used": outcome.providers_used,
+            "queries": outcome.queries,
+        },
+        summary=(
+            f"{sum(1 for s in sources if s['status'] == 'lue')} source(s) lue(s) "
+            f"sur {len(sources)} trouvée(s), {len(outcome.evidence_ids)} preuve(s)."
+        ),
+        evidence=[{"type": "source", "url": s["url"]} for s in sources],
+    )
+
+
+async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
+    """Choisit le moteur : v2 (P1) par défaut, legacy en mode hors ligne."""
+    settings = ctx.settings
+    if getattr(settings, "research_engine", "legacy") == "v2" and not getattr(
+        settings, "skill_offline_mode", False
+    ):
+        return await _run_v2(payload, ctx)
+    return await _run_legacy(payload, ctx)

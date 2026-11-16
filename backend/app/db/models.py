@@ -365,6 +365,36 @@ class Document(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(24), nullable=False, default="agent")
 
 
+class Evidence(Base):
+    """Preuve de lecture : ce que Kwes a réellement récupéré, et quand.
+
+    Une URL trouvée par un moteur n'est pas une preuve. Une ligne n'existe ici
+    qu'après une extraction réussie (HTML rendu ou PDF lu).
+    """
+
+    __tablename__ = "evidence"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    canonical_url: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    domain: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    excerpt: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    extraction_status: Mapped[str] = mapped_column(String(24), default="ok", nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
 class VoiceSession(Base):
     """Une session vocale Gemini : durée réelle, volume audio, coût estimé.
 
@@ -404,6 +434,7 @@ ALL_MODELS = [
     Approval,
     Integration,
     AuditLog,
+    Evidence,
     Notification,
     DeviceConnector,
     DeviceCommand,

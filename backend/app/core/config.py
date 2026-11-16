@@ -123,8 +123,25 @@ class Settings(BaseSettings):
     browser_allowlist: str = DEFAULT_BROWSER_ALLOWLIST
     web_extra_allowlist: str = ""
     fetch_max_bytes: int = 2_000_000
+    # Un PDF est plus volumineux qu'une page HTML : plafond distinct, sinon les
+    # documents réels sont tronqués et deviennent illisibles (constaté sur arXiv).
+    fetch_pdf_max_bytes: int = 8_000_000
     fetch_max_redirects: int = 4
     skill_offline_mode: bool = False  # tests : aucun accès réseau autorisé
+
+    # --- Recherche (P1) ---------------------------------------------------
+    research_engine: Literal["v2", "legacy"] = "v2"
+    searxng_url: str = "http://127.0.0.1:8888"
+    research_cache_enabled: bool = True
+    research_cache_ttl_seconds: int = 86_400  # 24 h
+    research_max_queries: int = 4
+    research_max_pages: int = 5
+    research_provider_daily_limit: int = 500
+    research_provider_timeout_seconds: float = 15.0
+    research_concurrency: int = 4
+    research_pdf_max_bytes: int = 8_000_000
+    research_pdf_max_pages: int = 40
+    research_synthesis_enabled: bool = True
 
     # --- Divers ----------------------------------------------------------
     log_level: str = "INFO"
@@ -135,7 +152,12 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_env(cls, value: object) -> object:
         if isinstance(value, str):
-            return value.strip().lower()
+            normalized = value.strip().lower()
+            # « production » et « prod » sont équivalents : une valeur explicite
+            # doit toujours atterrir sur le mode le plus strict.
+            aliases = {"production": "prod", "prod": "prod", "dev": "dev",
+                       "development": "dev", "test": "test"}
+            return aliases.get(normalized, normalized)
         return value
 
     @property
@@ -179,6 +201,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "prod"
+
+    @property
+    def jwt_issuer(self) -> str:
+        """Émetteur attendu des jetons Supabase (`https://<ref>.supabase.co/auth/v1`)."""
+        base = (self.supabase_url or "").rstrip("/")
+        return f"{base}/auth/v1" if base else ""
 
     @property
     def llm_is_mock(self) -> bool:

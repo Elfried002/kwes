@@ -196,7 +196,6 @@ export function HomeScreen() {
                 <a key={task.id} className="mission" href={href({ name: 'task', id: task.id })}>
                   <div className="mission__top">
                     <span className="mission__title">{truncate(task.title, 64)}</span>
-                    {task.is_demo ? <span className="badge badge--demo">[DEMO]</span> : null}
                     <StatusPill status={task.status} />
                   </div>
                   <div className="mission__meta">
@@ -258,7 +257,7 @@ export function HomeScreen() {
 
           <section className="card card--pad" aria-labelledby="limits-title">
             <h2 id="limits-title" style={{ fontSize: '1rem', marginBottom: 8 }}>
-              Périmètre Alpha
+              Périmètre de l’assistant
             </h2>
             <ul className="stack stack--sm" style={{ listStyle: 'none', fontSize: '0.8125rem', color: 'var(--muted-strong)' }}>
               <li>· Chat texte réel via le backend, streaming selon WebSocket.</li>

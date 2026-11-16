@@ -16,8 +16,10 @@ export function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-export function useDocumentTitle(title: string): void {
+/** `null` laisse le titre statique du document intact (page publique indexable). */
+export function useDocumentTitle(title: string | null): void {
   useEffect(() => {
+    if (title === null) return;
     document.title = title ? `${title} — Kwes` : 'Kwes — Personal Autonomous AI Agent';
   }, [title]);
 }

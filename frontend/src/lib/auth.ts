@@ -152,7 +152,7 @@ export function completePasswordRecovery(): void {
 }
 
 if (typeof window !== 'undefined') {
-  // Ancienne clé de démonstration (jeton collé) : retirée définitivement.
+  // Ancienne clé de développement (jeton collé) : retirée définitivement.
   try {
     localStorage.removeItem(LEGACY_DEV_TOKEN_KEY);
   } catch {

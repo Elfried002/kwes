@@ -41,7 +41,6 @@ function readSources(metadata: Record<string, unknown> | null | undefined): Sour
 
 export function MessageBubble({ message, onCopy, onRetry, streaming = false }: MessageBubbleProps) {
   const metadata = message.metadata ?? null;
-  const demo = message.is_demo === true || metadata?.is_demo === true;
   const simulated = metadata?.simulated === true;
   const sources = readSources(metadata);
   const roleLabel = ROLE_LABELS[message.role] ?? message.role;
@@ -50,7 +49,6 @@ export function MessageBubble({ message, onCopy, onRetry, streaming = false }: M
     <article className={`msg msg--${message.role}`} aria-label={`Message de ${roleLabel}`}>
       <div className="msg__who">
         <span>{roleLabel}</span>
-        {demo ? <span className="badge badge--demo">[DEMO]</span> : null}
         <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
       </div>
       <div className="msg__bubble">

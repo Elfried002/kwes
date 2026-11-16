@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Les routes de l'espace de travail sont rendues côté client après authentification ;
+# seule la page publique est destinée à l'indexation.
+
+Sitemap: https://frontend-phi-pied-lzumzbngjw.vercel.app/sitemap.xml

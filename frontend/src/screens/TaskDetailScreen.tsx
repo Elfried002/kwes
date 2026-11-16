@@ -107,7 +107,6 @@ export function TaskDetailScreen({ id }: { id: string }) {
           <div className="row" style={{ marginTop: 8 }}>
             <StatusPill status={task.status} />
             {task.priority ? <span className="badge">Priorité {task.priority}</span> : null}
-            {task.is_demo ? <span className="badge badge--demo">[DEMO]</span> : null}
             {task.conversation_id ? (
               <a className="btn btn--ghost btn--sm" href={href({ name: 'chat', conversationId: task.conversation_id })}>
                 <Icon name="chat" size={14} />

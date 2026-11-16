@@ -121,7 +121,6 @@ export function ConversationsScreen() {
                     créée le {formatDateTime(conversation.created_at)}
                   </span>
                   <span className="badge">{conversationStatusLabel(conversation.status)}</span>
-                  {conversation.is_demo ? <span className="badge badge--demo">[DEMO]</span> : null}
                 </div>
               </div>
               <div className="list__side">

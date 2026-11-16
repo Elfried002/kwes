@@ -1,13 +1,16 @@
-import { useState, type KeyboardEvent } from 'react';
-import { API_BASE_URL } from '../lib/api';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { clearSession, completePasswordRecovery } from '../lib/auth';
 import { authErrorMessage, passwordScore, validatePassword } from '../lib/auth-errors';
 import { supabase, supabaseConfigured, SUPABASE_CONFIG_ERROR } from '../lib/supabase';
 import { useKwes } from '../state/KwesProvider';
 import { HybridOrb } from '../components/orb/HybridOrb';
 import { Icon } from '../components/Icon';
+import type { AuthMode } from '../lib/router';
 
-type Mode = 'signin' | 'signup' | 'reset';
+type Mode = AuthMode;
+
+/** État du fournisseur Google, détecté sans redirection ni blocage de l'écran. */
+type GoogleState = 'unknown' | 'available' | 'unavailable';
 
 function redirectTo(): string {
   return `${window.location.origin}/`;
@@ -82,15 +85,53 @@ function PasswordField({
 
 const SCORE_LABELS = ['Très faible', 'Faible', 'Moyen', 'Bon', 'Excellent'];
 
-export function LoginScreen() {
+export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) {
   const { orbState, serverStatus } = useKwes();
-  const [mode, setMode] = useState<Mode>('signin');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState<'email' | 'google' | 'reset' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [googleState, setGoogleState] = useState<GoogleState>('unknown');
+
+  /*
+   * Détection non bloquante : l'URL d'autorisation Google est demandée à Supabase,
+   * puis sondée sans suivre la redirection. Un 4xx signifie que le fournisseur
+   * n'est pas encore activé ; un cas indéterminé laisse le bouton actif.
+   */
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    let cancelled = false;
+    void supabase.auth
+      .signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo(), skipBrowserRedirect: true } })
+      .then(async ({ data, error: failure }) => {
+        if (cancelled || failure || !data?.url) return;
+        try {
+          const probe = await fetch(data.url, {
+            method: 'GET',
+            redirect: 'manual',
+            cache: 'no-store',
+            signal: AbortSignal.timeout(4000),
+          });
+          if (cancelled) return;
+          if (probe.type === 'opaqueredirect' || probe.status === 0) {
+            setGoogleState('available');
+          } else if (probe.status >= 400) {
+            setGoogleState('unavailable');
+          }
+        } catch {
+          /* Sonde impossible (CORS, délai) : on ne conclut pas. */
+        }
+      })
+      .catch(() => {
+        /* Réseau indisponible : le bouton reste actif et l'erreur s'affichera au clic. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const resetFeedback = (): void => {
     setError(null);
@@ -101,6 +142,14 @@ export function LoginScreen() {
     resetFeedback();
     setMode(next);
     if (next !== 'signup') setConfirm('');
+    // L'URL suit l'onglet sans déclencher de navigation ni perdre la saisie.
+    const path =
+      next === 'signup' ? '#/inscription' : next === 'reset' ? '#/mot-de-passe-oublie' : '#/connexion';
+    try {
+      window.history.replaceState(null, '', path);
+    } catch {
+      /* history indisponible : l'onglet reste fonctionnel */
+    }
   };
 
   const requireConfig = (): boolean => {
@@ -222,6 +271,7 @@ export function LoginScreen() {
             payload = null;
           }
           const serverMessage = typeof payload?.msg === 'string' ? payload.msg : '';
+          setGoogleState('unavailable');
           setError(
             authErrorMessage({
               status: probe.status,
@@ -287,27 +337,36 @@ export function LoginScreen() {
           <HybridOrb state={orbState} className="orb--compact" />
         </div>
         <span className="login__tag">
-          <Icon name="spark" size={13} />
-          Alpha · connexion sécurisée
+          <Icon name="shield" size={13} />
+          Connexion sécurisée
         </span>
         <h1 id="login-title">Votre intelligence. Vos actions. Votre monde.</h1>
         <p>
-          Kwes converse, planifie et exécute des missions avec des outils réels et limités. Chaque
-          action sensible passe par votre validation. L’état de l’Orb reflète uniquement des
-          événements serveur, jamais le texte du modèle.
+          Kwes converse, planifie et exécute des missions avec des outils volontairement limités.
+          Chaque action sensible attend votre validation. L’Orb reflète l’état réel de l’agent, jamais
+          le texte du modèle.
         </p>
-        <p className="meta">
-          Backend :{' '}
-          {serverStatus === 'ok'
-            ? 'joignable'
-            : serverStatus === 'degraded'
-              ? 'dégradé'
-              : serverStatus === 'unreachable'
-                ? 'injoignable'
-                : 'vérification…'}
-          {' · '}
-          {API_BASE_URL}
-        </p>
+        <ul className="login__trust">
+          <li>
+            <Icon name="check" size={14} />
+            Chiffrement en transit
+          </li>
+          <li>
+            <Icon name="check" size={14} />
+            Aucun secret dans le navigateur
+          </li>
+          <li>
+            <Icon name="check" size={14} />
+            Service{' '}
+            {serverStatus === 'ok'
+              ? 'opérationnel'
+              : serverStatus === 'degraded'
+                ? 'dégradé'
+                : serverStatus === 'unreachable'
+                  ? 'injoignable'
+                  : 'en vérification'}
+          </li>
+        </ul>
       </section>
 
       <section className="login__form" aria-label="Authentification">
@@ -558,22 +617,34 @@ export function LoginScreen() {
               <div className="login__divider">
                 <span>ou</span>
               </div>
-              <button
-                type="button"
-                className="btn btn--soft btn--block login__google"
-                onClick={() => void handleGoogle()}
-                disabled={busy !== null || !supabaseConfigured}
-              >
-                <GoogleMark />
-                {busy === 'google' ? 'Redirection…' : 'Continuer avec Google'}
-              </button>
+              <div className="login__google-block">
+                <button
+                  type="button"
+                  className="btn btn--soft btn--block login__google"
+                  onClick={() => void handleGoogle()}
+                  disabled={busy !== null || !supabaseConfigured || googleState === 'unavailable'}
+                  aria-describedby={googleState === 'unavailable' ? 'google-status' : undefined}
+                >
+                  <GoogleMark />
+                  {busy === 'google' ? 'Redirection…' : 'Continuer avec Google'}
+                  {googleState === 'unavailable' ? (
+                    <span className="badge badge--soon">Bientôt disponible</span>
+                  ) : null}
+                </button>
+                {googleState === 'unavailable' ? (
+                  <p className="field__hint" id="google-status">
+                    La connexion Google n’est pas encore activée. Créez votre compte avec une adresse
+                    e-mail : l’accès Google sera proposé dès son ouverture.
+                  </p>
+                ) : null}
+              </div>
             </>
           )}
 
           <p className="login__foot">
-            Connexion sécurisée par Supabase Auth. Votre mot de passe n’est jamais transmis à
-            l’agent ni stocké dans cette application. PWA installable · données de démonstration
-            marquées <strong>[DEMO]</strong>.
+            Authentification assurée par Supabase. Votre mot de passe ne transite jamais par l’agent
+            et n’est jamais stocké dans cette interface. Vous pouvez fermer votre session à tout
+            moment depuis l’espace de travail.
           </p>
         </div>
       </section>

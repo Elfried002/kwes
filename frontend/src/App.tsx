@@ -6,6 +6,7 @@ import { KwesProvider } from './state/KwesProvider';
 import { AppShell } from './components/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginScreen, PasswordRecoveryScreen } from './screens/LoginScreen';
+import { PublicHome } from './screens/PublicHome';
 import { HomeScreen } from './screens/HomeScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { ConversationsScreen } from './screens/ConversationsScreen';
@@ -18,6 +19,8 @@ function titleFor(route: Route): string {
   switch (route.name) {
     case 'home':
       return 'Accueil';
+    case 'auth':
+      return 'Connexion';
     case 'chat':
       return 'Chat';
     case 'conversations':
@@ -48,14 +51,26 @@ function RoutedApp() {
   const ready = useAuthReady();
   const recovery = usePasswordRecovery();
   const route = useRoute();
-  useDocumentTitle(!ready ? 'Chargement' : recovery ? 'Nouveau mot de passe' : session ? titleFor(route) : 'Connexion');
+  useDocumentTitle(
+    !ready
+      ? 'Chargement'
+      : recovery
+        ? 'Nouveau mot de passe'
+        : session
+          ? titleFor(route)
+          : route.name === 'auth'
+            ? 'Connexion'
+            : null,
+  );
 
   if (!ready) {
     return <BootScreen />;
   }
 
   if (!session) {
-    return <LoginScreen />;
+    if (recovery) return <PasswordRecoveryScreen />;
+    if (route.name === 'auth') return <LoginScreen key={route.mode} initialMode={route.mode} />;
+    return <PublicHome />;
   }
 
   if (recovery) {
@@ -65,6 +80,7 @@ function RoutedApp() {
   let screen: ReactNode;
   switch (route.name) {
     case 'home':
+    case 'auth':
       screen = <HomeScreen />;
       break;
     case 'chat':

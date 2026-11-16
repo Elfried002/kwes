@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-/** Préférences locales (aucune écriture serveur : l'API Alpha n'expose pas de route profil). */
+/** Préférences locales (aucune écriture serveur : l'API n'expose pas de route profil). */
 
 const KEY = 'kwes.prefs.v1';
 

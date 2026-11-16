@@ -187,7 +187,7 @@ export function SettingsScreen() {
           <p className="notice notice--info" style={{ marginTop: 14 }}>
             <Icon name="alert" size={16} />
             <span>
-              La synthèse vocale ElevenLabs n’est pas encore exposée par une route de l’API Alpha :
+              La synthèse vocale ElevenLabs n’est pas encore exposée par une route de l’API :
               aucun son n’est simulé et l’Orb ne passe en « Parle » qu’à la lecture d’un audio réel.
             </span>
           </p>
@@ -280,7 +280,7 @@ export function SettingsScreen() {
       </div>
 
       <p className="meta" style={{ marginTop: 'var(--sp-5)' }}>
-        Kwes Alpha 0.1.0 · PWA installable · Orb piloté par machine à états déterministe.
+        Kwes · agent personnel autonome · Orb piloté par une machine à états déterministe.
       </p>
     </div>
   );

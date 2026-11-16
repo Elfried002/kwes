@@ -1,7 +1,7 @@
 {
   "name": "Kwes — Personal Autonomous AI Agent",
   "short_name": "Kwes",
-  "description": "Votre intelligence. Vos actions. Votre monde.",
+  "description": "Agent personnel autonome : missions planifiées, progression réelle et validation humaine avant toute action sensible.",
   "lang": "fr",
   "dir": "ltr",
   "start_url": "/",

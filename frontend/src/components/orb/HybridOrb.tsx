@@ -81,12 +81,12 @@ function makeParticles(count: number): Particle[] {
   });
 }
 
-function rgba(hex: string, alpha: number): string {
+function rgba(hex: string, opacity: number): string {
   const clean = hex.replace('#', '');
   const r = parseInt(clean.slice(0, 2), 16);
   const g = parseInt(clean.slice(2, 4), 16);
   const b = parseInt(clean.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+  return `rgba(${r}, ${g}, ${b}, ${opacity.toFixed(3)})`;
 }
 
 /** Écran/ordinateur affiché au centre de l'Orb pendant `executing`. */
@@ -350,11 +350,11 @@ export function HybridOrb({ state, className, onActivate, label }: HybridOrbProp
           y += Math.cos(time * 9 + p.phase) * r * 0.008;
         }
 
-        const alpha = 0.18 + p.depth * 0.62;
+        const lightness = 0.18 + p.depth * 0.62;
         const size = Math.max(0.6, p.size * (r / 150));
         context.beginPath();
         context.arc(x, y, size, 0, Math.PI * 2);
-        context.fillStyle = rgba(palette.particle, alpha * 0.85);
+        context.fillStyle = rgba(palette.particle, lightness * 0.85);
         context.fill();
       }
       context.restore();

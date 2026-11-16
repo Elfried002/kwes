@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from 'react';
 
+export type AuthMode = 'signin' | 'signup' | 'reset';
+
 export type Route =
   | { name: 'home' }
+  | { name: 'auth'; mode: AuthMode }
   | { name: 'chat'; conversationId?: string }
   | { name: 'conversations' }
   | { name: 'tasks' }
@@ -20,6 +23,14 @@ export function parseHash(hash: string): Route {
     case undefined:
     case '':
       return { name: 'home' };
+    case 'connexion':
+    case 'login':
+      return { name: 'auth', mode: 'signin' };
+    case 'inscription':
+    case 'signup':
+      return { name: 'auth', mode: 'signup' };
+    case 'mot-de-passe-oublie':
+      return { name: 'auth', mode: 'reset' };
     case 'chat':
       return second ? { name: 'chat', conversationId: second } : { name: 'chat' };
     case 'conversations':
@@ -41,6 +52,12 @@ export function routeToPath(route: Route): string {
   switch (route.name) {
     case 'home':
       return '/';
+    case 'auth':
+      return route.mode === 'signup'
+        ? '/inscription'
+        : route.mode === 'reset'
+          ? '/mot-de-passe-oublie'
+          : '/connexion';
     case 'chat':
       return route.conversationId ? `/chat/${encodeURIComponent(route.conversationId)}` : '/chat';
     case 'conversations':

@@ -126,7 +126,6 @@ export function TasksScreen() {
                     {task.priority ? <span>Priorité {task.priority}</span> : null}
                     <span>MAJ {formatRelative(task.updated_at)}</span>
                     {task.error_code ? <span className="badge badge--danger">{task.error_code}</span> : null}
-                    {task.is_demo ? <span className="badge badge--demo">[DEMO]</span> : null}
                   </div>
                   <div className="progress-row" style={{ marginTop: 4, maxWidth: 520 }}>
                     <div

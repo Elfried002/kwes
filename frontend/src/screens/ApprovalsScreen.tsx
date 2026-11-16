@@ -146,7 +146,6 @@ export function ApprovalsScreen() {
                         {expired ? 'Expirée' : formatCountdown(approval.expires_at)}
                       </span>
                       <span className="badge">{approval.action_type}</span>
-                      {approval.is_demo ? <span className="badge badge--demo">[DEMO]</span> : null}
                     </div>
                     <h3 id={`approval-${approval.id}`} className="approval__summary">
                       {approval.summary}

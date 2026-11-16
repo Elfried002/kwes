@@ -295,7 +295,6 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
           <h1 style={{ fontSize: '1.6rem' }}>{title}</h1>
         </div>
         <div className="row">
-          {conversation?.is_demo ? <span className="badge badge--demo">[DEMO]</span> : null}
           <a className="btn btn--soft" href={href({ name: 'conversations' })}>
             <Icon name="history" size={16} />
             Historique

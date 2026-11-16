@@ -2287,3 +2287,19 @@ details.disclosure[open] summary {
     scroll-behavior: auto !important;
   }
 }
+
+/* Typographie — titres en Sora, texte en Instrument Sans */
+h1, h2, h3, h4,
+.hero__title, .display, .brand-wordmark, .section-title {
+  font-family: var(--font-display, var(--font-sans));
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+h1 { letter-spacing: -0.035em; }
+
+body, button, input, textarea, select {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

@@ -131,8 +131,8 @@ export function HomeScreen() {
           <HybridOrb
             state={orbState}
             className="orb--hero"
-            onActivate={() => navigate({ name: 'chat' })}
-            label="Orb Kwes — ouvrir la conversation"
+            onActivate={() => navigate({ name: 'voice' })}
+            label="Orb Kwes — parler à Kwes"
           />
           <OrbStatus showCaption />
         </div>
@@ -290,7 +290,7 @@ export function HomeScreen() {
             title="Votre espace est prêt"
             icon={<Icon name="spark" size={26} />}
             action={
-              <a className="btn btn--soft" href={href({ name: 'chat' })}>
+              <a className="btn btn--soft" href={href({ name: 'voice' })}>
                 Parler à Kwes
               </a>
             }

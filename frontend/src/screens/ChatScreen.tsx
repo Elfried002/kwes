@@ -396,9 +396,9 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
             </div>
             <span
               className={`badge badge--${connection === 'online' ? 'success' : 'warning'}`}
-              title="Le WebSocket n’est pas la source de vérité : reconnexion et récupération REST automatiques."
+              title="La connexion se rétablit seule si le réseau coupe."
             >
-              {connection === 'online' ? 'Temps réel' : 'REST uniquement'}
+              {connection === 'online' ? 'En direct' : 'Mode dégradé'}
             </span>
           </header>
 
@@ -572,7 +572,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               micAllowed={prefs.voiceEnabled}
               autoFocus
               placeholder={conversationId ? 'Poursuivre la conversation…' : 'Décrivez votre objectif…'}
-              hint="Entrée pour envoyer · POST /chat réel · brouillon local conservé"
+              hint="Entrée pour envoyer · votre brouillon est conservé"
             />
             {sourcesLabel(messages.at(-1)?.metadata) ? (
               <p className="meta" style={{ marginTop: 6 }}>

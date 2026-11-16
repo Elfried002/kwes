@@ -14,6 +14,7 @@ import { TasksScreen } from './screens/TasksScreen';
 import { TaskDetailScreen } from './screens/TaskDetailScreen';
 import { ApprovalsScreen } from './screens/ApprovalsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { VoiceScreen } from './screens/VoiceScreen';
 
 function titleFor(route: Route): string {
   switch (route.name) {
@@ -22,6 +23,8 @@ function titleFor(route: Route): string {
     case 'auth':
       return 'Connexion';
     case 'chat':
+      return 'Parler';
+    case 'voice':
       return 'Parler';
     case 'conversations':
       return 'Vos échanges';
@@ -101,6 +104,9 @@ function RoutedApp() {
     case 'settings':
       screen = <SettingsScreen />;
       break;
+    case 'voice':
+      // Plein écran : ni barre latérale, ni barre du bas, ni carte.
+      return <VoiceScreen />;
   }
 
   return <AppShell route={route}>{screen}</AppShell>;

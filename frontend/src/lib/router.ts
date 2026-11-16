@@ -6,6 +6,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'auth'; mode: AuthMode }
   | { name: 'chat'; conversationId?: string }
+  | { name: 'voice' }
   | { name: 'conversations' }
   | { name: 'tasks' }
   | { name: 'task'; id: string }
@@ -33,6 +34,9 @@ export function parseHash(hash: string): Route {
       return { name: 'auth', mode: 'reset' };
     case 'chat':
       return second ? { name: 'chat', conversationId: second } : { name: 'chat' };
+    case 'parler':
+    case 'voix':
+      return { name: 'voice' };
     case 'conversations':
       return { name: 'conversations' };
     case 'tasks':
@@ -60,6 +64,8 @@ export function routeToPath(route: Route): string {
           : '/connexion';
     case 'chat':
       return route.conversationId ? `/chat/${encodeURIComponent(route.conversationId)}` : '/chat';
+    case 'voice':
+      return '/parler';
     case 'conversations':
       return '/conversations';
     case 'tasks':

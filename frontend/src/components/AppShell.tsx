@@ -22,7 +22,7 @@ interface NavEntry {
  */
 const NAV: NavEntry[] = [
   { label: 'Accueil', shortLabel: 'Accueil', route: { name: 'home' }, icon: 'home' },
-  { label: 'Parler', shortLabel: 'Parler', route: { name: 'chat' }, icon: 'chat' },
+  { label: 'Parler', shortLabel: 'Parler', route: { name: 'voice' }, icon: 'mic' },
   { label: 'Ce qu’il fait', shortLabel: 'Travail', route: { name: 'tasks' }, icon: 'activity' },
   {
     label: 'Il attend votre accord',

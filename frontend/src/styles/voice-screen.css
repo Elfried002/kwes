@@ -1,0 +1,361 @@
+/* Kwes — écran vocal immersif (`#/parler`).
+ *
+ * Noir pur, un seul objet au centre, chrome minimal. Les couleurs viennent
+ * uniquement des jetons de marque (violet #6B58FF, bleu #267BFF, cyan #5CE7FF,
+ * blanc #F7FBFF) posés sur #000. Aucun dégradé décoratif de fond : la matière
+ * est dessinée dans le canvas, pas en CSS.
+ *
+ * Respecte les zones sûres iOS (encoche + barre gestuelle) et
+ * `prefers-reduced-motion` (aucune transition, sous-titre immédiat).
+ */
+
+.voice-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #000;
+  color: var(--kwes-white);
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+/* ---------- Chrome : menu (gauche), réglages (droite) ---------- */
+
+.voice-screen__top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vs-circle {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(247, 251, 255, 0.1);
+  color: rgba(247, 251, 255, 0.92);
+  text-decoration: none;
+  transition: background-color 160ms var(--ease), transform 160ms var(--ease);
+}
+
+.vs-circle:hover {
+  background: rgba(247, 251, 255, 0.16);
+}
+
+.vs-circle:active {
+  transform: scale(0.96);
+}
+
+/* ---------- Le dot ---------- */
+
+.voice-screen__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.voice-screen__dot {
+  display: block;
+  pointer-events: auto;
+  width: min(92vw, 640px, 70vh);
+  aspect-ratio: 1;
+  max-height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.voice-screen__dot:active .voice-screen__canvas {
+  transform: scale(0.994);
+}
+
+.voice-screen__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: transform 220ms var(--ease);
+}
+
+/* ---------- Bas : sous-titre + barre demander / micro / fermer ---------- */
+
+.voice-screen__foot {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 640px);
+  padding: 0 16px;
+}
+
+.vs-caption {
+  min-height: 1.4em;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(247, 251, 255, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 520ms var(--ease), transform 520ms var(--ease);
+  pointer-events: none;
+}
+
+.vs-caption[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.vs-caption[data-tone='error'] {
+  color: var(--danger);
+}
+
+.vs-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.vs-ask {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgba(247, 251, 255, 0.08);
+  transition: background-color 180ms var(--ease);
+}
+
+.vs-ask:focus-within {
+  background: rgba(247, 251, 255, 0.12);
+}
+
+.vs-ask__input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--kwes-white);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.2;
+  padding: 0;
+}
+
+.vs-ask__input::placeholder {
+  color: rgba(247, 251, 255, 0.62);
+}
+
+.vs-fab {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(247, 251, 255, 0.1);
+  color: rgba(247, 251, 255, 0.92);
+  transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--ease);
+}
+
+.vs-fab:hover {
+  background: rgba(247, 251, 255, 0.16);
+}
+
+.vs-fab:active {
+  transform: scale(0.96);
+}
+
+.vs-fab[aria-pressed='true'] {
+  background: rgba(92, 231, 255, 0.16);
+  color: var(--kwes-cyan);
+  box-shadow: inset 0 0 0 1px rgba(92, 231, 255, 0.38);
+}
+
+.vs-fab--close,
+.vs-fab--close:hover {
+  background: var(--kwes-white);
+  color: #050310;
+}
+
+/* ---------- Menu de navigation ---------- */
+
+.vs-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: vs-fade 180ms var(--ease) both;
+}
+
+.vs-menu__panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 18px);
+  border-top: 1px solid var(--border);
+  border-radius: 22px 22px 0 0;
+  background: var(--bg-deep);
+  animation: vs-slide-up 240ms var(--ease) both;
+}
+
+.vs-menu__title {
+  margin: 0;
+  padding: 4px 12px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(247, 251, 255, 0.52);
+}
+
+.vs-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  color: rgba(247, 251, 255, 0.92);
+  text-decoration: none;
+  font-size: 0.9375rem;
+}
+
+.vs-menu__item:hover,
+.vs-menu__item:focus-visible {
+  background: rgba(247, 251, 255, 0.07);
+}
+
+.vs-menu__close {
+  margin-top: 8px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: rgba(247, 251, 255, 0.62);
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.vs-menu__close:hover {
+  color: var(--kwes-white);
+  background: rgba(247, 251, 255, 0.07);
+}
+
+/* ---------- Focus visible (jamais masqué) ---------- */
+
+.voice-screen :is(button, a):focus-visible,
+.vs-ask:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Le champ texte n'a pas de double liseré : c'est la barre qui porte le focus. */
+.vs-ask__input:focus,
+.vs-ask__input:focus-visible {
+  outline: none;
+}
+
+.voice-screen__dot:focus-visible {
+  outline-offset: 10px;
+}
+
+/* ---------- Petites hauteurs (paysage mobile) ---------- */
+
+@media (max-height: 560px) {
+  .voice-screen__dot {
+    width: min(70vh, 420px);
+  }
+
+  .vs-caption {
+    display: none;
+  }
+}
+
+/* ---------- Mouvement réduit : rien ne bouge, le sous-titre reste lisible ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-screen *,
+  .voice-screen *::before,
+  .voice-screen *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .voice-screen__dot:active .voice-screen__canvas,
+  .vs-fab:active,
+  .vs-circle:active {
+    transform: none;
+  }
+
+  .vs-caption {
+    transform: none;
+    opacity: 1;
+  }
+
+  .vs-caption[data-visible='false'] {
+    opacity: 0;
+  }
+}
+
+@keyframes vs-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vs-slide-up {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

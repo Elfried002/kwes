@@ -31,6 +31,7 @@ export type IconName =
   | 'alert'
   | 'clock'
   | 'external'
+  | 'menu'
   | 'install'
   | 'share';
 
@@ -127,6 +128,7 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   external: <path d="M13 4h7v7M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   install: (
     <>
       <path d="M12 3v11" />

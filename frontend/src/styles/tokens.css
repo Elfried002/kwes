@@ -47,8 +47,8 @@
   --focus: #8fc1ff;
 
   /* Typographie */
-  --font-sans: 'Inter', 'Geist', 'Geist Sans', ui-sans-serif, system-ui, -apple-system,
-    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Sora Variable', 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Instrument Sans Variable', 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --fs-h1: clamp(1.9rem, 3.4vw, 2.6rem);
   --fs-h2: clamp(1.35rem, 2.2vw, 1.65rem);

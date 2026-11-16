@@ -41,10 +41,16 @@ def settings(tmp_path: Path) -> Settings:
         worker_concurrency=1,
         worker_poll_timeout_seconds=0.05,
         worker_heartbeat_interval_seconds=30,
+        # P0 : la production tourne avec un worker séparé ; les tests gardent le
+        # worker inline pour continuer à vérifier le traitement de bout en bout.
+        worker_inline=True,
+        worker_drain_seconds=5.0,
         rate_limit_enabled=False,
         log_level="CRITICAL",
         deepseek_api_key="",
         skill_offline_mode=True,
+        # Hermétique : le .env de production ouvre le web (P0), les tests non.
+        browser_open_web=False,
         ws_heartbeat_seconds=30,
         max_task_steps=6,
         max_step_retries=1,

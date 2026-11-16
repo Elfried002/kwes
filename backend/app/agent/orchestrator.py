@@ -216,7 +216,7 @@ class Orchestrator:
                     "task_id": str(task.id),
                 },
             )
-            await self.queue.enqueue(task.id)
+            await self._enqueue(task.id)
             return ChatOutcome(
                 conversation=conversation,
                 user_message=user_message,
@@ -452,7 +452,7 @@ class Orchestrator:
                     "task_id": str(task.id),
                 },
             )
-            await self.queue.enqueue(task.id)
+            await self._enqueue(task.id)
             yield ChatStreamEvent(
                 "delta",
                 {**base_meta, "message_id": str(assistant_message.id), "delta": response, "intent": intent},
@@ -743,7 +743,7 @@ class Orchestrator:
             "task.updated",
             {"task_id": str(task.id), "status": task.status, "progress": task.progress},
         )
-        await self.queue.enqueue(task.id)
+        await self._enqueue(task.id)
         return task
 
     def _plan_from_raw_steps(self, goal: str, raw_steps: list[dict[str, Any]]) -> Plan:
@@ -801,6 +801,24 @@ class Orchestrator:
     # ==================================================================
     # Exécution (appelée par le worker)
     # ==================================================================
+    async def _enqueue(self, task_id: uuid.UUID) -> bool:
+        """Met la tâche en file sans faire échouer la requête.
+
+        La base est la source de vérité : si Redis est indisponible, la tâche
+        reste ``queued`` et le balayage périodique du worker la reprend. Une
+        erreur ici ne doit jamais empêcher la création d'une mission.
+        """
+        try:
+            await self.queue.enqueue(task_id)
+            return True
+        except Exception as exc:
+            logger.warning(
+                "Mise en file impossible task=%s (%s) : reprise par balayage.",
+                task_id,
+                type(exc).__name__,
+            )
+            return False
+
     async def execute_task(self, task_id: uuid.UUID) -> str:
         started = await self._mark_running(task_id)
         if started is None:
@@ -1418,7 +1436,7 @@ class Orchestrator:
                     user.id, "task.updated",
                     {"task_id": str(task.id), "status": "queued", "progress": task.progress},
                 )
-                await self.queue.enqueue(task.id)
+                await self._enqueue(task.id)
         else:
             approval.status = "rejected"
             if step is not None:
@@ -1532,7 +1550,7 @@ class Orchestrator:
             user.id, "task.updated",
             {"task_id": str(task.id), "status": "queued", "progress": task.progress},
         )
-        await self.queue.enqueue(task.id)
+        await self._enqueue(task.id)
         return task
 
     # ==================================================================

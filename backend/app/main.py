@@ -134,11 +134,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         application.state.orchestrator = orchestrator
 
-        worker = TaskWorker(
-            settings=settings, db=db, orchestrator=orchestrator, queue=queue
-        )
+        # P0 : le worker vit dans son propre processus (service kwes-worker).
+        # L'API ne le démarre que si on le demande explicitement (tests, dev).
+        worker: TaskWorker | None = None
+        if settings.worker_inline:
+            worker = TaskWorker(
+                settings=settings, db=db, orchestrator=orchestrator, queue=queue
+            )
+            await worker.start()
+            logger.info("Worker inline activé (dev/tests).")
         application.state.worker = worker
-        await worker.start()
         if settings.llm_is_mock:
             logger.warning(
                 "MODE MOCK : DeepSeek non configuré, réponses simulées et en-tête X-Kwes-Mock: 1."
@@ -146,7 +151,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
-            await worker.stop()
+            if worker is not None:
+                await worker.stop()
             await db.dispose()
 
     app = FastAPI(

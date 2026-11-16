@@ -1,0 +1,34 @@
+[Unit]
+Description=Kwes — API FastAPI
+Documentation=file:///home/babayaga/business/kwes/docs/KWES_P0_IMPLEMENTATION_REPORT.md
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=babayaga
+Group=babayaga
+WorkingDirectory=/home/babayaga/business/kwes/backend
+# Le fichier .env reste la seule source des secrets ; aucune valeur ici.
+EnvironmentFile=/home/babayaga/business/kwes/backend/.env
+Environment=KWES_ENV_FILE=/home/babayaga/business/kwes/backend/.env
+# P0 : l'API ne consomme plus la file de tâches, le service kwes-worker s'en charge.
+Environment=WORKER_INLINE=false
+ExecStart=/home/babayaga/business/kwes/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=40
+KillSignal=SIGTERM
+# Durcissement : pas de privilèges supplémentaires, écriture limitée au dossier.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/babayaga/business/kwes/backend
+MemoryHigh=1G
+MemoryMax=2G
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

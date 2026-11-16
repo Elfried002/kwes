@@ -124,3 +124,17 @@ ElevenLabs n'est plus instancié, configuré, ni appelé.
 avec un vrai micro physique, la prononciation dans une phrase longue (mesurée seulement sur le
 mot isolé), et le palier de facturation Google (libre ou payant) — l'estimation de coût est au
 tarif payant publié.
+
+## P0 — 16/11 22:30 — worker isolé, file fiable, exploitation systemd
+
+- `kwes-api.service` et `kwes-worker.service` séparés (utilisateur non root, limites mémoire,
+  `NoNewPrivileges`, `ProtectSystem=strict`), API avec `WORKER_INLINE=false`.
+- File Redis : `BLMOVE` vers une liste « en cours » + acquittement, dédoublonnage des entrées,
+  reprise au démarrage et balayage périodique (30 s).
+- Verrou d'exécution PostgreSQL (`tasks.claimed_by`), migration additive `0011`.
+- Mise en file non bloquante : une coupure Redis ne fait plus échouer la création de mission.
+- Correctif de fiabilité : normalisation `depth: "approfondie"` → `deep` avant validation.
+- `BROWSER_OPEN_WEB=true` (décision produit), garde-fous SSRF vérifiés.
+- Tests : 163 backend (+15), 134 frontend, build OK.
+- Rapport : `docs/KWES_P0_IMPLEMENTATION_REPORT.md` ; contrats : `docs/CONTRATS_COMPETENCES.md` ;
+  rollback : `docs/ROLLBACK_P0.md`.

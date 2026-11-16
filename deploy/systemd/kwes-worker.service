@@ -1,0 +1,35 @@
+[Unit]
+Description=Kwes — worker de missions (file Redis)
+Documentation=file:///home/babayaga/business/kwes/docs/KWES_P0_IMPLEMENTATION_REPORT.md
+After=network-online.target docker.service kwes-api.service
+Wants=network-online.target docker.service
+# Le worker peut démarrer avant l'API : il ne dépend que de Redis/PostgreSQL.
+
+[Service]
+Type=simple
+User=babayaga
+Group=babayaga
+WorkingDirectory=/home/babayaga/business/kwes/backend
+EnvironmentFile=/home/babayaga/business/kwes/backend/.env
+Environment=KWES_ENV_FILE=/home/babayaga/business/kwes/backend/.env
+# Redis obligatoire : pas de repli silencieux sur une file en mémoire.
+Environment=QUEUE_BACKEND=redis
+Environment=WORKER_NAME=kwes-worker-1
+ExecStart=/home/babayaga/business/kwes/backend/.venv/bin/python -m app.worker
+# Arrêt propre : SIGTERM, puis 25 s pour finir la tâche en cours.
+KillSignal=SIGTERM
+TimeoutStopSec=25
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/babayaga/business/kwes/backend
+MemoryHigh=1G
+MemoryMax=2G
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

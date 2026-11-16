@@ -93,6 +93,15 @@ class Settings(BaseSettings):
     worker_heartbeat_interval_seconds: float = 10.0
     worker_heartbeat_ttl_seconds: int = 60
     orphan_recovery_enabled: bool = True
+    # P0 : le worker tourne dans un processus séparé. L'API ne le démarre
+    # que si cette option est explicitement activée (tests, dev).
+    worker_inline: bool = False
+    worker_drain_seconds: float = 20.0
+    worker_claim_ttl_seconds: int = 120
+    # Balayage périodique : rattrape les tâches créées pendant une coupure Redis
+    # ou dont la mise en file a échoué (la base reste la source de vérité).
+    worker_sweep_interval_seconds: float = 30.0
+    worker_name: str = "kwes-worker-1"
     approval_ttl_minutes: int = 30
 
     # --- WebSocket --------------------------------------------------------

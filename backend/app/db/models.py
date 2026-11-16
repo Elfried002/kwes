@@ -117,6 +117,9 @@ class Task(TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # P0 : verrou d'exécution. Un seul worker peut détenir une tâche à la fois.
+    claimed_by: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     steps: Mapped[list["TaskStep"]] = relationship(
         back_populates="task", cascade="all, delete-orphan", lazy="selectin"

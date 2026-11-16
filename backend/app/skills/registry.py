@@ -28,6 +28,7 @@ from app.skills.base import (
     SkillTimeout,
     SkillValidationError,
 )
+from app.skills.normalize import normalize_payload
 
 logger = logging.getLogger("kwes.skills")
 
@@ -262,6 +263,8 @@ class SkillRegistry:
         if skill is None:
             raise SkillValidationError(f"Skill inconnu: {name}")
 
+        # Synonymes connus (ex. « approfondie » → « deep ») avant validation.
+        payload = normalize_payload(name, payload)
         self.validate_input(name, payload)
 
         missing = set(skill.manifest.permissions) - set(ctx.granted_permissions)

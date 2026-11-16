@@ -372,7 +372,7 @@ produit restent ceux déjà connus : DeepSeek (raisonnement) et Gemini (voix), h
 
 ## 18. Commit Git
 
-Commit unique de la mission : **`b6d2e9e`** — `feat(p1): moteur de recherche multi-fournisseurs,
+Commit de code de la mission : **`31f6907`** — `feat(p1): moteur de recherche multi-fournisseurs,
 preuves et authentification stricte`. Message complet :
 
 ```

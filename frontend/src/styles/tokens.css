@@ -1,0 +1,84 @@
+/* Kwes — design tokens.
+ * Source palette : pack de marque (#267BFF, #5CE7FF, #6B58FF, #100B32, #F7FBFF).
+ * Les surfaces sombres sont dérivées de #100B32 ; les accents texte sont éclaircis
+ * pour rester au niveau WCAG AA sur fond sombre.
+ */
+:root {
+  /* Palette de marque brute */
+  --kwes-blue: #267bff;
+  --kwes-cyan: #5ce7ff;
+  --kwes-violet: #6b58ff;
+  --kwes-ink: #100b32;
+  --kwes-white: #f7fbff;
+
+  /* Surfaces */
+  --bg: #08061c;
+  --bg-deep: #060415;
+  --surface: #100b32;
+  --surface-raised: #171040;
+  --surface-glass: rgba(23, 16, 64, 0.62);
+  --border: rgba(140, 155, 255, 0.16);
+  --border-strong: rgba(140, 155, 255, 0.32);
+
+  /* Texte */
+  --text: #f7fbff;
+  --text-soft: #d5dcf6;
+  --muted: #a6b0d8;
+  --muted-strong: #bcc5e6;
+
+  /* Actions et états */
+  --accent: #267bff;
+  --accent-strong: #4c8dff;
+  --accent-soft: rgba(38, 123, 255, 0.16);
+  /* Dégradé d'action : assombri pour garantir 4,5:1 avec le texte blanc. */
+  --action-from: #1f63e6;
+  --action-to: #5a46e0;
+  --action-from-hover: #1b5fdb;
+  --action-to-hover: #4e3fd6;
+  --accent-cyan: #5ce7ff;
+  --accent-violet: #6b58ff;
+  --link: #9cc2ff;
+  --success: #4be3ae;
+  --success-soft: rgba(75, 227, 174, 0.14);
+  --warning: #ffc774;
+  --warning-soft: rgba(255, 199, 116, 0.14);
+  --danger: #ff8a9b;
+  --danger-soft: rgba(255, 138, 155, 0.14);
+  --focus: #8fc1ff;
+
+  /* Typographie */
+  --font-sans: 'Inter', 'Geist', 'Geist Sans', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-h1: clamp(1.9rem, 3.4vw, 2.6rem);
+  --fs-h2: clamp(1.35rem, 2.2vw, 1.65rem);
+  --fs-h3: 1.125rem;
+  --fs-body: 0.9375rem;
+  --fs-small: 0.8125rem;
+  --fs-meta: 0.75rem;
+
+  /* Formes */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 26px;
+  --r-pill: 999px;
+  --shadow-soft: 0 18px 50px -28px rgba(4, 2, 20, 0.9);
+  --shadow-glow: 0 0 60px -12px rgba(38, 123, 255, 0.45);
+
+  /* Espacements */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  --sidebar-w: 248px;
+  --content-max: 1120px;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+}

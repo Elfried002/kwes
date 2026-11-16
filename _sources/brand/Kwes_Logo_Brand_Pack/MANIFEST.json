@@ -1,0 +1,78 @@
+{
+  "brand": "Kwes",
+  "version": "1.0.0",
+  "files": [
+    {
+      "path": "01-logos/Kwes_Logo_Static.png",
+      "bytes": 67613
+    },
+    {
+      "path": "01-logos/Kwes_Logo_Static_2x.png",
+      "bytes": 505275
+    },
+    {
+      "path": "02-animation/Kwes_Animated_Logo.gif",
+      "bytes": 244513
+    },
+    {
+      "path": "02-animation/Kwes_Animation_Frame_01.png",
+      "bytes": 67613
+    },
+    {
+      "path": "02-animation/Kwes_Animation_Frame_02.png",
+      "bytes": 57078
+    },
+    {
+      "path": "02-animation/Kwes_Animation_Frame_03.png",
+      "bytes": 57837
+    },
+    {
+      "path": "02-animation/Kwes_Animation_Frame_04.png",
+      "bytes": 67192
+    },
+    {
+      "path": "02-animation/Kwes_Animation_Frame_05.png",
+      "bytes": 68702
+    },
+    {
+      "path": "02-animation/Kwes_Animation_Frame_06.png",
+      "bytes": 66212
+    },
+    {
+      "path": "03-icons/Kwes_Favicon_192.png",
+      "bytes": 17677
+    },
+    {
+      "path": "03-icons/Kwes_Favicon_512.png",
+      "bytes": 66273
+    },
+    {
+      "path": "03-icons/Kwes_Favicon_64.png",
+      "bytes": 4357
+    },
+    {
+      "path": "03-icons/Kwes_Orb_Icon.png",
+      "bytes": 170125
+    },
+    {
+      "path": "03-icons/Kwes_Orb_Icon.svg",
+      "bytes": 1524
+    },
+    {
+      "path": "04-previews/Kwes_Animation_Contact_Sheet.jpg",
+      "bytes": 70397
+    },
+    {
+      "path": "04-previews/Kwes_Visual_Concept_Sheet.png",
+      "bytes": 1817480
+    },
+    {
+      "path": "05-guidelines/BRAND_GUIDELINES.md",
+      "bytes": 750
+    },
+    {
+      "path": "README.md",
+      "bytes": 1773
+    }
+  ]
+}

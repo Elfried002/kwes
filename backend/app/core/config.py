@@ -1,0 +1,159 @@
+"""Configuration applicative (pydantic-settings, alimentée par l'environnement / .env).
+
+Aucune valeur secrète n'est codée en dur : les secrets viennent uniquement de
+l'environnement. Les valeurs par défaut sont soit non sensibles, soit les
+valeurs de développement explicitement prévues par CONTRACTS.md.
+"""
+
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_DEV_JWT_SECRET = "dev-secret-change-me"
+DEFAULT_CORS_ORIGINS = "http://127.0.0.1:5173,http://localhost:5173"
+DEFAULT_BROWSER_ALLOWLIST = (
+    "wikipedia.org,fr.wikipedia.org,en.wikipedia.org,example.com,www.example.com,duckduckgo.com"
+)
+
+
+class Settings(BaseSettings):
+    """Paramètres du backend Kwes.
+
+    Les noms de champs correspondent aux variables d'environnement du contrat
+    (insensibles à la casse) : DATABASE_URL -> database_url, etc.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=os.environ.get("KWES_ENV_FILE", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    app_name: str = "Kwes API"
+    app_env: Literal["dev", "prod", "test"] = "dev"
+    version: str = "0.1.0"
+    api_prefix: str = "/api/v1"
+
+    # --- Infrastructure -------------------------------------------------
+    database_url: str = "postgresql+psycopg://kwes:kwes@127.0.0.1:5432/kwes"
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    queue_backend: Literal["auto", "redis", "memory"] = "auto"
+    database_pool_size: int = 5
+
+    # --- Authentification ----------------------------------------------
+    dev_jwt_secret: str = DEFAULT_DEV_JWT_SECRET
+    supabase_jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_leeway_seconds: int = 30
+    jwt_audience: str = ""  # vide = pas de vérification d'audience
+
+    # --- Fournisseurs ---------------------------------------------------
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-chat"
+    deepseek_timeout_seconds: float = 30.0
+    deepseek_max_retries: int = 2
+    deepseek_temperature: float = 0.2
+
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = ""
+    elevenlabs_base_url: str = "https://api.elevenlabs.io"
+    elevenlabs_model_id: str = "eleven_multilingual_v2"
+    elevenlabs_timeout_seconds: float = 20.0
+
+    # --- API -------------------------------------------------------------
+    cors_origins: str = DEFAULT_CORS_ORIGINS
+    max_request_body_bytes: int = 1_500_000
+    max_message_chars: int = 8000
+    dev_endpoints: bool = False  # active POST /dev/token — dev uniquement
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 180
+    rate_limit_chat_per_minute: int = 40
+    request_id_header: str = "X-Request-ID"
+
+    # --- Orchestrateur / worker -----------------------------------------
+    max_task_steps: int = 6
+    max_plan_repair_attempts: int = 1
+    max_step_retries: int = 2
+    step_retry_backoff_seconds: float = 0.25
+    skill_default_timeout_seconds: float = 60.0
+    worker_concurrency: int = 2
+    worker_poll_timeout_seconds: float = 1.0
+    worker_heartbeat_interval_seconds: float = 10.0
+    worker_heartbeat_ttl_seconds: int = 60
+    orphan_recovery_enabled: bool = True
+    approval_ttl_minutes: int = 30
+
+    # --- WebSocket --------------------------------------------------------
+    ws_heartbeat_seconds: float = 30.0
+    ws_require_origin: bool = False  # True en prod : Origin obligatoire
+
+    # --- Skills -----------------------------------------------------------
+    browser_allowlist: str = DEFAULT_BROWSER_ALLOWLIST
+    web_extra_allowlist: str = ""
+    fetch_max_bytes: int = 2_000_000
+    fetch_max_redirects: int = 4
+    skill_offline_mode: bool = False  # tests : aucun accès réseau autorisé
+
+    # --- Divers ----------------------------------------------------------
+    log_level: str = "INFO"
+    demo_prefix: str = "[DEMO]"
+
+    # ------------------------------------------------------------------
+    @field_validator("app_env", mode="before")
+    @classmethod
+    def _normalize_env(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def browser_domain_allowlist(self) -> list[str]:
+        items = self.browser_allowlist.split(",") + self.web_extra_allowlist.split(",")
+        return [d.strip().lower().rstrip(".") for d in items if d.strip()]
+
+    @property
+    def jwt_secret(self) -> str:
+        """Secret HS256 effectif (dev : DEV_JWT_SECRET, sinon SUPABASE_JWT_SECRET)."""
+        if self.app_env in ("dev", "test"):
+            return self.dev_jwt_secret or DEFAULT_DEV_JWT_SECRET
+        return self.supabase_jwt_secret
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env == "prod"
+
+    @property
+    def llm_is_mock(self) -> bool:
+        return not bool(self.deepseek_api_key.strip())
+
+    @property
+    def voice_is_mock(self) -> bool:
+        return not bool(self.elevenlabs_api_key.strip())
+
+    def mock_providers(self) -> list[str]:
+        providers: list[str] = []
+        if self.llm_is_mock:
+            providers.append("deepseek")
+        if self.voice_is_mock:
+            providers.append("elevenlabs")
+        return providers
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
+
+
+def clear_settings_cache() -> None:
+    get_settings.cache_clear()

@@ -1,0 +1,261 @@
+# =============================================================================
+# Kwes — .github/workflows/ci.yml
+#
+# Contrôles à chaque push / PR :
+#   backend     : ruff (lint + format) et pytest
+#   frontend    : npm ci, TypeScript, build Vite
+#   migrations  : application réelle des migrations sur PostgreSQL 16 + pgvector,
+#                 contrôles RLS, test d'isolation, idempotence
+#   docker      : validation du compose et construction de l'image backend
+#
+# Sécurité : permissions minimales (contents: read), actions épinglées par SHA,
+# aucun secret requis, rien n'est publié.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend — lint + tests
+  # ---------------------------------------------------------------------------
+  backend:
+    name: backend (ruff, pytest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
+          python -m pip install "ruff>=0.6" "pytest>=8" "pytest-asyncio>=0.23"
+
+      - name: Ruff (lint)
+        run: |
+          if compgen -G "**/*.py" > /dev/null || compgen -G "*.py" > /dev/null; then
+            ruff check --output-format=github .
+          else
+            echo "::warning::aucun fichier Python dans backend/ — étape ignorée"
+          fi
+
+      - name: Ruff (format)
+        run: |
+          if compgen -G "**/*.py" > /dev/null || compgen -G "*.py" > /dev/null; then
+            ruff format --check --diff .
+          else
+            echo "::warning::aucun fichier Python dans backend/ — étape ignorée"
+          fi
+
+      - name: Pytest
+        env:
+          ENVIRONMENT: test
+          DEV_JWT_SECRET: ci-test-secret
+          DATABASE_URL: ""      # les tests unitaires ne doivent pas toucher la base
+          REDIS_URL: ""
+        run: |
+          if [ -d tests ] || compgen -G "test_*.py" > /dev/null; then
+            python -m pytest -q --maxfail=1
+          else
+            echo "::warning::aucun test backend pour l'instant"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Frontend — types + build
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: frontend (tsc, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          elif [ -f package.json ]; then
+            npm install --no-audit --no-fund
+          else
+            echo "::warning::frontend/package.json absent — étape ignorée"
+          fi
+
+      - name: Typecheck
+        run: |
+          if [ -f tsconfig.json ]; then
+            npx --no-install tsc --noEmit
+          else
+            echo "::warning::tsconfig.json absent — étape ignorée"
+          fi
+
+      - name: Build
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8000
+        run: |
+          if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+            npm run build
+          else
+            echo "::warning::script build absent — étape ignorée"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Migrations — exécution réelle sur PostgreSQL 16 + pgvector
+  # ---------------------------------------------------------------------------
+  migrations:
+    name: migrations (postgres + pgvector)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: kwes
+          POSTGRES_PASSWORD: kwes_ci
+          POSTGRES_DB: kwes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kwes -d kwes"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: kwes
+      PGPASSWORD: kwes_ci
+      PGDATABASE: kwes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Apply migrations
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -q -f supabase/local/0000_local_auth_shim.sql
+          for f in supabase/migrations/*.sql; do
+            echo "::group::$f"
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Idempotence (re-apply)
+        run: |
+          set -euo pipefail
+          for f in supabase/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          echo "réapplication sans erreur"
+
+      - name: Assert schema (13 tables, RLS partout, pgvector)
+        run: |
+          set -euo pipefail
+          tables=$(psql -At -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+                                where n.nspname='public' and c.relkind='r'")
+          rls_off=$(psql -At -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+                                 where n.nspname='public' and c.relkind='r' and c.relrowsecurity=false")
+          skills=$(psql -At -c "select count(*) from public.skills")
+          active=$(psql -At -c "select count(*) from public.skill_versions where status='active'")
+          emb=$(psql -At -c "select format_type(a.atttypid,a.atttypmod) from pg_attribute a
+                             join pg_class c on c.oid=a.attrelid
+                             where c.relname='memories' and a.attname='embedding'")
+          policies=$(psql -At -c "select count(*) from pg_policies where schemaname='public'")
+          always_true=$(psql -At -c "select count(*) from pg_policies
+                                     where schemaname='public' and qual='true'
+                                       and tablename not in ('skills','skill_versions')")
+          echo "tables=$tables rls_off=$rls_off skills=$skills active=$active embedding=$emb policies=$policies always_true=$always_true"
+          [ "$tables" -ge 13 ]        || { echo "::error::tables=$tables (<13)"; exit 1; }
+          [ "$rls_off" -eq 0 ]        || { echo "::error::$rls_off tables sans RLS"; exit 1; }
+          [ "$skills" -eq 3 ]         || { echo "::error::seed skills=$skills"; exit 1; }
+          [ "$active" -eq 3 ]         || { echo "::error::versions actives=$active"; exit 1; }
+          [ "$emb" = "vector(1536)" ] || { echo "::error::embedding=$emb"; exit 1; }
+          [ "$policies" -ge 30 ]      || { echo "::error::policies=$policies"; exit 1; }
+          [ "$always_true" -eq 0 ]    || { echo "::error::$always_true policies always-true hors référentiel"; exit 1; }
+
+      - name: RLS isolation tests
+        run: psql -v ON_ERROR_STOP=1 -q -f supabase/tests/rls_test.sql
+
+  # ---------------------------------------------------------------------------
+  # Docker — compose valide + image backend constructible
+  # ---------------------------------------------------------------------------
+  docker:
+    name: docker (compose, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Validate compose file
+        run: |
+          set -euo pipefail
+          cp .env.example .env          # valeurs factices, aucun secret
+          docker compose -f infra/docker-compose.yml config -q
+          docker compose -f infra/docker-compose.yml config --services
+
+      - name: Build backend image
+        run: |
+          docker build \
+            -f infra/backend.Dockerfile \
+            -t kwes/backend:ci \
+            --build-arg PYTHON_VERSION=3.12 \
+            .
+
+      - name: Smoke test image (non-root, healthcheck présent)
+        run: |
+          set -euo pipefail
+          docker image inspect kwes/backend:ci \
+            --format 'User={{.Config.User}} HC={{if .Config.Healthcheck}}yes{{else}}no{{end}} Cmd={{join .Config.Cmd " "}}'
+          user=$(docker image inspect kwes/backend:ci --format '{{.Config.User}}')
+          [ "$user" != "" ] && [ "$user" != "root" ] && [ "$user" != "0" ] \
+            || { echo "::error::l'image tourne en root"; exit 1; }

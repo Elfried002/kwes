@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "business_planning.output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "summary": { "type": "string" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "depends_on": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["id", "title", "description"]
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "risk": { "type": "string" },
+          "impact": { "type": "string" },
+          "mitigation": { "type": "string" }
+        },
+        "required": ["risk", "impact"]
+      }
+    },
+    "kpis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "metric": { "type": "string" },
+          "target": { "type": "string" }
+        },
+        "required": ["name", "metric"]
+      }
+    },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "external_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requested": { "type": "boolean" },
+        "performed": { "type": "boolean" },
+        "reason": { "type": "string" }
+      },
+      "required": ["requested", "performed"]
+    }
+  },
+  "required": ["summary", "steps", "risks", "kpis", "external_action"]
+}

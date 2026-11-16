@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "web_research.input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": { "type": "string", "minLength": 3, "maxLength": 500 },
+    "scope": { "type": ["string", "null"], "maxLength": 200 },
+    "depth": { "type": "string", "enum": ["quick", "standard", "deep"], "default": "standard" }
+  },
+  "required": ["query"]
+}

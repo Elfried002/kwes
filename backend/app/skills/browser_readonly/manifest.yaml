@@ -1,0 +1,18 @@
+name: browser_readonly
+version: 1.0.0
+description: Lecture seule d'une page web autorisée, extraction du contenu lisible
+entrypoint: skill.py
+permissions:
+  - browser.read
+  - web.read
+risk_level: R0
+network:
+  mode: allowlist
+  domains: []
+resources:
+  timeout_seconds: 30
+  memory_mb: 512
+  cpu_limit: 0.5
+approval:
+  required_for:
+    - external_publish

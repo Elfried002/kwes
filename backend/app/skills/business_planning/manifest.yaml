@@ -1,0 +1,17 @@
+name: business_planning
+version: 1.0.0
+description: Structuration d'un plan d'action, risques et indicateurs
+entrypoint: skill.py
+permissions:
+  - local.write
+risk_level: R1
+network:
+  mode: none
+  domains: []
+resources:
+  timeout_seconds: 20
+  memory_mb: 256
+  cpu_limit: 0.5
+approval:
+  required_for:
+    - external_publish

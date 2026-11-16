@@ -1,0 +1,49 @@
+# Contexte de build Docker (racine du dépôt) — réduire et ne rien fuiter.
+
+# Versionnement / CI
+.git
+.gitignore
+.github
+
+# Secrets et environnement local (jamais dans une image)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+certs/
+
+# Artefacts Python
+backend/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.tox
+**/htmlcov
+**/.coverage
+
+# Artefacts Node
+frontend/node_modules
+**/.vite
+**/dist
+**/build
+npm-debug.log*
+
+# Documentation, sources, infra (inutiles dans l'image applicative)
+docs
+_sources
+infra
+supabase
+tests
+**/*.md
+!backend/README.md
+
+# Divers
+.DS_Store
+*.log
+**/*.sqlite
+**/*.db
+tmp/

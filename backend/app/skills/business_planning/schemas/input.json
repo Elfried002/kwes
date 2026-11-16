@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "business_planning.input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "objective": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 1000
+    },
+    "context": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 4000
+    },
+    "constraints": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "maxItems": 12
+        },
+        {
+          "type": "string",
+          "maxLength": 1200
+        }
+      ],
+      "description": "Liste de contraintes, ou texte libre converti en liste par le skill."
+    },
+    "publish_external": {
+      "type": "boolean"
+    },
+    "source_step": {
+      "type": "string",
+      "maxLength": 40
+    }
+  },
+  "required": [
+    "objective"
+  ]
+}

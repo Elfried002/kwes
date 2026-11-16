@@ -1,0 +1,10 @@
+# Override de développement local — jamais utilisé en production.
+# Publie postgres et redis sur la boucle locale uniquement, pour lancer
+# le backend et le worker directement sur l'hôte pendant le développement.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"

@@ -1,0 +1,96 @@
+# =============================================================================
+# Kwes — infra/caddy/Caddyfile  (ALTERNATIVE à Nginx)
+#
+# Caddy gère TLS automatiquement (ACME) : aucun bootstrap de certificat, aucun
+# cron de renouvellement. À préférer si vous ne voulez pas opérer certbot.
+#
+# Utilisation (remplace le service `proxy` du compose) :
+#   caddy:
+#     image: caddy:2-alpine
+#     ports: ["80:80", "443:443"]
+#     volumes:
+#       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+#       - caddy_data:/data        # certificats (à sauvegarder !)
+#       - caddy_config:/config
+#     environment:
+#       KWES_DOMAIN: ${KWES_DOMAIN}
+#       ACME_EMAIL: ${LETSENCRYPT_EMAIL}
+#     networks: [edge]
+#
+# Sans Caddy, voir infra/nginx/kwes.conf + infra/scripts/bootstrap_tls.sh.
+# =============================================================================
+
+{
+	email {$ACME_EMAIL}
+	# Décommenter pour tester sans consommer le quota Let's Encrypt :
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$KWES_DOMAIN} {
+	encode zstd gzip
+
+	# --- En-têtes de sécurité (équivalents de la conf Nginx) ---
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), geolocation=(), payment=(), usb=(), microphone=(self)"
+		Cross-Origin-Opener-Policy "same-origin"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+		-Server
+	}
+
+	# --- Limite de taille des requêtes ---
+	request_body {
+		max_size 25MB
+	}
+
+	# --- Sonde locale ---
+	respond /healthz 200 {
+		close
+	}
+
+	# --- WebSocket temps réel : pas de timeout de lecture ---
+	reverse_proxy /api/v1/ws backend:8000 {
+		transport http {
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+
+	# --- Chat en streaming : désactiver la bufferisation ---
+	reverse_proxy /api/v1/chat backend:8000 {
+		flush_interval -1
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+	}
+
+	# --- API ---
+	reverse_proxy /api/* backend:8000 {
+		transport http {
+			read_timeout 120s
+		}
+	}
+
+	reverse_proxy /health backend:8000
+
+	# --- Racine : le frontend vit sur Vercel ---
+	respond / "{\"service\":\"kwes-api\",\"status\":\"ok\"}" 200
+
+	respond 404 "{\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Route inconnue\",\"details\":{}}}" {
+		close
+	}
+
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+}

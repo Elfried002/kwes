@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "web_research.output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string" },
+          "title": { "type": "string" },
+          "snippet": { "type": "string" },
+          "domain": { "type": "string" }
+        },
+        "required": ["url", "title"]
+      }
+    },
+    "facts": { "type": "array", "items": { "type": "string" } },
+    "synthesis": { "type": "string" },
+    "limits": { "type": "array", "items": { "type": "string" } },
+    "skipped_sources": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["sources", "facts", "synthesis", "limits"]
+}

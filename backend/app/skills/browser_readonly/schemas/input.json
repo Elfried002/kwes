@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "browser_readonly.input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "url": { "type": "string", "minLength": 8, "maxLength": 2048 },
+    "objective": { "type": ["string", "null"], "maxLength": 400 },
+    "max_chars": { "type": "integer", "minimum": 200, "maximum": 20000, "default": 8000 }
+  },
+  "required": ["url"]
+}

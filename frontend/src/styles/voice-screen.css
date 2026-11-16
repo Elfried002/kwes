@@ -115,15 +115,19 @@
 
 .vs-caption {
   min-height: 1.4em;
+  max-height: 4.4em;
   margin: 0;
   padding: 0 8px;
   font-size: 0.9375rem;
-  line-height: 1.4;
+  line-height: 1.45;
   text-align: center;
   color: rgba(247, 251, 255, 0.72);
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  text-wrap: pretty;
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 520ms var(--ease), transform 520ms var(--ease);

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { clearSession, useSession } from '../lib/auth';
-import { initials } from '../lib/format';
+import { firstName, initials } from '../lib/format';
 import { href, type Route } from '../lib/router';
 import { listApprovals } from '../lib/api';
 import { useApi } from '../lib/hooks';
@@ -16,16 +16,17 @@ interface NavEntry {
 }
 
 /**
- * Cinq entrées, en français courant. Aucun terme interne (mission, tâche,
- * validation, activité, conversation) : l'utilisateur voit ce que Kwes fait,
- * pas comment il est construit.
+ * Le rail garde les écrans réels de l'utilisateur — ce que Kwes fait, ce qu'il
+ * attend, les échanges passés — mais en icônes seules. Les libellés
+ * n'apparaissent qu'au survol ou au clavier.
  */
 const NAV: NavEntry[] = [
   { label: 'Accueil', shortLabel: 'Accueil', route: { name: 'home' }, icon: 'home' },
   { label: 'Parler', shortLabel: 'Parler', route: { name: 'voice' }, icon: 'mic' },
+  { label: 'Vos échanges', shortLabel: 'Échanges', route: { name: 'conversations' }, icon: 'history' },
   { label: 'Ce qu’il fait', shortLabel: 'Travail', route: { name: 'tasks' }, icon: 'activity' },
   {
-    label: 'Il attend votre accord',
+    label: 'Accord en attente',
     shortLabel: 'Accord',
     route: { name: 'approvals' },
     icon: 'shield',
@@ -39,6 +40,10 @@ function isActive(route: Route, target: Route): boolean {
       return route.name === 'home';
     case 'chat':
       return route.name === 'chat';
+    case 'voice':
+      return route.name === 'voice';
+    case 'conversations':
+      return route.name === 'conversations';
     case 'tasks':
       return route.name === 'tasks' || route.name === 'task';
     case 'approvals':
@@ -91,6 +96,8 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
   const { orbState, orbMeta, lastError, clearError, refreshKey } = useKwes();
   const approvals = useApi((signal) => listApprovals(signal), [], { refreshKey });
   const waiting = (approvals.data ?? []).filter((approval) => approval.status === 'pending').length;
+  const profileName =
+    firstName(session?.email, session?.displayName) || session?.email || session?.userId || 'Votre profil';
 
   return (
     <>
@@ -99,28 +106,36 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
       </a>
 
       <div className="app-shell">
-        <aside className="sidebar" aria-label="Navigation principale">
-          <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
-            <BrandMark size={38} state={orbState} />
-            <span>
-              <span className="brand__name">Kwes</span>
-              <span className="brand__tag">Assistant personnel</span>
-            </span>
+        <aside className="rail" aria-label="Navigation principale">
+          <a className="rail__brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
+            <BrandMark size={34} state={orbState} />
+            <span className="rail__label rail__wordmark">Kwes</span>
           </a>
 
-          <nav className="nav" aria-label="Sections">
-            <span className="nav__label">Votre espace</span>
+          <a
+            className="rail__new"
+            href={href({ name: 'home' })}
+            aria-label="Nouvelle demande"
+            title="Nouvelle demande"
+          >
+            <Icon name="edit" size={20} />
+            <span className="rail__label">Nouvelle demande</span>
+          </a>
+
+          <nav className="rail__nav" aria-label="Sections">
             {NAV.map((entry) => (
               <a
                 key={entry.label}
-                className="nav__item"
+                className="rail__item"
                 href={href(entry.route)}
+                aria-label={entry.label}
+                title={entry.label}
                 aria-current={isActive(route, entry.route) ? 'page' : undefined}
               >
-                <Icon name={entry.icon} size={18} className="nav__icon" />
-                {entry.label}
+                <Icon name={entry.icon} size={20} className="rail__icon" />
+                <span className="rail__label">{entry.label}</span>
                 {entry.route.name === 'approvals' && waiting > 0 ? (
-                  <span className="nav__count" aria-label={`${waiting} demande(s) en attente`}>
+                  <span className="rail__count" aria-label={`${waiting} demande(s) en attente`}>
                     {waiting}
                   </span>
                 ) : null}
@@ -128,19 +143,26 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
             ))}
           </nav>
 
-          <div className="sidebar__foot">
-            <ConnectionBadge />
+          <div className="rail__foot">
+            <div className="rail__status">
+              <ConnectionBadge />
+            </div>
             {session ? (
-              <div className="user-chip">
-                <span className="user-chip__avatar" aria-hidden="true">
-                  {initials(session.email)}
-                </span>
-                <span className="user-chip__mail" title={session.email || session.userId}>
-                  {session.email || session.userId || 'Session dev'}
-                </span>
+              <div className="rail__account">
+                <a
+                  className="rail__user"
+                  href={href({ name: 'settings' })}
+                  aria-label={`${profileName} — réglages`}
+                  title="Votre profil et les réglages"
+                >
+                  <span className="rail__avatar" aria-hidden="true">
+                    {initials(session.email || session.userId || 'kwes')}
+                  </span>
+                  <span className="rail__label rail__user-name">{profileName}</span>
+                </a>
                 <button
                   type="button"
-                  className="btn btn--icon"
+                  className="rail__logout"
                   aria-label="Se déconnecter"
                   title="Se déconnecter"
                   onClick={() => {
@@ -154,7 +176,7 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
           </div>
         </aside>
 
-        <div>
+        <div className="app-shell__body">
           <header className="mobile-bar">
             <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
               <BrandMark size={30} state={orbState} />

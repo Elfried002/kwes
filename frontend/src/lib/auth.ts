@@ -18,7 +18,17 @@ export interface Session {
   token: string;
   email: string;
   userId: string;
+  displayName: string;
   expiresAt: number | null;
+}
+
+function readDisplayName(session: SupabaseSession | null): string {
+  const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
+  for (const key of ['display_name', 'full_name', 'name']) {
+    const value = metadata?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
 }
 
 interface AuthState {
@@ -36,6 +46,7 @@ function toSession(session: SupabaseSession | null): Session | null {
     token: session.access_token,
     email: session.user?.email ?? '',
     userId: session.user?.id ?? '',
+    displayName: readDisplayName(session),
     expiresAt: typeof session.expires_at === 'number' ? session.expires_at : null,
   };
 }
@@ -56,6 +67,7 @@ function readStored(): Session | null {
       token: candidate.token,
       email: typeof candidate.email === 'string' ? candidate.email : '',
       userId: typeof candidate.userId === 'string' ? candidate.userId : '',
+      displayName: typeof candidate.displayName === 'string' ? candidate.displayName : '',
       expiresAt: typeof candidate.expiresAt === 'number' ? candidate.expiresAt : null,
     };
   } catch {
@@ -89,6 +101,7 @@ function applySession(session: SupabaseSession | null): void {
     state.ready &&
     next?.token === state.session?.token &&
     next?.email === state.session?.email &&
+    next?.displayName === state.session?.displayName &&
     next?.expiresAt === state.session?.expiresAt
   ) {
     return;

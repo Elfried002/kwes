@@ -7,22 +7,33 @@
  *   ouvert, audio en lecture (événements `onplay` / `onended` de l'élément).
  * - Chaque phrase complète reçue du flux part immédiatement en synthèse ;
  *   la file audio n'attend jamais la fin de la réponse.
- * - Barge-in : la parole pendant la lecture coupe l'audio, annule le flux en
- *   cours et repasse en écoute.
+ * - Tour de parole strict : la reconnaissance reste active pendant que Kwes
+ *   parle ; toute phrase reconnue (interim ou final) coupe net l'audio, annule
+ *   le flux en cours et rend la parole à l'utilisateur. L'ancienne réponse ne
+ *   reprend jamais : chaque tour porte une génération (`epoch`), et tout ce qui
+ *   appartient à une génération dépassée est jeté (file, promesses, deltas SSE).
+ * - L'écho du haut-parleur est reconnu en comparant la transcription à la
+ *   phrase réellement en train d'être lue : couper là-dessus reviendrait à ce
+ *   que Kwes s'interrompe lui-même.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { errorMessage, streamChat, synthesizeSpeech, type SynthesizedSpeech } from './api';
+import { errorMessage, streamChat } from './api';
+import { useKwesSpeech } from './use-kwes-speech';
 import { useKwes } from '../state/KwesProvider';
 import {
+  FIRST_CONTACT_MESSAGE,
   SILENCE_MS,
+  hasMetKwes,
   initialVoiceState,
+  looksLikeEcho,
+  markKwesMet,
   matchWakeWord,
   reduceVoice,
   shouldCutAudio,
+  shouldOpenDiscovery,
   shouldSubmitOnSilence,
   splitSentences,
-  stripMarkdownForSpeech,
   type VoiceEvent,
   type VoicePhase,
   type VoiceSessionState,
@@ -93,7 +104,8 @@ export interface VoiceTurnInfo {
 export interface VoiceConversationOptions {
   conversationId?: string;
   language?: string;
-  /** Appelé pour chaque phrase réellement envoyée au serveur. */
+  /** Voix choisie dans les réglages (`null` = voix par défaut du serveur). */
+  voiceId?: string | null;
   onUserMessage: (text: string) => void;
   /** Appelé une fois la réponse complète reçue (message persistant côté serveur). */
   onAssistantMessage: (text: string, info: VoiceTurnInfo) => void;
@@ -115,9 +127,6 @@ export interface VoiceConversation extends VoiceSessionState {
   /** Soumission manuelle d'une phrase (bouton « Envoyer » du mode vocal). */
   speak: (text: string) => void;
 }
-
-/** Délai minimal avant d'accepter un barge-in : évite l'auto-interruption par le haut-parleur. */
-const BARGE_IN_GUARD_MS = 350;
 
 export function useVoiceConversation(options: VoiceConversationOptions): VoiceConversation {
   const { setMicActive, notifyChatStarted, notifyAudioStart, notifyAudioEnd, dispatchOrb, resetOrb } =
@@ -141,11 +150,8 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
 
   const conversationIdRef = useRef<string | undefined>(options.conversationId);
   const turnAbortRef = useRef<AbortController | null>(null);
-  const audioQueueRef = useRef<Array<Promise<SynthesizedSpeech | null>>>([]);
-  const drainingRef = useRef(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioFinishedRef = useRef<(() => void) | null>(null);
-  const speakingSinceRef = useRef(0);
+
+  const introStartedRef = useRef(false);
 
   /** Réduction synchrone : les handlers du micro lisent un état à jour. */
   const send = useCallback((event: VoiceEvent): VoiceSessionState => {
@@ -159,126 +165,32 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
     conversationIdRef.current = options.conversationId;
   }, [options.conversationId]);
 
-  /* ---------- Audio ---------- */
+  /* ---------- Audio (moteur partagé avec l'accueil) ---------- */
 
-  const playSpeech = useCallback(
-    (speech: SynthesizedSpeech): Promise<void> =>
-      new Promise<void>((resolve) => {
-        if (!speech.audioBase64) {
-          resolve();
-          return;
-        }
-        const audio = new Audio(
-          `data:${speech.mimeType ?? 'audio/mpeg'};base64,${speech.audioBase64}`,
-        );
-        audioRef.current = audio;
-        let settled = false;
-        let monitor: number | null = null;
-        const finish = (): void => {
-          if (settled) return;
-          settled = true;
-          if (monitor !== null) window.clearInterval(monitor);
-          audioFinishedRef.current = null;
-          if (audioRef.current === audio) audioRef.current = null;
-          resolve();
-        };
-        audioFinishedRef.current = finish;
+  /**
+   * Une seule implémentation de la parole pour toute l'application : file
+   * séquentielle, repli voix de l'appareil quand ElevenLabs ne renvoie pas
+   * d'audio, coupe nette. Ce hook ne fait que traduire les faits observés en
+   * événements de la machine à états.
+   */
+  const speech = useKwesSpeech({
+    voiceId: options.voiceId,
+    onNotice: (message) => callbacksRef.current.onNotice?.(message),
+    onQueued: () => send({ type: 'AUDIO_QUEUED' }),
+    onPlaying: () => send({ type: 'AUDIO_PLAYING' }),
+    onEnded: () => send({ type: 'AUDIO_ENDED' }),
+  });
 
-        audio.onplay = () => {
-          speakingSinceRef.current = Date.now();
-          const startedAt = Date.now();
-          if (monitor !== null) window.clearInterval(monitor);
-          // Surveillance : `ended` peut ne jamais arriver (onglet masqué, sortie
-          // audio indisponible). On surveille la progression réelle de la lecture.
-          monitor = window.setInterval(() => {
-            if (settled) return;
-            const duration = audio.duration;
-            if (Number.isFinite(duration) && duration > 0 && audio.currentTime >= duration - 0.2) {
-              send({ type: 'AUDIO_ENDED' });
-              finish();
-              return;
-            }
-            if (audio.currentTime <= 0.05 && Date.now() - startedAt > 4000) {
-              callbacksRef.current.onNotice?.(
-                'Lecture audio impossible dans ce navigateur (aucune sortie audio). La réponse reste affichée en texte.',
-              );
-              send({ type: 'AUDIO_ENDED' });
-              finish();
-            }
-          }, 500);
-          send({ type: 'AUDIO_PLAYING' });
-        };
-        audio.onended = () => {
-          send({ type: 'AUDIO_ENDED' });
-          finish();
-        };
-        audio.onerror = () => {
-          // Audio illisible : on ne prétend pas avoir parlé, on passe à la suite.
-          callbacksRef.current.onNotice?.(
-            'Extrait audio illisible dans ce navigateur : la réponse reste affichée en texte.',
-          );
-          send({ type: 'AUDIO_ENDED' });
-          finish();
-        };
-
-        void audio.play().catch(() => {
-          callbacksRef.current.onNotice?.(
-            'Lecture audio bloquée par le navigateur : cliquez à nouveau sur le micro. Le texte reste disponible.',
-          );
-          send({ type: 'AUDIO_ENDED' });
-          finish();
-        });
-      }),
-    [send],
-  );
-
-  const drainAudio = useCallback(async (): Promise<void> => {
-    if (drainingRef.current) return;
-    drainingRef.current = true;
-    try {
-      while (audioQueueRef.current.length > 0) {
-        const pending = audioQueueRef.current.shift();
-        if (!pending) continue;
-        const speech = await pending;
-        if (!speech) {
-          send({ type: 'AUDIO_ENDED' });
-          continue;
-        }
-        if (!speech.audioBase64) {
-          if (speech.reason) callbacksRef.current.onNotice?.(speech.reason);
-          send({ type: 'AUDIO_ENDED' });
-          continue;
-        }
-        await playSpeech(speech);
-      }
-    } finally {
-      drainingRef.current = false;
-    }
-  }, [playSpeech, send]);
+  const nextEpoch = speech.beginTurn;
+  const stopAudio = speech.stop;
 
   /** Synthèse lancée dès la phrase complète (parallèle à la lecture en cours). */
   const enqueueSpeech = useCallback(
-    (sentence: string): void => {
-      const text = stripMarkdownForSpeech(sentence);
-      if (!text) return;
-      const signal = turnAbortRef.current?.signal;
-      const promise = synthesizeSpeech(text, signal).catch(() => null);
-      audioQueueRef.current.push(promise);
-      send({ type: 'AUDIO_QUEUED' });
-      void drainAudio();
+    (sentence: string, epoch: number): void => {
+      speech.enqueue(sentence, epoch, turnAbortRef.current?.signal);
     },
-    [drainAudio, send],
+    [speech],
   );
-
-  const stopAudio = useCallback((): void => {
-    audioQueueRef.current = [];
-    const audio = audioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-    audioFinishedRef.current?.();
-  }, []);
 
   /* ---------- Tour de conversation ---------- */
 
@@ -286,14 +198,16 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
     (text: string): void => {
       const message = text.trim();
       if (!message) return;
-      const already = stateRef.current;
-      if (already.phase !== 'listening') return;
+      if (stateRef.current.phase !== 'listening') return;
 
+      // Un nouveau tour invalide tout audio encore en vol (aucune reprise).
+      const epoch = nextEpoch();
       send({ type: 'UTTERANCE', text: message });
       callbacksRef.current.onUserMessage(message);
 
       const controller = new AbortController();
       turnAbortRef.current = controller;
+      const current = (): boolean => epoch === speech.epoch();
       let buffer = '';
       let answer = '';
 
@@ -306,21 +220,23 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
         },
         {
           onMeta: (meta) => {
-            if (!meta.conversation_id) return;
+            if (!current() || !meta.conversation_id) return;
             if (meta.conversation_id === conversationIdRef.current) return;
             conversationIdRef.current = meta.conversation_id;
             callbacksRef.current.onConversationId?.(meta.conversation_id);
           },
           onDelta: (chunk) => {
+            if (!current()) return; // réponse d'un tour déjà interrompu
             answer += chunk;
             send({ type: 'DELTA', text: chunk });
             buffer += chunk;
             const { sentences, rest } = splitSentences(buffer);
             buffer = rest;
-            for (const sentence of sentences) enqueueSpeech(sentence);
+            for (const sentence of sentences) enqueueSpeech(sentence, epoch);
           },
           onDone: (payload) => {
-            if (buffer.trim()) enqueueSpeech(buffer);
+            if (!current()) return;
+            if (buffer.trim()) enqueueSpeech(buffer, epoch);
             send({ type: 'STREAM_DONE' });
             callbacksRef.current.onAssistantMessage(payload.response ?? answer, {
               conversationId: payload.conversation_id ?? conversationIdRef.current,
@@ -330,6 +246,7 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
             });
           },
           onError: (error) => {
+            if (!current() || controller.signal.aborted) return;
             send({ type: 'STREAM_ERROR', message: error.message });
             callbacksRef.current.onError?.(error.message);
           },
@@ -337,7 +254,7 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
         controller.signal,
       )
         .catch((cause: unknown) => {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted || !current()) return;
           const message = errorMessage(cause);
           send({ type: 'STREAM_ERROR', message });
           callbacksRef.current.onError?.(message);
@@ -346,19 +263,31 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
           if (turnAbortRef.current === controller) turnAbortRef.current = null;
         });
     },
-    [enqueueSpeech, send],
+    [enqueueSpeech, nextEpoch, send, speech],
   );
 
-  const bargeIn = useCallback((): void => {
-    const current = stateRef.current;
-    if (!shouldCutAudio(current) && !current.streaming) return;
-    turnAbortRef.current?.abort();
-    turnAbortRef.current = null;
-    stopAudio();
-    finalTextRef.current = '';
-    interimTextRef.current = '';
-    send({ type: 'BARGE_IN' });
-  }, [send, stopAudio]);
+  /**
+   * L'utilisateur reprend la parole : on coupe tout de suite, et on ne relance
+   * jamais la réponse interrompue.
+   */
+  const bargeIn = useCallback(
+    (transcript: string): boolean => {
+      const current = stateRef.current;
+      if (!current.active) return false;
+      const audioBusy = speech.audioBusy();
+      if (!audioBusy && !current.streaming && !shouldCutAudio(current)) return false;
+
+      turnAbortRef.current?.abort();
+      turnAbortRef.current = null;
+      stopAudio();
+      send({ type: 'BARGE_IN' });
+      // La transcription dite pour interrompre est conservée : elle sera
+      // envoyée après 1,2 s de silence, comme n'importe quelle phrase.
+      if (transcript.trim()) send({ type: 'INTERIM', text: transcript.trim() });
+      return true;
+    },
+    [send, speech, stopAudio],
+  );
 
   /* ---------- Reconnaissance vocale ---------- */
 
@@ -417,35 +346,47 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
       send({ type: 'MIC_READY' });
     };
 
-    recognition.onspeechstart = () => {
-      const current = stateRef.current;
-      if (!current.active) return;
-      if (current.phase === 'speaking' || current.phase === 'thinking') {
-        // Barge-in : l'utilisateur reprend la parole. Garde anti-écho au début
-        // de la lecture (le haut-parleur peut être capté par le micro).
-        if (current.phase === 'speaking' && Date.now() - speakingSinceRef.current < BARGE_IN_GUARD_MS) {
-          return;
-        }
-        bargeIn();
-      }
-      armSilenceTimer();
-    };
+    // Aucune coupure ici : `onspeechstart` se déclenche aussi sur la propre
+    // voix de Kwes. Le barge-in se décide sur du texte reconnu (voir onresult).
+    recognition.onspeechstart = null;
 
     recognition.onresult = (event) => {
       let interim = '';
+      let finalPart = '';
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
         if (!result) continue;
         const alternative = result[0];
         if (!alternative) continue;
-        if (result.isFinal) {
-          finalTextRef.current = `${finalTextRef.current} ${alternative.transcript}`.trim();
-        } else {
-          interim += alternative.transcript;
-        }
+        if (result.isFinal) finalPart += ` ${alternative.transcript}`;
+        else interim += alternative.transcript;
       }
-      interimTextRef.current = interim;
-      const pending = `${finalTextRef.current} ${interim}`.replace(/\s+/g, ' ').trim();
+      const candidate = `${finalPart} ${interim}`.replace(/\s+/g, ' ').trim();
+      if (!candidate) return;
+
+      const current = stateRef.current;
+      if (!current.active) return;
+
+      const speakingNow = current.phase === 'speaking' || speech.audioBusy();
+      if (speakingNow && looksLikeEcho(candidate, speech.spokenText())) {
+        // Écho du haut-parleur (Kwes s'entend) : on n'accumule rien, on ne coupe
+        // rien. Toute autre parole coupe immédiatement, sans délai d'attente.
+        return;
+      }
+
+      // Soit Kwes parle, soit il réfléchit : dans les deux cas l'utilisateur
+      // reprend la main immédiatement.
+      if (speakingNow || current.streaming) {
+        bargeIn(candidate);
+      }
+
+      if (finalPart.trim()) {
+        finalTextRef.current = `${finalTextRef.current} ${finalPart}`.replace(/\s+/g, ' ').trim();
+      }
+      interimTextRef.current = interim.trim();
+      const pending = `${finalTextRef.current} ${interimTextRef.current}`
+        .replace(/\s+/g, ' ')
+        .trim();
       if (!pending) return;
       send({ type: 'INTERIM', text: pending });
       armSilenceTimer();
@@ -487,7 +428,7 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
       send({ type: 'MIC_FAILED', message });
       callbacksRef.current.onError?.(message);
     }
-  }, [armSilenceTimer, bargeIn, send]);
+  }, [armSilenceTimer, bargeIn, send, speech]);
 
   const stopRecognition = useCallback((): void => {
     if (restartTimerRef.current !== null) {
@@ -500,8 +441,8 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
     if (recognition) {
       recognition.onend = null;
       recognition.onresult = null;
-      recognition.onspeechstart = null;
       recognition.onerror = null;
+      recognition.onstart = null;
       try {
         recognition.stop();
       } catch {
@@ -510,6 +451,26 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
     }
     setListening(false);
   }, [clearSilenceTimer]);
+
+  /* ---------- Premier contact ---------- */
+
+  /** Kwes parle en premier : une présentation, puis UNE question. */
+  const openDiscovery = useCallback((): void => {
+    if (introStartedRef.current) return;
+    if (!shouldOpenDiscovery({
+      metBefore: hasMetKwes(),
+      standby: stateRef.current.standby,
+      active: false,
+    })) {
+      return;
+    }
+    introStartedRef.current = true;
+    markKwesMet();
+    const epoch = nextEpoch();
+    // Le texte réellement prononcé alimente le sous-titre (aucun faux contenu).
+    send({ type: 'DELTA', text: FIRST_CONTACT_MESSAGE });
+    enqueueSpeech(FIRST_CONTACT_MESSAGE, epoch);
+  }, [enqueueSpeech, nextEpoch, send]);
 
   /* ---------- API publique ---------- */
 
@@ -524,7 +485,9 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
     if (stateRef.current.active) return;
     send({ type: 'ACTIVATE' });
     startRecognition();
-  }, [send, startRecognition, supported]);
+    // Le micro vient d'être activé par un clic : la lecture est autorisée.
+    openDiscovery();
+  }, [openDiscovery, send, startRecognition, supported]);
 
   const deactivate = useCallback((): void => {
     send({ type: 'DEACTIVATE' });
@@ -604,14 +567,10 @@ export function useVoiceConversation(options: VoiceConversationOptions): VoiceCo
     return () => {
       stopRecognition();
       turnAbortRef.current?.abort();
-      audioQueueRef.current = [];
-      const audio = audioRef.current;
-      if (audio) {
-        audio.pause();
-        audioRef.current = null;
-      }
+      // Coupe la lecture et invalide tout ce qui est en vol.
+      stopAudio();
     };
-  }, [stopRecognition]);
+  }, [stopAudio, stopRecognition]);
 
   return { ...state, supported, listening, toggle, activate, deactivate, setStandby, speak };
 }

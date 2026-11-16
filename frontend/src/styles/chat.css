@@ -1,0 +1,671 @@
+/* Kwes — écran de conversation et historique.
+ * Sobriété d'abord : une liste, des bulles, une barre de saisie. Pas de carte,
+ * pas de bordure lumineuse, pas d'ombre portée lourde.
+ */
+
+/* ---------- Structure ---------- */
+
+.convo {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 28px;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  height: calc(100dvh - 112px);
+  min-height: 520px;
+}
+
+/* ---------- Liste des conversations ---------- */
+
+.convo__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 2px 0;
+}
+
+.convo__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 6px 2px 10px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.convo__items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.convo__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  color: var(--text-soft);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.convo__item:hover {
+  background: rgba(140, 155, 255, 0.09);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.convo__item[aria-current='page'] {
+  background: rgba(140, 155, 255, 0.13);
+  color: var(--text);
+}
+
+.convo__item-title {
+  overflow: hidden;
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.convo__item-date {
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.convo__list-empty {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.convo__list-all {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.convo__list-all:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* ---------- Fil ---------- */
+
+.convo__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.convo__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 760px;
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.convo__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.convo__menu {
+  position: relative;
+  flex: none;
+}
+
+.convo__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.convo__icon:hover {
+  background: rgba(140, 155, 255, 0.1);
+  color: var(--text);
+}
+
+.convo__icon--menu {
+  display: none;
+  flex: none;
+}
+
+.convo__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 176px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #14102f;
+  box-shadow: 0 20px 40px -26px rgba(0, 0, 0, 0.9);
+}
+
+.convo__pop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.convo__pop-item:hover:not(:disabled) {
+  background: rgba(140, 155, 255, 0.1);
+}
+
+.convo__pop-item--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.convo__pop-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Messages ---------- */
+
+.convo__thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 760px;
+  min-height: 0;
+  margin: 0 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 28px 4px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 155, 255, 0.22) transparent;
+  /* Le texte s'efface doucement en haut et en bas plutôt que d'être coupé net. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 14px), transparent 100%);
+}
+
+.convo__thread::-webkit-scrollbar {
+  width: 8px;
+}
+
+.convo__thread::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(140, 155, 255, 0.22);
+}
+
+.convo__thread::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.convo__thread > * {
+  flex: none;
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: turn-in 200ms var(--ease) both;
+}
+
+@keyframes turn-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.turn--user {
+  align-items: flex-end;
+}
+
+.turn--assistant,
+.turn--tool,
+.turn--system {
+  align-items: flex-start;
+}
+
+.turn__bubble {
+  max-width: 100%;
+  color: var(--text-soft);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.turn--user .turn__bubble {
+  max-width: min(78%, 560px);
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: rgba(38, 123, 255, 0.22);
+  color: var(--text);
+}
+
+.turn--tool .turn__bubble,
+.turn--system .turn__bubble {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.turn__caret {
+  display: inline-block;
+  width: 7px;
+  height: 1.05em;
+  margin-left: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  vertical-align: text-bottom;
+  animation: caret 1s steps(2, start) infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.turn__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.turn__sources a {
+  color: var(--link);
+}
+
+.turn__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.turn--user .turn__meta {
+  flex-direction: row-reverse;
+}
+
+.turn__actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.turn:hover .turn__actions,
+.turn:focus-within .turn__actions {
+  opacity: 1;
+}
+
+.turn:hover .turn__meta,
+.turn:focus-within .turn__meta {
+  opacity: 0.9;
+}
+
+.turn__action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.turn__action:hover {
+  background: rgba(140, 155, 255, 0.12);
+  color: var(--text);
+}
+
+/* ---------- États fins ---------- */
+
+.convo__status {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.convo__hint {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.convo__hint--error {
+  color: var(--warning);
+}
+
+.convo__empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  width: auto;
+  min-height: 160px;
+  margin: auto;
+  color: var(--muted);
+  font-size: 1.0625rem;
+  text-align: center;
+}
+
+/* ---------- Barre de saisie ---------- */
+
+.convo__compose {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 0 2px;
+  border-top: 1px solid var(--border);
+}
+
+.convo__compose .composer.composer--bar {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.convo__compose .convo__hint {
+  max-width: 760px;
+  margin: 0 auto 8px;
+}
+
+/* ---------- Historique ---------- */
+
+.hist {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding-top: 4px;
+}
+
+.hist__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.hist__head h1 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.hist__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8125rem;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.hist__new:hover:not(:disabled) {
+  background: rgba(140, 155, 255, 0.1);
+}
+
+.hist__new:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hist__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hist__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding-right: 6px;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.hist__row:hover,
+.hist__row:focus-within {
+  background: rgba(140, 155, 255, 0.07);
+}
+
+.hist__link-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 16px;
+  padding: 13px 10px;
+  color: var(--text-soft);
+}
+
+.hist__link-main:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.hist__convo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hist__date {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.hist__remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.hist__row:hover .hist__remove,
+.hist__row:focus-within .hist__remove,
+.hist__remove:focus-visible {
+  opacity: 1;
+}
+
+.hist__remove:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.hist__hint {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.hist__hint--error {
+  color: var(--warning);
+}
+
+.hist__error {
+  margin-bottom: 12px;
+  color: var(--warning);
+  font-size: 0.8125rem;
+}
+
+.hist__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Sur écran tactile, le survol n'existe pas : les actions restent visibles. */
+@media (hover: none) {
+  .turn__actions,
+  .hist__remove {
+    opacity: 0.55;
+  }
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 900px) {
+  .convo {
+    display: block;
+    height: calc(100dvh - 168px);
+    min-height: 420px;
+  }
+
+  .convo__main {
+    height: 100%;
+  }
+
+  .convo__icon--menu {
+    display: grid;
+  }
+
+  .convo__list {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: min(84vw, 320px);
+    padding: calc(16px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));
+    border-right: 1px solid var(--border);
+    background: #0b0823;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 200ms var(--ease), visibility 200ms var(--ease);
+  }
+
+  .convo__list.is-open {
+    transform: none;
+    visibility: visible;
+  }
+
+  .convo__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    padding: 0;
+    border: 0;
+    background: rgba(4, 3, 16, 0.55);
+  }
+
+  .convo__thread {
+    padding: 20px 0 12px;
+  }
+
+  .turn--user .turn__bubble {
+    max-width: 86%;
+  }
+
+  /* Le champ garde une seule ligne même sur un écran étroit. */
+  .convo__compose .composer textarea.composer__field {
+    font-size: 0.9375rem;
+  }
+
+  .hist__head {
+    flex-wrap: wrap;
+  }
+
+  .hist__head h1 {
+    font-size: 1.35rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .hist__link-main {
+    gap: 10px;
+  }
+
+  .hist__date {
+    font-size: 0.6875rem;
+  }
+}
+
+/* ---------- Mouvement réduit ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .convo__thread {
+    scroll-behavior: auto;
+  }
+
+  .turn {
+    animation: none;
+  }
+
+  .turn__caret {
+    animation: none;
+  }
+
+  .convo__list,
+  .turn__actions,
+  .turn__meta,
+  .hist__remove {
+    transition: none;
+  }
+}

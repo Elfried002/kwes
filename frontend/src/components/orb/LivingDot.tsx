@@ -1,18 +1,21 @@
 /**
- * « Dot vivant » — la matière de l'écran vocal, dessinée en Canvas 2D.
+ * Kwes — le personnage de l'écran vocal, dessiné au Canvas 2D.
  *
- * Aucune image, aucun GIF : tout est calculé à chaque image (dégradé radial
- * violet/bleu/cyan, rubans internes qui dérivent comme un liquide, halo au
- * sol, respiration, clignement des yeux, micro-squash à la parole).
+ * Ce n'est pas une bille : c'est une petite créature d'argile.
+ *   - corps BLOB irrégulier (plusieurs arcs modulés + grain), jamais une sphère ;
+ *   - deux GRANDS yeux qui portent l'expression : clignement, regard qui suit le
+ *     curseur, sourcils, yeux plissés quand il parle ;
+ *   - une bouche minuscule dont l'ouverture suit l'amplitude réelle du son ;
+ *   - un accessoire signature unique : un anneau cyan qui flotte au-dessus ;
+ *   - respiration, squash & stretch, inclinaison de la tête, réactions réelles.
  *
- * L'amplitude vient d'un niveau réel (`levelRef`) fourni par `useAudioLevel` :
- * analyse du flux audio de la réponse quand Kwes parle, activité réelle de la
- * reconnaissance quand l'utilisateur parle. Aucun mouvement n'est inventé quand
- * rien ne se passe : en veille, le dot respire et cligne, c'est tout.
+ * L'amplitude vient de `levelRef` (mesure réelle : RMS de l'audio TTS quand Kwes
+ * parle, activité de reconnaissance quand l'utilisateur parle). Rien n'est
+ * inventé quand il ne se passe rien : il respire, cligne, et c'est tout.
  *
- * Performance : une seule boucle rAF, aucun `shadowBlur` (remplacé par des
- * dégradés), DPR plafonné à 2, boucle suspendue quand l'onglet est masqué,
- * rendu statique quand `prefers-reduced-motion` est actif.
+ * Aucune image bitmap (le grain est généré en mémoire), aucun `shadowBlur`,
+ * une seule boucle rAF, DPR plafonné à 2, boucle suspendue onglet masqué,
+ * image figée mais complète quand `prefers-reduced-motion` est actif.
  */
 
 import { useEffect, useRef } from 'react';
@@ -32,6 +35,7 @@ const VIOLET = '#6B58FF';
 const BLUE = '#267BFF';
 const CYAN = '#5CE7FF';
 const WHITE = '#F7FBFF';
+const INK = '#0C0720';
 
 function rgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '');
@@ -45,15 +49,376 @@ function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
+function mix(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/* ------------------------------------------------------------------ */
+/* Grain d'argile (généré une fois, jamais une image externe)          */
+/* ------------------------------------------------------------------ */
+
+function buildGrainTile(size = 96): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const tile = document.createElement('canvas');
+  tile.width = size;
+  tile.height = size;
+  const context = tile.getContext('2d');
+  if (!context) return null;
+  const image = context.createImageData(size, size);
+  for (let index = 0; index < image.data.length; index += 4) {
+    const value = 118 + Math.random() * 137;
+    image.data[index] = value;
+    image.data[index + 1] = value;
+    image.data[index + 2] = value;
+    image.data[index + 3] = 54;
+  }
+  context.putImageData(image, 0, 0);
+  return tile;
+}
+
+/* ------------------------------------------------------------------ */
+/* Contour du blob                                                     */
+/* ------------------------------------------------------------------ */
+
+const WOBBLE_PHASES = [0.7, 2.4, 4.1, 5.6];
+const BLOB_SEGMENTS = 64;
+
+/**
+ * Rayon organique : trois harmoniques lentes + une asymétrie de base, pour un
+ * galet d'argile pétri à la main plutôt qu'un cercle parfait.
+ */
+function blobRadius(angle: number, time: number, wobble: number): number {
+  const [p1, p2, p3, p4] = WOBBLE_PHASES as [number, number, number, number];
+  const harmonic =
+    0.046 * Math.sin(3 * angle + time * 0.62 + p1) +
+    0.030 * Math.sin(5 * angle - time * 0.48 + p2) +
+    0.016 * Math.sin(7 * angle + time * 0.83 + p3);
+  // Asymétrie : le flanc droit est un peu plus plein, le gauche plus haut.
+  const asym = 0.038 * Math.cos(angle) - 0.026 * Math.sin(angle + p4);
+  return 1 + (harmonic + asym) * wobble;
+}
+
+function traceBlob(
+  context: CanvasRenderingContext2D,
+  R: number,
+  time: number,
+  scaleX: number,
+  scaleY: number,
+  wobble: number,
+): void {
+  const points: Array<[number, number]> = [];
+  for (let index = 0; index < BLOB_SEGMENTS; index += 1) {
+    const angle = (index / BLOB_SEGMENTS) * TAU;
+    const radius = R * blobRadius(angle, time, wobble);
+    // Les bords s'aplatissent un peu en bas : l'argile repose.
+    const settle = 1 - 0.05 * Math.max(0, Math.sin(angle));
+    points.push([Math.cos(angle) * radius * scaleX, Math.sin(angle) * radius * scaleY * settle]);
+  }
+  context.beginPath();
+  const first = points[0] as [number, number];
+  const last = points[points.length - 1] as [number, number];
+  context.moveTo((last[0] + first[0]) / 2, (last[1] + first[1]) / 2);
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index] as [number, number];
+    const next = points[(index + 1) % points.length] as [number, number];
+    context.quadraticCurveTo(point[0], point[1], (point[0] + next[0]) / 2, (point[1] + next[1]) / 2);
+  }
+  context.closePath();
+}
+
+/* ------------------------------------------------------------------ */
+/* Visage                                                             */
+/* ------------------------------------------------------------------ */
+
+interface Face {
+  /** Ouverture des paupières (1 = grand ouvert). */
+  open: number;
+  /** Yeux plissés « sourire » : un arc au lieu d'un ovale. */
+  happy: boolean;
+  /** Regard : décalage en fraction de rayon d'œil. */
+  lookX: number;
+  lookY: number;
+  /** Sourcils : élévation (positif = relevés), inclinaison et asymétrie. */
+  browLift: number;
+  browTilt: number;
+  browSkew: number;
+  mouth: 'smile' | 'flat' | 'round' | 'talk' | 'frown';
+}
+
+function faceFor(phase: DotPhase, level: number, time: number): Face {
+  switch (phase) {
+    case 'listening':
+      return {
+        open: 1.14,
+        happy: false,
+        lookX: 0,
+        lookY: 0.16,
+        browLift: 0.9,
+        browTilt: -0.1,
+        browSkew: 0.15,
+        mouth: 'round',
+      };
+    case 'thinking':
+      return {
+        open: 0.84,
+        happy: false,
+        lookX: 0.42 + 0.12 * Math.sin(time * 0.9),
+        lookY: -0.55,
+        browLift: 0.5,
+        browTilt: 0.22,
+        browSkew: 0.55,
+        mouth: 'flat',
+      };
+    case 'speaking':
+      return {
+        open: 0.98 - level * 0.14,
+        happy: false,
+        lookX: 0.05 * Math.sin(time * 2.1),
+        lookY: 0,
+        browLift: 0.2 + level * 0.5,
+        browTilt: 0,
+        browSkew: 0.1,
+        mouth: 'talk',
+      };
+    case 'error':
+      return {
+        open: 0.58,
+        happy: false,
+        lookX: 0,
+        lookY: 0.3,
+        browLift: -0.9,
+        browTilt: 0.5,
+        browSkew: -0.2,
+        mouth: 'frown',
+      };
+    default:
+      return {
+        open: 0.94,
+        happy: false,
+        lookX: 0.06 * Math.sin(time * 0.42),
+        lookY: 0.04 * Math.sin(time * 0.31 + 1.2),
+        browLift: 0,
+        browTilt: 0,
+        browSkew: 0,
+        mouth: 'smile',
+      };
+  }
+}
+
+function drawEye(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  rx: number,
+  ry: number,
+  face: Face,
+  blink: number,
+  side: number,
+  time: number,
+): void {
+  const open = Math.max(0.06, face.open * blink);
+  const height = ry * open;
+
+  // Paupière tombante de l'état erreur : l'œil est coupé en biais.
+  const tilt = side * 0.12;
+
+  if (face.happy && open > 0.45) {
+    // Yeux plissés « sourire » : un simple arc, très lisible.
+    context.save();
+    context.beginPath();
+    context.lineWidth = Math.max(2, ry * 0.22);
+    context.lineCap = 'round';
+    context.strokeStyle = rgba(INK, 0.92);
+    context.arc(x, y + ry * 0.25, rx * 0.9, Math.PI * 1.12, Math.PI * 1.88);
+    context.stroke();
+    context.restore();
+    return;
+  }
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(tilt);
+
+  // Globe sombre : c'est lui qui donne le regard.
+  context.beginPath();
+  context.ellipse(0, 0, rx, Math.max(1.2, height), 0, 0, TAU);
+  context.fillStyle = rgba(INK, 0.94);
+  context.fill();
+
+  // Reflet : petit, en haut à gauche, il rend l'œil « vivant ».
+  if (open > 0.28) {
+    const lookX = face.lookX * rx * 0.22;
+    const lookY = face.lookY * ry * 0.22;
+    const glintR = rx * 0.3;
+    const glint = context.createRadialGradient(
+      lookX - rx * 0.34,
+      lookY - height * 0.34,
+      0,
+      lookX - rx * 0.34,
+      lookY - height * 0.34,
+      glintR,
+    );
+    glint.addColorStop(0, `rgba(255, 255, 255, ${(0.92 * Math.min(1, open * 1.4)).toFixed(3)})`);
+    glint.addColorStop(1, 'rgba(230, 240, 255, 0)');
+    context.fillStyle = glint;
+    context.beginPath();
+    context.arc(lookX - rx * 0.34, lookY - height * 0.34, glintR, 0, TAU);
+    context.fill();
+
+    // Second reflet, minuscule, en bas à droite (asymétrie volontaire).
+    context.fillStyle = rgba(WHITE, 0.34 * Math.min(1, open * 1.2));
+    context.beginPath();
+    context.arc(
+      lookX + rx * 0.36,
+      lookY + height * 0.42,
+      Math.max(0.8, rx * 0.13),
+      0,
+      TAU,
+    );
+    context.fill();
+  }
+
+  // Ligne de paupière supérieure : donne le plissé et la concentration.
+  if (open < 0.9) {
+    context.beginPath();
+    context.strokeStyle = rgba(INK, 0.5);
+    context.lineWidth = Math.max(1.2, ry * 0.1);
+    context.moveTo(-rx * 0.98, -height * 0.92);
+    context.quadraticCurveTo(0, -height * 1.42, rx * 0.98, -height * 0.92);
+    context.stroke();
+  }
+  context.restore();
+
+  // Sourcil : une virgule au-dessus de l'œil.
+  const lift = face.browLift + side * face.browSkew;
+  const browY = y - ry * (1.5 + 0.16 * lift) + Math.sin(time * 0.9 + side) * ry * 0.02;
+  context.save();
+  context.translate(x, browY);
+  context.rotate(face.browTilt * side);
+  context.beginPath();
+  context.lineWidth = Math.max(2, ry * 0.2);
+  context.lineCap = 'round';
+  context.strokeStyle = rgba(INK, 0.7);
+  context.moveTo(-rx * 0.82, ry * 0.12);
+  context.quadraticCurveTo(0, -ry * (0.16 + 0.12 * Math.max(0, lift)), rx * 0.82, ry * 0.06);
+  context.stroke();
+  context.restore();
+}
+
+function drawMouth(
+  context: CanvasRenderingContext2D,
+  y: number,
+  R: number,
+  face: Face,
+  level: number,
+  time: number,
+): void {
+  const width = R * 0.15;
+  context.save();
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+
+  if (face.mouth === 'talk') {
+    const openness = 0.22 + level * 0.95;
+    const height = R * (0.035 + 0.085 * openness);
+    context.beginPath();
+    context.ellipse(
+      0,
+      y + height * 0.35,
+      width * (0.86 + level * 0.16),
+      height,
+      0,
+      0,
+      TAU,
+    );
+    context.fillStyle = rgba(INK, 0.86);
+    context.fill();
+    // Langue discrète quand la bouche est très ouverte.
+    if (openness > 0.72) {
+      context.beginPath();
+      context.ellipse(0, y + height * 1.1, width * 0.46, height * 0.36, 0, 0, TAU);
+      context.fillStyle = rgba('#FF8FA8', 0.5);
+      context.fill();
+    }
+    context.restore();
+    return;
+  }
+
+  if (face.mouth === 'round') {
+    context.beginPath();
+    context.ellipse(0, y, width * 0.46, R * 0.045, 0, 0, TAU);
+    context.fillStyle = rgba(INK, 0.62);
+    context.fill();
+    context.restore();
+    return;
+  }
+
+  if (face.mouth === 'frown') {
+    context.beginPath();
+    context.strokeStyle = rgba(INK, 0.72);
+    context.lineWidth = Math.max(2, R * 0.022);
+    context.moveTo(-width * 0.7, y + R * 0.02);
+    context.quadraticCurveTo(0, y - R * 0.045, width * 0.7, y + R * 0.02);
+    context.stroke();
+    context.restore();
+    return;
+  }
+
+  if (face.mouth === 'flat') {
+    context.beginPath();
+    context.strokeStyle = rgba(INK, 0.6);
+    context.lineWidth = Math.max(2, R * 0.02);
+    context.moveTo(-width * 0.5, y);
+    context.quadraticCurveTo(0, y + R * 0.012 * Math.sin(time), width * 0.5, y);
+    context.stroke();
+    context.restore();
+    return;
+  }
+
+  // Sourire : arc ouvert vers le haut, coin droit un peu plus relevé.
+  context.beginPath();
+  context.strokeStyle = rgba(INK, 0.76);
+  context.lineWidth = Math.max(2, R * 0.024);
+  context.moveTo(-width * 0.72, y);
+  context.quadraticCurveTo(0, y + R * 0.075, width * 0.78, y - R * 0.008);
+  context.stroke();
+  context.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* Composant                                                          */
+/* ------------------------------------------------------------------ */
+
 export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const clockRef = useRef(0);
-  const blinkRef = useRef({ next: 4.6, at: -1 });
+  const blinkRef = useRef({ next: 2.4, at: -1 });
   const phaseRef = useRef<DotPhase>(phase);
+  const gazeRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, hasPointer: false });
   const reduced = usePrefersReducedMotion();
   const reducedRef = useRef(reduced);
   phaseRef.current = phase;
   reducedRef.current = reduced;
+
+  /* Le regard suit le curseur ; au doigt, il dérive doucement. */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPointer = (event: PointerEvent): void => {
+      if (event.pointerType === 'touch') return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width < 2) return;
+      const dx = (event.clientX - (rect.left + rect.width / 2)) / (rect.width * 0.7);
+      const dy = (event.clientY - (rect.top + rect.height / 2)) / (rect.height * 0.7);
+      const gaze = gazeRef.current;
+      gaze.targetX = Math.max(-1, Math.min(1, dx));
+      gaze.targetY = Math.max(-1, Math.min(1, dy));
+      gaze.hasPointer = true;
+    };
+    window.addEventListener('pointermove', onPointer, { passive: true });
+    return () => window.removeEventListener('pointermove', onPointer);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,14 +431,24 @@ export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
     let frame = 0;
     let last = 0;
 
-    // Particules « convergentes » de l'état réflexion (positions déterministes).
-    const particles = Array.from({ length: 22 }, (_, index) => {
+    const grain = buildGrainTile();
+    let grainPattern: CanvasPattern | null = null;
+    if (grain) {
+      try {
+        grainPattern = context.createPattern(grain, 'repeat');
+      } catch {
+        grainPattern = null;
+      }
+    }
+
+    // Particules de réflexion : elles montent le long du corps, jamais un anneau.
+    const particles = Array.from({ length: 12 }, (_, index) => {
       const seed = (index * 2654435761) % 4294967296;
       return {
-        angle: (((seed >>> 8) % 1000) / 1000) * TAU,
-        offset: ((seed >>> 18) % 500) / 500,
-        speed: 0.1 + (((seed >>> 4) % 300) / 300) * 0.09,
-        size: 0.6 + (((seed >>> 12) % 400) / 400) * 1.1,
+        offset: ((seed >>> 9) % 1000) / 1000,
+        drift: (((seed >>> 19) % 300) / 300 - 0.5) * 0.7,
+        speed: 0.16 + ((seed >>> 5) % 200) / 200 * 0.12,
+        size: 0.7 + ((seed >>> 13) % 300) / 300 * 1.3,
       };
     });
 
@@ -90,346 +465,294 @@ export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    /* ---------- Sol : halo elliptique + reflet ---------- */
+    /* ---------- Ombre au sol : le blob repose sur quelque chose ---------- */
 
-    const drawGround = (S: number, R: number, time: number, level: number, muted: boolean): void => {
+    const drawShadow = (S: number, R: number, time: number, level: number, muted: boolean): void => {
       const cx = S / 2;
-      const groundY = S / 2 + R * 1.03;
-      const breathe = 0.5 + 0.5 * Math.sin(time * 0.68);
-      const energy = level * 0.55;
-      const tint = muted ? '#4E5872' : BLUE;
-      const glowTint = muted ? '#5B6076' : CYAN;
-
+      const groundY = S / 2 + R * 1.02;
+      const breathe = 0.5 + 0.5 * Math.sin(time * 0.7);
+      const spread = 1 + level * 0.06;
       context.save();
-      context.globalCompositeOperation = 'lighter';
       context.translate(cx, groundY);
-      context.scale(1, 0.26);
-      const glow = context.createRadialGradient(0, 0, R * 0.05, 0, 0, R * 1.25);
-      glow.addColorStop(0, rgba(glowTint, 0.42 + 0.08 * breathe + energy * 0.24));
-      glow.addColorStop(0.32, rgba(tint, 0.24 + 0.05 * breathe + energy * 0.16));
-      glow.addColorStop(0.66, rgba(tint, 0.06 + energy * 0.06));
-      glow.addColorStop(1, rgba(tint, 0));
-      context.fillStyle = glow;
+      context.scale(1, 0.2);
+      const shadow = context.createRadialGradient(0, 0, R * 0.1, 0, 0, R * 1.05 * spread);
+      shadow.addColorStop(0, rgba(muted ? '#1A1B24' : '#1B0F4A', 0.55 + 0.04 * breathe));
+      shadow.addColorStop(0.55, rgba(muted ? '#121319' : '#140B36', 0.26));
+      shadow.addColorStop(1, rgba('#000000', 0));
+      context.fillStyle = shadow;
       context.beginPath();
-      context.arc(0, 0, R * 1.25, 0, TAU);
+      context.arc(0, 0, R * 1.05 * spread, 0, TAU);
       context.fill();
-      context.restore();
-
-      // Un seul anneau, très doux : le dot « touche » le sol.
-      context.save();
-      context.globalCompositeOperation = 'lighter';
-      context.beginPath();
-      context.ellipse(cx, groundY, R * 1.12, R * 0.135, 0, 0, TAU);
-      context.strokeStyle = rgba(glowTint, 0.1 + 0.04 * breathe + energy * 0.12);
-      context.lineWidth = 1;
-      context.stroke();
       context.restore();
     };
 
-    /* ---------- Aura circulaire (jamais un rectangle) ---------- */
+    /* ---------- Halo doux derrière (cyan, respiration réelle) ---------- */
 
-    const drawAura = (S: number, R: number, time: number, level: number, muted: boolean): void => {
+    const drawHalo = (S: number, R: number, time: number, level: number, phase: DotPhase): void => {
       const cx = S / 2;
       const cy = S / 2;
-      // Borné au canvas : un halo plus grand serait coupé net par le bord.
-      const radius = Math.min(R * (1.55 + 0.05 * Math.sin(time * 0.55) + level * 0.12), S * 0.49);
-      const aura = context.createRadialGradient(cx, cy, R * 0.82, cx, cy, radius);
-      const a = muted ? '#3C3F55' : VIOLET;
-      aura.addColorStop(0, rgba(a, muted ? 0.14 : 0.16 + level * 0.05));
-      aura.addColorStop(0.4, rgba(a, muted ? 0.06 : 0.05 + level * 0.03));
-      aura.addColorStop(0.82, rgba(a, muted ? 0.015 : 0.015));
-      aura.addColorStop(1, rgba(a, 0));
-      context.fillStyle = aura;
+      if (phase === 'error') return;
+      const radius = Math.min(R * (1.5 + 0.05 * Math.sin(time * 0.6) + level * 0.16), S * 0.49);
+      const halo = context.createRadialGradient(cx, cy, R * 0.7, cx, cy, radius);
+      const tint = phase === 'listening' ? CYAN : VIOLET;
+      const strength = phase === 'listening' ? 0.16 : 0.11;
+      halo.addColorStop(0, rgba(tint, strength + level * 0.06));
+      halo.addColorStop(0.55, rgba(tint, (strength + level * 0.05) * 0.34));
+      halo.addColorStop(1, rgba(tint, 0));
+      context.fillStyle = halo;
       context.beginPath();
       context.arc(cx, cy, radius, 0, TAU);
       context.fill();
     };
 
-    /* ---------- Ruban liquide interne ---------- */
+    /* ---------- L'anneau signature, au-dessus de la tête ---------- */
 
-    const ribbon = (
+    const drawRing = (
+      time: number,
       R: number,
-      baseY: number,
-      amplitude: number,
-      frequency: number,
-      drift: number,
-      slope: number,
-      thickness: number,
-      color: string,
-      alpha: number,
+      level: number,
+      phase: DotPhase,
+      tilt: number,
+      headTop: number,
     ): void => {
-      const segments = 44;
-      const from = -R * 1.02;
-      const to = R * 1.02;
-      const step = (to - from) / segments;
-      const wave = (x: number): number => {
-        const u = x / R;
-        return (
-          baseY +
-          slope * u * R +
-          amplitude * Math.sin(frequency * u + drift) +
-          amplitude * 0.46 * Math.sin(frequency * 2.15 * u - drift * 1.35)
-        );
-      };
+      const muted = phase === 'error';
+      const bob = Math.sin(time * 1.55) * R * 0.022;
+      const spin = phase === 'thinking' ? Math.sin(time * 1.6) * 0.34 : 0;
+      const pulse = phase === 'speaking' ? level : 0;
+      const centerY = headTop - R * 0.2 + bob;
+      const rx = R * (0.3 + pulse * 0.035);
+      const ry = R * (0.088 + pulse * 0.02);
 
+      context.save();
+      context.translate(0, centerY);
+      context.rotate(tilt * 0.9 + spin);
       context.beginPath();
-      for (let index = 0; index <= segments; index += 1) {
-        const x = from + step * index;
-        const y = wave(x);
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      }
-      for (let index = segments; index >= 0; index -= 1) {
-        const x = from + step * index;
-        const u = x / R;
-        const y = wave(x) + thickness * (1 + 0.3 * Math.sin(frequency * 0.8 * u + drift * 0.7));
-        context.lineTo(x, y);
-      }
-      context.closePath();
-
-      const gradient = context.createLinearGradient(0, baseY - amplitude, 0, baseY + thickness * 2);
-      gradient.addColorStop(0, rgba(color, alpha * 0.3));
-      gradient.addColorStop(0.5, rgba(color, alpha * 0.72));
-      gradient.addColorStop(1, rgba(color, alpha));
-      context.fillStyle = gradient;
-      context.fill();
-
-      // Liseré lumineux sur la crête : c'est lui qui donne le « liquide ».
-      context.beginPath();
-      for (let index = 0; index <= segments; index += 1) {
-        const x = from + step * index;
-        const y = wave(x);
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      }
-      context.strokeStyle = rgba('#EDE9FF', Math.min(0.18, alpha * 0.5));
-      context.lineWidth = Math.max(1, R * 0.006);
+      context.ellipse(0, 0, rx, ry, 0, 0, TAU);
+      context.lineWidth = Math.max(2.4, R * 0.033);
+      context.strokeStyle = muted ? rgba('#6F7284', 0.6) : rgba(CYAN, 0.92);
       context.stroke();
+
+      if (!muted) {
+        context.beginPath();
+        context.ellipse(0, 0, rx, ry, 0, 0, TAU);
+        context.lineWidth = Math.max(4, R * 0.09);
+        context.strokeStyle = rgba(CYAN, 0.14 + pulse * 0.16);
+        context.stroke();
+      }
+      context.restore();
     };
 
-    /* ---------- Sphère ---------- */
+    /* ---------- Le personnage ---------- */
 
-    const drawSphere = (S: number, time: number, level: number, phase: DotPhase): void => {
+    const drawCharacter = (S: number, time: number, level: number, phase: DotPhase): void => {
       const cx = S / 2;
-      const cy = S / 2;
-      const R = S * 0.39;
+      const cy = S / 2 + S * 0.02;
+      const R = S * 0.315;
       const muted = phase === 'error';
       const calm = phase === 'idle' || muted;
 
-      // Respiration 1.00 → 1.02 ; micro-squash quand la voix sort.
-      const breath = 1 + 0.01 * (1 + Math.sin(time * 0.82));
+      // --- Respiration, squash & stretch, inclinaison ------------------
+      const breath = 1 + 0.014 * Math.sin(time * 0.85);
       let scaleX = breath;
       let scaleY = breath;
       if (phase === 'speaking') {
-        scaleX *= 1 + 0.028 * level;
-        scaleY *= 1 - 0.042 * level;
+        scaleX *= 1 + 0.055 * level;
+        scaleY *= 1 - 0.06 * level;
+      } else if (phase === 'listening') {
+        // Il se penche vers la voix, légèrement plus haut.
+        scaleY *= 1 + 0.012 * Math.sin(time * 1.3);
+      }
+      scaleY *= 0.92; // galet plus large que haut
+      scaleX *= 1.03;
+
+      const gaze = gazeRef.current;
+      const tiltBase =
+        phase === 'listening'
+          ? gaze.x * 0.06
+          : phase === 'thinking'
+            ? 0.03 * Math.sin(time * 0.8)
+            : phase === 'speaking'
+              ? 0.016 * Math.sin(time * 1.9) * (0.4 + level)
+              : 0.024 * Math.sin(time * 0.5);
+      const tilt = tiltBase;
+
+      // Le regard : vers le curseur en écoute, sinon dérive / saccades.
+      let lookX = 0;
+      let lookY = 0;
+      if (phase === 'listening') {
+        lookX = gaze.x * 0.9;
+        lookY = gaze.y * 0.7 + 0.18;
+      } else if (phase !== 'thinking') {
+        lookX = gaze.hasPointer ? gaze.x * 0.55 : Math.sin(time * 0.37) * 0.2;
+        lookY = gaze.hasPointer ? gaze.y * 0.4 : Math.cos(time * 0.29) * 0.12;
       }
 
-      drawAura(S, R, time, level, muted);
+      const face = faceFor(phase, level, time);
+      if (phase !== 'thinking') {
+        face.lookX = lookX;
+        face.lookY = lookY;
+      }
+
+      // --- Clignement ---------------------------------------------------
+      const blinkState = blinkRef.current;
+      const blinkProgress = (time - blinkState.at) / 0.2;
+      let blink = 1;
+      if (blinkProgress >= 0 && blinkProgress <= 1) {
+        blink = 1 - Math.sin(Math.PI * blinkProgress) * 0.94;
+      }
+
+      drawHalo(S, R, time, level, phase);
+      drawShadow(S, R, time, level, muted);
 
       context.save();
       context.translate(cx, cy);
+      context.rotate(tilt);
       context.scale(scaleX, scaleY);
 
-      // Corps : cœur clair en haut à gauche, violet, puis bleu.
-      context.beginPath();
-      context.arc(0, 0, R, 0, TAU);
-      const body = context.createRadialGradient(-R * 0.26, -R * 0.34, R * 0.02, 0, 0, R * 1.05);
+      // --- Corps ---------------------------------------------------------
+      traceBlob(context, R, time, 1, 1, calm ? 0.8 : 1);
+      const body = context.createLinearGradient(-R * 0.5, -R, R * 0.6, R);
       if (muted) {
-        body.addColorStop(0, rgba('#B9BBC6', 0.9));
-        body.addColorStop(0.28, rgba('#5E6178', 0.94));
-        body.addColorStop(0.68, rgba('#454A5E', 0.94));
-        body.addColorStop(1, rgba('#33374A', 0.92));
+        body.addColorStop(0, '#8E8E9E');
+        body.addColorStop(0.5, '#5E5F70');
+        body.addColorStop(1, '#454656');
+      } else if (phase === 'listening') {
+        body.addColorStop(0, '#A79AFF');
+        body.addColorStop(0.48, '#6F63FF');
+        body.addColorStop(1, BLUE);
+      } else if (phase === 'speaking') {
+        body.addColorStop(0, '#A294FF');
+        body.addColorStop(0.5, VIOLET);
+        body.addColorStop(1, BLUE);
       } else {
-        body.addColorStop(0, rgba('#F1EEFF', 0.96));
-        body.addColorStop(0.16, rgba('#B4A6FF', 0.95));
-        body.addColorStop(0.5, rgba(VIOLET, 0.93));
-        body.addColorStop(0.82, rgba('#2C4CDC', 0.93));
-        body.addColorStop(1, rgba('#2668F2', 0.92));
+        body.addColorStop(0, '#9E92FF');
+        body.addColorStop(0.52, '#6153F5');
+        body.addColorStop(1, '#2B5BDB');
       }
       context.fillStyle = body;
       context.fill();
 
-      // Intérieur : rubans + lueur cyan en bas, confinés dans la sphère.
+      // Modelé d'argile : lumière douce en haut à gauche, ombre en bas.
       context.save();
-      context.beginPath();
-      context.arc(0, 0, R * 0.995, 0, TAU);
+      traceBlob(context, R, time, 1, 1, calm ? 0.8 : 1);
       context.clip();
-      context.globalCompositeOperation = 'lighter';
 
-      const tempo =
-        muted ? 0.32 : phase === 'thinking' ? 0.62 : phase === 'speaking' ? 1.35 : 0.9;
-      const energy = (calm ? 0.7 : 1) * (0.7 + level * 0.55);
-
-      ribbon(
-        R,
-        -R * 0.06,
-        R * 0.115 * energy,
-        1.5,
-        time * 0.34 * tempo,
-        0.2,
-        R * 0.16,
-        muted ? '#8A8C9A' : '#DED8FF',
-        muted ? 0.24 : 0.34,
-      );
-      ribbon(
-        R,
+      const light = context.createRadialGradient(
+        -R * 0.42,
+        -R * 0.52,
         R * 0.05,
-        R * 0.075 * energy,
-        2.2,
-        -time * 0.27 * tempo + 1.7,
-        -0.14,
-        R * 0.12,
-        muted ? '#7E8394' : '#93B9FF',
-        muted ? 0.2 : 0.3,
+        -R * 0.3,
+        -R * 0.3,
+        R * 1.35,
       );
-      ribbon(
-        R,
-        R * 0.23,
-        R * 0.05 * energy,
-        3,
-        time * 0.21 * tempo + 3.4,
-        0.07,
-        R * 0.085,
-        muted ? '#767C8C' : CYAN,
-        muted ? 0.16 : 0.22,
-      );
+      light.addColorStop(0, `rgba(255, 255, 255, ${muted ? 0.1 : 0.2})`);
+      light.addColorStop(0.45, 'rgba(255, 255, 255, 0.03)');
+      light.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      context.fillStyle = light;
+      context.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
 
-      // Cyan qui remonte du bas de la sphère.
-      const bottom = context.createRadialGradient(0, R * 0.92, R * 0.04, 0, R * 0.82, R * 0.95);
-      bottom.addColorStop(0, rgba(muted ? '#767C8C' : CYAN, muted ? 0.16 : 0.24 + level * 0.06));
-      bottom.addColorStop(0.55, rgba(muted ? '#5C6172' : '#2F7BFF', muted ? 0.1 : 0.14));
-      bottom.addColorStop(1, rgba(BLUE, 0));
+      const shade = context.createRadialGradient(
+        R * 0.4,
+        R * 0.5,
+        R * 0.1,
+        R * 0.2,
+        R * 0.35,
+        R * 1.15,
+      );
+      shade.addColorStop(0, 'rgba(9, 3, 32, 0)');
+      shade.addColorStop(1, `rgba(9, 3, 32, ${muted ? 0.34 : 0.26})`);
+      context.fillStyle = shade;
+      context.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
+
+      // Teinte cyan en bas : l'identité de Kwes, sans brillance de verre.
+      const bottom = context.createRadialGradient(0, R * 0.95, 0, 0, R * 0.85, R * 0.85);
+      bottom.addColorStop(0, rgba(muted ? '#7C808E' : CYAN, muted ? 0.1 : 0.12 + level * 0.07));
+      bottom.addColorStop(1, rgba(CYAN, 0));
       context.fillStyle = bottom;
       context.fillRect(-R, -R, R * 2, R * 2);
-      context.restore();
 
-      // Profondeur : le bas du globe s'assombrit légèrement.
-      const depth = context.createRadialGradient(0, R * 0.3, R * 0.2, 0, R * 0.6, R * 1.12);
-      depth.addColorStop(0, 'rgba(7, 3, 28, 0)');
-      depth.addColorStop(1, 'rgba(7, 3, 28, 0.34)');
-      context.fillStyle = depth;
-      context.beginPath();
-      context.arc(0, 0, R, 0, TAU);
-      context.fill();
-
-      // Deux lueurs internes : les yeux. Discrets, ils s'ouvrent et se ferment.
-      const blinkProgress = (time - blinkRef.current.at) / 0.24;
-      const openness =
-        blinkProgress >= 0 && blinkProgress <= 1
-          ? 1 - Math.sin(Math.PI * blinkProgress) * 0.95
-          : 1;
-      const attentive = phase === 'listening' ? 1.14 : phase === 'thinking' ? 0.92 : 1;
-      const eyeY = -R * 0.045;
-      const eyeR = R * 0.04 * attentive;
-      context.save();
-      context.globalCompositeOperation = 'lighter';
-      for (const side of [-1, 1]) {
-        const x = side * R * 0.165;
-        const gradient = context.createRadialGradient(x, eyeY, 0, x, eyeY, eyeR * 2.2);
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${(0.26 * openness).toFixed(3)})`);
-        gradient.addColorStop(0.35, `rgba(226, 240, 255, ${(0.11 * openness).toFixed(3)})`);
-        gradient.addColorStop(1, 'rgba(198, 224, 255, 0)');
+      // Grain : la matière.
+      if (grainPattern) {
         context.save();
-        context.translate(x, eyeY);
-        context.scale(1, Math.max(0.08, openness));
-        context.translate(-x, -eyeY);
-        context.fillStyle = gradient;
-        context.beginPath();
-        context.arc(x, eyeY, eyeR * 2.2, 0, TAU);
-        context.fill();
+        context.globalCompositeOperation = 'overlay';
+        context.globalAlpha = 0.75;
+        context.fillStyle = grainPattern;
+        context.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
         context.restore();
       }
       context.restore();
 
-      // Reflet spéculaire diffus (pas de « pastille » blanche).
-      context.save();
-      context.globalCompositeOperation = 'lighter';
-      const specular = context.createRadialGradient(
-        -R * 0.32,
-        -R * 0.42,
-        0,
-        -R * 0.32,
-        -R * 0.42,
-        R * 0.78,
-      );
-      specular.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
-      specular.addColorStop(0.45, 'rgba(226, 236, 255, 0.05)');
-      specular.addColorStop(1, 'rgba(226, 236, 255, 0)');
-      context.fillStyle = specular;
-      context.beginPath();
-      context.arc(0, 0, R, 0, TAU);
-      context.fill();
-      context.restore();
-
-      // Liseré : clair en haut, cyan en bas — la matière devient une sphère.
-      const rim = context.createLinearGradient(-R * 0.3, -R, R * 0.2, R);
-      rim.addColorStop(0, rgba(WHITE, muted ? 0.18 : 0.42));
-      rim.addColorStop(0.55, rgba(WHITE, muted ? 0.1 : 0.16));
-      rim.addColorStop(1, rgba(muted ? '#8C90A0' : CYAN, muted ? 0.16 : 0.46 + level * 0.08));
-      context.beginPath();
-      context.arc(0, 0, R * 0.988, 0, TAU);
-      context.strokeStyle = rim;
-      context.lineWidth = Math.max(1, R * 0.011);
+      // Bord : un liseré très fin, mat (pas de reflet).
+      traceBlob(context, R, time, 1, 1, calm ? 0.8 : 1);
+      context.lineWidth = Math.max(1.4, R * 0.012);
+      context.strokeStyle = muted ? rgba('#2A2B33', 0.5) : rgba('#2A1C6B', 0.42);
       context.stroke();
 
-      context.restore();
+      // --- Visage --------------------------------------------------------
+      const eyeY = -R * 0.14;
+      const eyeR = R * 0.185;
+      const eyeX = R * 0.345;
+      const gazeShift = face.lookX * eyeR * 0.26;
 
-      /* ---------- Signatures d'état, toutes en dehors du corps ---------- */
-
-      if (phase === 'listening') {
-        context.save();
-        context.globalCompositeOperation = 'lighter';
-        context.translate(cx, cy);
-        for (let index = 0; index < 3; index += 1) {
-          const progress = (((time * 0.3 + index / 3) % 1) + 1) % 1;
-          const radius = R * (1.04 + progress * 0.46 + level * 0.05);
-          const alpha = (1 - progress) * (0.1 + level * 0.24);
-          context.beginPath();
-          context.arc(0, 0, radius, 0, TAU);
-          context.strokeStyle = rgba(CYAN, alpha);
-          context.lineWidth = 1.1;
-          context.stroke();
-        }
-        context.restore();
+      for (const side of [-1, 1] as const) {
+        drawEye(
+          context,
+          side * eyeX + gazeShift,
+          eyeY + face.lookY * eyeR * 0.2,
+          eyeR * (phase === 'thinking' ? 0.94 : 1),
+          eyeR * 1.1,
+          face,
+          blink,
+          side,
+          time,
+        );
       }
 
+      drawMouth(context, R * 0.26, R, face, level, time);
+
+      // Joues : deux touches cyan très douces, uniquement quand il s'anime.
+      if (!muted && (phase === 'speaking' || phase === 'listening')) {
+        for (const side of [-1, 1] as const) {
+          const blush = context.createRadialGradient(
+            side * R * 0.48,
+            R * 0.16,
+            0,
+            side * R * 0.48,
+            R * 0.16,
+            R * 0.2,
+          );
+          blush.addColorStop(0, rgba(CYAN, 0.16 + level * 0.1));
+          blush.addColorStop(1, rgba(CYAN, 0));
+          context.fillStyle = blush;
+          context.beginPath();
+          context.arc(side * R * 0.48, R * 0.16, R * 0.2, 0, TAU);
+          context.fill();
+        }
+      }
+
+      // --- L'anneau signature -------------------------------------------
+      drawRing(time, R, level, phase, tilt, -R * 0.98);
+
+      context.restore();
+
+      /* ---------- Signatures d'état, hors du corps ---------- */
+
       if (phase === 'thinking') {
+        // Petites particules qui montent : la réflexion se voit, discrètement.
         context.save();
-        context.globalCompositeOperation = 'lighter';
         for (const particle of particles) {
           const progress = (((time * particle.speed + particle.offset) % 1) + 1) % 1;
-          const radius = R * (1.3 - progress * 1.0);
-          const angle = particle.angle + time * 0.4 + progress * 1.4;
-          const alpha = Math.sin(Math.PI * progress) * 0.42;
+          const y = cy + R * (0.9 - progress * 2.1);
+          const x = cx + R * (particle.drift * (0.6 + progress)) + Math.sin(time + particle.offset * 8) * R * 0.06;
+          const alpha = Math.sin(Math.PI * progress) * 0.9;
           context.beginPath();
-          context.arc(
-            cx + Math.cos(angle) * radius,
-            cy + Math.sin(angle) * radius,
-            particle.size * (R / 260),
-            0,
-            TAU,
-          );
-          context.fillStyle = `rgba(222, 216, 255, ${alpha.toFixed(3)})`;
+          context.arc(x, y, particle.size * (R / 150), 0, TAU);
+          context.fillStyle = rgba('#DCD6FF', alpha);
           context.fill();
         }
         context.restore();
       }
 
-      if (phase === 'speaking') {
-        // Halo doux qui bat avec le son réel.
-        const haloRadius = R * (1.1 + 0.06 * level);
-        const halo = context.createRadialGradient(cx, cy, R * 0.99, cx, cy, haloRadius);
-        halo.addColorStop(0, rgba(CYAN, 0.06 + level * 0.13));
-        halo.addColorStop(1, rgba(CYAN, 0));
-        context.save();
-        context.globalCompositeOperation = 'lighter';
-        context.fillStyle = halo;
-        context.beginPath();
-        context.arc(cx, cy, haloRadius, 0, TAU);
-        context.fill();
-        context.restore();
-      }
     };
 
     const render = (time: number): void => {
@@ -438,19 +761,24 @@ export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
       const S = Math.min(width, height);
       const phase = phaseRef.current;
       const level = clamp01(levelRef?.current ?? 0);
-      const drift = phase === 'error' ? time * 0.34 : time;
 
+      // Clignement : jamais pendant une erreur, moins souvent quand il parle.
       const blink = blinkRef.current;
-      if (phase !== 'error' && drift > blink.next) {
-        blink.at = drift;
-        blink.next = drift + 5.2 + Math.random() * 1.7;
+      if (phase !== 'error' && time > blink.next) {
+        blink.at = time;
+        const gap = phase === 'speaking' ? 3.4 + Math.random() * 1.6 : 2.8 + Math.random() * 2.6;
+        blink.next = time + gap;
       }
+
+      // Regard : interpolation douce (le suivi ne doit pas trembler).
+      const gaze = gazeRef.current;
+      gaze.x = mix(gaze.x, gaze.targetX, 0.08);
+      gaze.y = mix(gaze.y, gaze.targetY, 0.08);
 
       context.clearRect(0, 0, width, height);
       context.save();
       context.translate((width - S) / 2, (height - S) / 2);
-      drawGround(S, S * 0.39, drift, level, phase === 'error');
-      drawSphere(S, drift, level, phase);
+      drawCharacter(S, time, level, phase);
       context.restore();
     };
 
@@ -476,7 +804,8 @@ export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
 
     resize();
     if (reducedRef.current) {
-      render(1.6);
+      // Image figée mais complète : même visage, même anneau, aucun mouvement.
+      render(2.2);
     } else {
       last = performance.now();
       frame = window.requestAnimationFrame(tick);
@@ -488,7 +817,7 @@ export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
         ? null
         : new ResizeObserver(() => {
             resize();
-            if (reducedRef.current) render(1.6);
+            if (reducedRef.current) render(2.2);
           });
     observer?.observe(canvas);
 
@@ -498,7 +827,7 @@ export function LivingDot({ phase, levelRef, className }: LivingDotProps) {
       observer?.disconnect();
     };
     // `phase` : en mouvement réduit, l'image statique est redessinée à chaque
-    // changement d'état. Le temps, lui, continue de courir entre deux montages.
+    // changement d'état. Les constantes de temps, elles, continuent de courir.
   }, [levelRef, reduced, phase]);
 
   return (

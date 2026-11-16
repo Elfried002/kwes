@@ -1,305 +1,313 @@
-import { useEffect, useRef, useState } from 'react';
-import { errorMessage, listTasks, sendChat } from '../lib/api';
-import { clampProgress, formatRelative, greeting, truncate } from '../lib/format';
-import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
-import { href, navigate } from '../lib/router';
-import { useKwes } from '../state/KwesProvider';
-import { HybridOrb } from '../components/orb/HybridOrb';
-import { OrbStatus } from '../components/OrbStatus';
-import { Composer } from '../components/Composer';
-import { StatusPill } from '../components/StatusPill';
-import { EmptyState } from '../components/EmptyState';
-import { Icon } from '../components/Icon';
-import type { Task } from '../lib/types';
+/**
+ * Accueil — Kwes parle, il n'écrit pas.
+ *
+ * Le personnage est la présence principale : il occupe le centre, passe en
+ * `thinking` pendant le traitement, puis en `speaking` dès que la première
+ * phrase complète est réellement prononcée. La réponse ne s'affiche jamais en
+ * bloc : une seule ligne de sous-titre, révélée au rythme de la lecture, sous
+ * le personnage. « Lire la réponse » ouvre la conversation complète.
+ *
+ * La parole vient de `use-kwes-speech` : même moteur que l'écran vocal (file
+ * séquentielle, une seule voix à la fois, repli voix de l'appareil quand
+ * ElevenLabs ne renvoie pas d'audio). Interruption : bouton « Arrêter », appui
+ * sur le personnage, ou prise de parole au micro — la lecture est coupée net,
+ * jamais reprise.
+ */
 
-const ACTIVE_STATUSES = new Set(['queued', 'planning', 'running', 'awaiting_approval', 'paused']);
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { errorMessage, streamChat } from '../lib/api';
+import { href } from '../lib/router';
+import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
+import { useKwes } from '../state/KwesProvider';
+import { Composer } from '../components/Composer';
+import { LivingDot } from '../components/orb/LivingDot';
+import { useAudioLevel } from '../lib/use-audio-level';
+import { useKwesSpeech } from '../lib/use-kwes-speech';
+import { usePrefersReducedMotion } from '../lib/hooks';
+import { speechEnvelope } from '../lib/kwes-speech';
+import { splitSentences } from '../lib/voice-session';
+import {
+  canReadAnswer,
+  homeAnnouncement,
+  homeCaption,
+  homeSpokenLine,
+  initialHomeVoice,
+  reduceHomeVoice,
+} from '../lib/home-voice';
+
+/**
+ * Trois amorces concrètes, pas des arguments de vente : elles remplissent
+ * simplement le champ pour que l'utilisateur puisse les ajuster avant d'envoyer.
+ */
+const SUGGESTIONS = [
+  'Aide-moi à préparer ma journée.',
+  'Résume où en sont mes projets.',
+  'Rédige un message pour mon équipe.',
+];
 
 export function HomeScreen() {
-  const {
-    orbState,
-    notifyChatStarted,
-    notifyChatAnswered,
-    notifyApiError,
-    resetOrb,
-    refreshKey,
-    bumpRefresh,
-    probeHealth,
-    connection,
-    serverStatus,
-    setMicActive,
-  } = useKwes();
+  const { notifyChatStarted, notifyChatAnswered, notifyApiError, resetOrb, bumpRefresh, micActive } =
+    useKwes();
   const prefs = usePreferences();
+  const reduced = usePrefersReducedMotion();
   const [draft, setDraft] = useState(() => readDraft('home'));
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [focusSignal, setFocusSignal] = useState(0);
+  const [deviceVoice, setDeviceVoice] = useState(false);
+  const [state, dispatch] = useReducer(reduceHomeVoice, initialHomeVoice);
+
   const abortRef = useRef<AbortController | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [tasksError, setTasksError] = useState<string | null>(null);
-  const [tasksLoading, setTasksLoading] = useState(true);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  const speech = useKwesSpeech({
+    voiceId: prefs.voiceId,
+    onNotice: (message) => setNotice(message),
+    onPlaying: (text) => {
+      setNotice(null);
+      dispatch({ type: 'PLAYING', text });
+    },
+    onProgress: (text, fraction) => dispatch({ type: 'PROGRESS', text, fraction }),
+    onEnded: (text) => dispatch({ type: 'SPOKEN', text }),
+    onDeviceVoice: setDeviceVoice,
+  });
+
+  const { levelRef: audioLevelRef, prime } = useAudioLevel(state.phase === 'speaking');
+  /** Niveau réel (audio) ou cadence de la voix de l'appareil — jamais les deux. */
+  const levelRef = useRef(0);
+
+  useEffect(() => {
+    if (state.phase !== 'speaking') {
+      levelRef.current = 0;
+      return;
+    }
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => {
+      const measured = audioLevelRef.current;
+      const fallback =
+        deviceVoice && !reduced ? speechEnvelope((performance.now() - startedAt) / 1000) : 0;
+      levelRef.current = Math.max(measured, fallback);
+    }, 50);
+    return () => {
+      window.clearInterval(timer);
+      levelRef.current = 0;
+    };
+  }, [audioLevelRef, deviceVoice, reduced, state.phase]);
 
   useEffect(() => {
     writeDraft('home', draft);
   }, [draft]);
 
+  // Aucune voix ne continue quand on quitte l'écran.
   useEffect(() => {
-    const controller = new AbortController();
-    setTasksLoading(true);
-    listTasks(controller.signal)
-      .then((result) => {
-        setTasks(result);
-        setTasksError(null);
-      })
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
-        setTasksError(errorMessage(cause));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setTasksLoading(false);
-      });
-    return () => controller.abort();
-  }, [refreshKey]);
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
 
-  const activeTasks = tasks
-    .filter((task) => ACTIVE_STATUSES.has(task.status))
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-    .slice(0, 4);
+  const stopAll = useCallback((): void => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    speech.stop();
+    dispatch({ type: 'STOP' });
+    resetOrb();
+  }, [resetOrb, speech]);
+
+  // Prise de parole au micro (dictée) : Kwes se tait immédiatement. On ne
+  // réagit qu'au démarrage réel du micro (transition), jamais à un micro déjà
+  // actif : un message dicté doit pouvoir être envoyé sans être coupé.
+  const micWasActiveRef = useRef(micActive);
+  useEffect(() => {
+    const wasActive = micWasActiveRef.current;
+    micWasActiveRef.current = micActive;
+    if (!micActive || wasActive) return;
+    if (state.phase !== 'speaking' && state.phase !== 'thinking') return;
+    stopAll();
+  }, [micActive, state.phase, stopAll]);
 
   const submit = async (): Promise<void> => {
-    const message = draft.trim();
-    if (!message || sending) return;
+    const message = draftRef.current.trim();
+    if (!message) return;
+    // Un nouvel envoi coupe net la réponse en cours : jamais deux voix.
+    const epoch = speech.stop();
+    abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setSending(true);
-    setError(null);
+    prime();
+    setNotice(null);
+    writeDraft('home', '');
+    setDraft('');
+    dispatch({ type: 'SEND' });
     notifyChatStarted();
+
+    const live = (): boolean => !controller.signal.aborted && epoch === speech.epoch();
+    let buffer = '';
+    let conversationId: string | null = null;
+
+    const speak = (sentence: string): void => {
+      const text = sentence.trim();
+      if (!text) return;
+      dispatch({ type: 'SENTENCE', text });
+      speech.enqueue(text, epoch, controller.signal);
+    };
+
     try {
-      const result = await sendChat(
-        { conversation_id: null, message, language: prefs.language, mode: 'auto' },
+      await streamChat(
+        {
+          conversation_id: null,
+          message,
+          language: prefs.language,
+          mode: analysis ? 'mission' : 'auto',
+        },
+        {
+          onMeta: (meta) => {
+            if (!live() || !meta.conversation_id) return;
+            if (meta.conversation_id === conversationId) return;
+            conversationId = meta.conversation_id;
+            dispatch({ type: 'CONVERSATION', id: meta.conversation_id });
+          },
+          onDelta: (chunk) => {
+            if (!live()) return;
+            dispatch({ type: 'DELTA', text: chunk });
+            buffer += chunk;
+            const { sentences, rest } = splitSentences(buffer);
+            buffer = rest;
+            for (const sentence of sentences) speak(sentence);
+          },
+          onDone: (payload) => {
+            if (!live()) return;
+            if (buffer.trim()) speak(buffer);
+            buffer = '';
+            conversationId = payload.conversation_id ?? conversationId;
+            dispatch({ type: 'DONE', conversationId });
+            setAnalysis(false);
+            notifyChatAnswered();
+            bumpRefresh();
+          },
+          onError: (error) => {
+            if (!live()) return;
+            dispatch({ type: 'ERROR', message: error.message });
+            notifyApiError(error);
+            setDraft((current) => (current.trim() ? current : message));
+          },
+        },
         controller.signal,
       );
-      writeDraft('home', '');
-      setDraft('');
-      notifyChatAnswered();
-      bumpRefresh();
-      navigate({ name: 'chat', conversationId: result.conversation_id });
     } catch (cause) {
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || !live()) {
         resetOrb();
         return;
       }
-      setError(errorMessage(cause));
+      dispatch({ type: 'ERROR', message: errorMessage(cause) });
       notifyApiError(cause);
+      setDraft((current) => (current.trim() ? current : message));
     } finally {
-      setSending(false);
-      abortRef.current = null;
-      setMicActive(false);
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
-  const liveUpdates = connection === 'online';
+  const caption = homeCaption(state);
+  const speaking = state.phase === 'speaking';
+  const working = state.phase === 'thinking';
+  const visible = Boolean(caption) || speaking || working;
+
+  const dotLabel = speaking ? 'Arrêter la réponse' : working ? 'Arrêter et revenir au repos' : 'Écrire à Kwes';
+
+  const handleDot = (): void => {
+    if (speaking || working) {
+      stopAll();
+      return;
+    }
+    setFocusSignal((current) => current + 1);
+  };
 
   return (
-    <div className="page">
-      <section className="home-hero" aria-labelledby="home-title">
-        <div className="home-hero__copy">
-          <span className="page-head__eyebrow">
-            {greeting()} ·{' '}
-            {new Date().toLocaleDateString('fr-FR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-            })}
-          </span>
-          <h1 id="home-title">Qu’est-ce qu’on fait aujourd’hui ?</h1>
-          <p className="home-hero__lede">
-            Dites-le avec vos mots. Kwes s’en occupe, vous montre où il en est, et vous demande votre
-            accord dès qu’une action peut avoir des conséquences.
+    <div className="page home-dot" data-phase={state.phase}>
+      <div className="home-dot__stage">
+        <button
+          type="button"
+          className="home-dot__figure"
+          onClick={handleDot}
+          aria-label={dotLabel}
+          data-active={speaking || working ? 'true' : 'false'}
+        >
+          <LivingDot phase={state.phase} levelRef={levelRef} className="home-dot__canvas" />
+        </button>
+
+        <div className="home-dot__caption">
+          <p
+            className="home-dot__subtitle"
+            data-visible={visible ? 'true' : 'false'}
+            data-tone={state.error ? 'error' : 'neutral'}
+            aria-live="polite"
+          >
+            <span aria-hidden="true">{caption || '\u00A0'}</span>
+            <span className="sr-only">{homeSpokenLine(state)}</span>
           </p>
-          <div className="home-hero__actions">
-            <a className="btn btn--primary" href={href({ name: 'chat' })}>
-              <Icon name="chat" size={17} />
-              Parler à Kwes
-            </a>
-            <a className="btn" href={href({ name: 'tasks' })}>
-              <Icon name="activity" size={17} />
-              Voir ce qu’il fait
-            </a>
-          </div>
-        </div>
 
-        <div className="orb-hero">
-          <HybridOrb
-            state={orbState}
-            className="orb--hero"
-            onActivate={() => navigate({ name: 'voice' })}
-            label="Orb Kwes — parler à Kwes"
-          />
-          <OrbStatus showCaption />
-        </div>
-      </section>
-
-      <div className="home-grid">
-        <section className="card card--pad" aria-labelledby="quick-title">
-          <div className="panel-title">
-            <h2 id="quick-title">Demander à Kwes</h2>
-          </div>
-
-          {error ? (
-            <p className="notice notice--danger" role="alert" style={{ marginBottom: 12 }}>
-              {error} — votre brouillon est conservé sur cet appareil.
-            </p>
-          ) : null}
-
-          <Composer
-            value={draft}
-            onChange={setDraft}
-            onSubmit={() => {
-              void submit();
-            }}
-            busy={sending}
-            onStop={() => abortRef.current?.abort()}
-            placeholder="Ex. : prépare un plan de lancement pour un service de veille concurrentielle"
-            micAllowed={prefs.voiceEnabled}
-            hint="Votre message part directement à Kwes · brouillon conservé en cas d’échec"
-          />
-
-          {!liveUpdates ? (
-            <p className="notice notice--info" style={{ marginTop: 14 }}>
-              <Icon name="alert" size={16} />
-              <span>
-                La liaison en direct est interrompue. Vous pouvez continuer à écrire : Kwes vous
-                répondra, et son avancement se mettra à jour à chaque actualisation.
-              </span>
-            </p>
-          ) : null}
-
-          <div className="divider" />
-
-          <div className="panel-title">
-            <h3>Ce qu’il fait en ce moment</h3>
-            <a className="meta" href={href({ name: 'tasks' })}>
-              Tout voir
-            </a>
-          </div>
-
-          {tasksLoading ? (
-            <div className="stack stack--sm" aria-hidden="true">
-              <div className="skeleton skeleton--row" />
-              <div className="skeleton skeleton--row" />
-            </div>
-          ) : tasksError ? (
-            <p className="notice notice--warning">
-              <Icon name="alert" size={16} />
-              <span>Impossible de charger son travail pour le moment : {tasksError}</span>
-            </p>
-          ) : activeTasks.length === 0 ? (
-            <p className="muted" style={{ fontSize: '0.8125rem' }}>
-              Kwes ne travaille sur rien pour le moment. Dites-lui ce que vous voulez accomplir.
-            </p>
-          ) : (
-            <div className="mission-list">
-              {activeTasks.map((task) => (
-                <a key={task.id} className="mission" href={href({ name: 'task', id: task.id })}>
-                  <div className="mission__top">
-                    <span className="mission__title">{truncate(task.title, 64)}</span>
-                    <StatusPill status={task.status} />
-                  </div>
-                  <div className="mission__meta">
-                    <span>{formatRelative(task.updated_at)}</span>
-                    <span>{clampProgress(task.progress)} % du travail</span>
-                  </div>
-                  <div className="progress" aria-hidden="true">
-                    <div
-                      className="progress__bar"
-                      style={{ width: `${clampProgress(task.progress)}%` }}
-                    />
-                  </div>
-                </a>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <aside className="stack">
-          <section className="card card--pad" aria-labelledby="status-title">
-            <div className="panel-title">
-              <h2 id="status-title">Est-ce que tout va bien ?</h2>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => {
-                  probeHealth();
-                  bumpRefresh();
-                }}
-              >
-                <Icon name="refresh" size={14} />
-                Vérifier
+          <div className="home-dot__actions">
+            {speaking || working ? (
+              <button type="button" className="home-dot__stop" onClick={stopAll}>
+                Arrêter
               </button>
-            </div>
-            <div className="stack stack--sm" style={{ fontSize: '0.8125rem' }}>
-              <div className="row row--between">
-                <span className="muted">Kwes répond</span>
-                <span
-                  className={`badge badge--${serverStatus === 'ok' ? 'success' : serverStatus === 'unreachable' ? 'danger' : 'warning'}`}
-                >
-                  {serverStatus === 'ok'
-                    ? 'Oui'
-                    : serverStatus === 'degraded'
-                      ? 'Lentement'
-                      : serverStatus === 'unreachable'
-                        ? 'Non'
-                        : 'Je vérifie…'}
-                </span>
-              </div>
-              <div className="row row--between">
-                <span className="muted">Mises à jour en direct</span>
-                <span
-                  className={`badge badge--${liveUpdates ? 'success' : connection === 'offline' ? 'danger' : 'warning'}`}
-                >
-                  {liveUpdates ? 'Oui' : connection === 'offline' ? 'Non' : 'En attente'}
-                </span>
-              </div>
-              <p className="meta" style={{ marginTop: 4 }}>
-                {liveUpdates
-                  ? 'Kwes vous montre son avancement au fur et à mesure.'
-                  : 'L’avancement s’affichera à chaque actualisation de la page.'}
-              </p>
-            </div>
-          </section>
+            ) : null}
+            {canReadAnswer(state) && state.conversationId ? (
+              <a
+                className="home-dot__read"
+                href={href({ name: 'chat', conversationId: state.conversationId })}
+              >
+                Lire la réponse
+              </a>
+            ) : null}
+          </div>
 
-          <section className="card card--pad" aria-labelledby="limits-title">
-            <h2 id="limits-title" style={{ fontSize: '1rem', marginBottom: 8 }}>
-              Ce que Kwes fait, et ce qu’il ne fait pas
-            </h2>
-            <ul
-              className="stack stack--sm"
-              style={{ listStyle: 'none', fontSize: '0.8125rem', color: 'var(--muted-strong)' }}
-            >
-              <li>· Vous écrivez, il répond et agit pour vous.</li>
-              <li>· Vous voyez chaque étape de son travail.</li>
-              <li>· Rien de délicat sans votre accord.</li>
-              <li>· Aucun paiement, aucun appel, aucun accès à vos comptes.</li>
-            </ul>
-          </section>
-        </aside>
+          {notice ? <p className="home-dot__notice">{notice}</p> : null}
+        </div>
+
+        <p className="sr-only" role="status" aria-live="polite">
+          {homeAnnouncement(state)}
+        </p>
       </div>
 
-      {!tasksLoading && !tasksError && tasks.length === 0 ? (
-        <div style={{ marginTop: 'var(--sp-5)' }}>
-          <EmptyState
-            title="Votre espace est prêt"
-            icon={<Icon name="spark" size={26} />}
-            action={
-              <a className="btn btn--soft" href={href({ name: 'voice' })}>
-                Parler à Kwes
-              </a>
-            }
-          >
-            Rien encore ici. Commencez par écrire à Kwes : tout ce qu’il fera apparaîtra dans votre
-            espace.
-          </EmptyState>
-        </div>
-      ) : null}
+      <div className="home-dot__bottom">
+        <Composer
+          value={draft}
+          onChange={setDraft}
+          onSubmit={() => {
+            void submit();
+          }}
+          busy={working}
+          onStop={stopAll}
+          onVoice={() => {
+            window.location.hash = href({ name: 'voice' });
+          }}
+          placeholder="Demander à Kwes"
+          autoFocus
+          micAllowed={prefs.voiceEnabled}
+          analysis={{ active: analysis, onToggle: () => setAnalysis((current) => !current) }}
+          focusSignal={focusSignal}
+        />
+
+        {state.phase === 'idle' && !state.sentence && !state.error ? (
+          <div className="home-dot__suggestions" aria-label="Suggestions">
+            {SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                className="home-dot__suggestion"
+                onClick={() => {
+                  setDraft(suggestion);
+                  setFocusSignal((current) => current + 1);
+                }}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

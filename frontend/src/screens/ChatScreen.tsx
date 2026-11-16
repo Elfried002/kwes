@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage, listConversations, listMessages, sendChat } from '../lib/api';
+import {
+  deleteConversation,
+  errorMessage,
+  listConversations,
+  listMessages,
+  sendChat,
+} from '../lib/api';
 import { formatRelative, truncate } from '../lib/format';
 import { usePrefersReducedMotion } from '../lib/hooks';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { href, navigate } from '../lib/router';
-import { isRecord, type Conversation, type ConversationDeltaData, type Message } from '../lib/types';
-import { useVoiceConversation } from '../lib/use-voice-conversation';
+import { type Conversation, type ConversationDeltaData, type Message } from '../lib/types';
 import { useKwes } from '../state/KwesProvider';
 import { Composer } from '../components/Composer';
-import { EmptyState } from '../components/EmptyState';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Icon } from '../components/Icon';
 import { MessageBubble } from '../components/MessageBubble';
-import { VoiceDock } from '../components/VoiceDock';
-import { HybridOrb } from '../components/orb/HybridOrb';
 
 interface TypingState {
   message: Message;
@@ -32,25 +35,14 @@ function mergeMessages(server: Message[], local: Message[]): Message[] {
   return [...server, ...extras];
 }
 
-function sourcesLabel(metadata: Record<string, unknown> | null | undefined): string | null {
-  if (!metadata) return null;
-  if (isRecord(metadata.task) && typeof metadata.task.id === 'string') return metadata.task.id;
-  return null;
-}
-
+/**
+ * Fil de conversation : un titre, les messages, une barre de saisie.
+ * La liste des conversations sert de repère latéral et passe sous un bouton
+ * d'en-tête sur mobile ; la voix vit sur son propre écran.
+ */
 export function ChatScreen({ conversationId }: { conversationId?: string }) {
-  const {
-    connection,
-    refreshKey,
-    bumpRefresh,
-    notifyChatStarted,
-    notifyChatAnswered,
-    notifyApiError,
-    resetOrb,
-    subscribe,
-    setMicActive,
-    orbState,
-  } = useKwes();
+  const { refreshKey, bumpRefresh, notifyChatStarted, notifyChatAnswered, notifyApiError, resetOrb, subscribe } =
+    useKwes();
   const prefs = usePreferences();
   const reducedMotion = usePrefersReducedMotion();
 
@@ -63,64 +55,20 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   const [draft, setDraft] = useState(() => readDraft(conversationId ?? 'new'));
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [streaming, setStreaming] = useState('');
   const [typing, setTyping] = useState<TypingState | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const conversationRef = useRef<string | undefined>(conversationId);
   conversationRef.current = conversationId;
-
-  // Mode vocal continu : micro navigateur → SSE → ElevenLabs, phrase par phrase.
-  const voice = useVoiceConversation({
-    conversationId,
-    language: prefs.language,
-    onUserMessage: (text) => {
-      setSendError(null);
-      setVoiceError(null);
-      setNotice(null);
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `voice-user-${Date.now()}`,
-          conversation_id: conversationRef.current ?? 'pending',
-          role: 'user',
-          content: text,
-          created_at: new Date().toISOString(),
-          metadata: { voice: true, optimistic: true },
-        },
-      ]);
-    },
-    onAssistantMessage: (text, info) => {
-      const target = info.conversationId ?? conversationRef.current;
-      setMessages((previous) => {
-        const duplicate = previous.some(
-          (message) => message.role === 'assistant' && message.content.trim() === text.trim(),
-        );
-        return duplicate
-          ? previous
-          : [
-              ...previous,
-              {
-                id: info.messageId ?? `voice-assistant-${Date.now()}`,
-                conversation_id: target ?? 'pending',
-                role: 'assistant',
-                content: text,
-                created_at: new Date().toISOString(),
-                metadata: { voice: true, mock: info.mock ?? false },
-              },
-            ];
-      });
-      bumpRefresh();
-      if (target && !conversationRef.current) {
-        navigate({ name: 'chat', conversationId: target }, { replace: true });
-      }
-    },
-    onError: (message) => setVoiceError(message),
-    onNotice: (message) => setNotice(message),
-  });
 
   const conversation = conversations.find((item) => item.id === conversationId) ?? null;
   const title = conversation?.title?.trim() || (conversationId ? 'Conversation' : 'Nouvelle conversation');
@@ -185,6 +133,8 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
           )
         : [],
     );
+    setListOpen(false);
+    setMenuOpen(false);
   }, [conversationId]);
 
   useEffect(() => {
@@ -234,9 +184,36 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   }, [typing]);
 
   useEffect(() => {
-    if (messages.length === 0 && !typing && !streaming && !voice.answer && !voice.pending) return;
+    if (messages.length === 0 && !typing && !streaming) return;
     bottomRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'end' });
-  }, [messages, typing, streaming, voice.answer, voice.pending, reducedMotion]);
+  }, [messages, typing, streaming, reducedMotion]);
+
+  // Tiroir mobile : Échap le referme.
+  useEffect(() => {
+    if (!listOpen) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setListOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [listOpen]);
+
+  // Menus : fermeture au clic extérieur et à Échap.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (event: MouseEvent): void => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   const sendMessage = async (raw: string): Promise<void> => {
     const text = raw.trim();
@@ -264,7 +241,6 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const wasOnline = connection === 'online';
 
     try {
       const result = await sendChat(
@@ -287,14 +263,10 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
         role: 'assistant',
         content: result.response,
         created_at: new Date().toISOString(),
-        metadata: wasOnline ? {} : { simulated: true },
+        metadata: {},
       };
 
-      if (wasOnline) {
-        setMessages((previous) => [...previous, assistant]);
-      } else {
-        setTyping({ message: assistant, shown: 0 });
-      }
+      setMessages((previous) => [...previous, assistant]);
 
       if (!currentConversation) {
         navigate({ name: 'chat', conversationId: result.conversation_id }, { replace: true });
@@ -304,7 +276,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       writeDraft(key, text);
       setDraft(text);
       if (controller.signal.aborted) {
-        setNotice('Envoi interrompu avant réponse. Aucune action n’est déclarée effectuée.');
+        setNotice('Envoi interrompu avant la réponse.');
         resetOrb();
       } else {
         setSendError(errorMessage(cause));
@@ -313,16 +285,15 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     } finally {
       setSending(false);
       abortRef.current = null;
-      setMicActive(false);
     }
   };
 
   const handleCopy = async (message: Message): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.content);
-      setNotice('Message copié dans le presse-papiers.');
+      setNotice('Message copié.');
     } catch {
-      setNotice('Copie impossible : le navigateur a refusé l’accès au presse-papiers.');
+      setNotice('Copie impossible depuis ce navigateur.');
     }
   };
 
@@ -333,255 +304,230 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       .reverse()
       .find((message) => message.role === 'user');
     if (!previousUser) {
-      setNotice('Aucun message utilisateur à relancer.');
+      setNotice('Aucun message à relancer.');
       return;
     }
     void sendMessage(previousUser.content);
   };
 
+  const removeConversation = async (): Promise<void> => {
+    if (!conversationId) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteConversation(conversationId);
+      setPendingDelete(false);
+      bumpRefresh();
+      navigate({ name: 'chat' });
+    } catch (cause) {
+      setDeleteError(errorMessage(cause));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const busy = sending && !streaming;
+
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <span className="page-head__eyebrow">Conversation</span>
-          <h1 style={{ fontSize: '1.6rem' }}>{title}</h1>
-        </div>
-        <div className="row">
-          <a className="btn btn--soft" href={href({ name: 'conversations' })}>
-            <Icon name="history" size={16} />
-            Historique
-          </a>
-          <button type="button" className="btn" onClick={() => navigate({ name: 'chat' })}>
-            <Icon name="plus" size={16} />
-            Nouveau
+    <div className="convo">
+      <aside className={`convo__list${listOpen ? ' is-open' : ''}`} aria-label="Vos conversations">
+        <div className="convo__list-head">
+          <span>Récentes</span>
+          <button
+            type="button"
+            className="convo__icon"
+            aria-label="Nouvelle conversation"
+            title="Nouvelle conversation"
+            onClick={() => navigate({ name: 'chat' })}
+          >
+            <Icon name="plus" size={17} />
           </button>
         </div>
-      </div>
-
-      <div className="chat">
-        <aside className="chat-rail" aria-label="Conversations récentes">
-          <div className="chat-rail__head">
-            <strong style={{ fontSize: '0.8125rem' }}>Récentes</strong>
-            <a className="meta" href={href({ name: 'conversations' })}>
-              Tout voir
-            </a>
-          </div>
-          <div className="chat-rail__list">
-            {conversationsError ? <p className="meta">{conversationsError}</p> : null}
-            {conversations.length === 0 && !conversationsError ? (
-              <p className="meta">Aucune conversation enregistrée.</p>
-            ) : null}
-            {conversations.slice(0, 30).map((item) => (
-              <a
-                key={item.id}
-                className="rail-item"
-                href={href({ name: 'chat', conversationId: item.id })}
-                aria-current={item.id === conversationId ? 'page' : undefined}
-              >
-                <span className="rail-item__title">{item.title?.trim() || 'Sans titre'}</span>
-                <span className="rail-item__meta">{formatRelative(item.updated_at)}</span>
-              </a>
-            ))}
-          </div>
-        </aside>
-
-        <section className="chat-main" aria-label="Fil de conversation">
-          <header className="chat-head">
-            <div className="chat-head__title">
-              <h2>{title}</h2>
-              <p className="meta">
-                {conversationId ? `ID ${truncate(conversationId, 18)}` : 'Nouvelle conversation'}
-                {conversation?.status ? ` · ${conversation.status}` : ''}
-              </p>
-            </div>
-            <span
-              className={`badge badge--${connection === 'online' ? 'success' : 'warning'}`}
-              title="La connexion se rétablit seule si le réseau coupe."
+        <nav className="convo__items">
+          {conversationsError ? <p className="convo__list-empty">{conversationsError}</p> : null}
+          {conversations.length === 0 && !conversationsError ? (
+            <p className="convo__list-empty">Aucune conversation pour l’instant.</p>
+          ) : null}
+          {conversations.slice(0, 40).map((item) => (
+            <a
+              key={item.id}
+              className="convo__item"
+              href={href({ name: 'chat', conversationId: item.id })}
+              aria-current={item.id === conversationId ? 'page' : undefined}
+              title={item.title?.trim() || 'Sans titre'}
             >
-              {connection === 'online' ? 'En direct' : 'Mode dégradé'}
-            </span>
-          </header>
+              <span className="convo__item-title">{truncate(item.title?.trim() || 'Sans titre', 40)}</span>
+              <span className="convo__item-date">{formatRelative(item.updated_at)}</span>
+            </a>
+          ))}
+        </nav>
+        <a className="convo__list-all" href={href({ name: 'conversations' })}>
+          Tout voir
+        </a>
+      </aside>
 
-          <div className="thread" aria-live="polite" aria-busy={sending}>
-            {loadingMessages && messages.length === 0 ? (
-              <div className="stack" aria-hidden="true">
-                <div className="skeleton skeleton--block" />
-                <div className="skeleton skeleton--block" style={{ width: '70%' }} />
+      {listOpen ? (
+        <button
+          type="button"
+          className="convo__scrim"
+          aria-label="Fermer la liste des conversations"
+          onClick={() => setListOpen(false)}
+        />
+      ) : null}
+
+      <section className="convo__main" aria-label="Conversation">
+        <header className="convo__head">
+          <button
+            type="button"
+            className="convo__icon convo__icon--menu"
+            aria-label="Vos conversations"
+            aria-expanded={listOpen}
+            onClick={() => setListOpen((value) => !value)}
+          >
+            <Icon name="menu" size={19} />
+          </button>
+          <h1 className="convo__title" title={title}>
+            {title}
+          </h1>
+          <div className="convo__menu" ref={menuRef}>
+            <button
+              type="button"
+              className="convo__icon"
+              aria-label="Options de la conversation"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((value) => !value)}
+            >
+              <Icon name="more" size={18} />
+            </button>
+            {menuOpen ? (
+              <div className="convo__pop" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="convo__pop-item convo__pop-item--danger"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setPendingDelete(true);
+                  }}
+                  disabled={!conversationId}
+                >
+                  <Icon name="trash" size={15} />
+                  Supprimer
+                </button>
               </div>
             ) : null}
-
-            {messagesError ? (
-              <p className="notice notice--warning" role="alert">
-                <Icon name="alert" size={16} />
-                <span>
-                  Historique indisponible : {messagesError}{' '}
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => setMessagesNonce((value) => value + 1)}
-                  >
-                    Réessayer
-                  </button>
-                </span>
-              </p>
-            ) : null}
-
-            {!loadingMessages && messages.length === 0 && !messagesError ? (
-              <div style={{ margin: 'auto', width: '100%', maxWidth: 520 }} className="chat-empty">
-                <div className="orb-hero" style={{ paddingTop: 0 }}>
-                  <HybridOrb state={orbState} className="orb--compact" />
-                </div>
-                <EmptyState title="Commencez par un objectif" icon={<Icon name="spark" size={24} />}>
-                  Décrivez ce que vous voulez accomplir. Kwes confirme, planifie, puis exécute avec
-                  votre validation pour les actions sensibles.
-                </EmptyState>
-                <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-                  {[
-                    'Explique ce que tu peux faire et tes limites.',
-                    'Prépare un plan de lancement en 5 étapes.',
-                    'Résume mes missions en cours.',
-                  ].map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      className="filter"
-                      onClick={() => setDraft(suggestion)}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                onCopy={(item) => {
-                  void handleCopy(item);
-                }}
-                onRetry={retry}
-              />
-            ))}
-
-            {typing ? (
-              <article className="msg msg--assistant" aria-label="Message de Kwes en cours d’affichage">
-                <div className="msg__who">
-                  <span>Kwes</span>
-                  <span className="badge badge--accent">affichage local</span>
-                </div>
-                <div className="msg__bubble">
-                  {typing.message.content.slice(0, typing.shown)}
-                  <span className="typing" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </div>
-              </article>
-            ) : null}
-
-            {streaming ? (
-              <article className="msg msg--assistant" aria-label="Réponse en streaming">
-                <div className="msg__who">
-                  <span>Kwes</span>
-                  <span className="badge badge--accent">en direct</span>
-                </div>
-                <div className="msg__bubble">
-                  {streaming}
-                  <span className="typing" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </div>
-              </article>
-            ) : null}
-
-            {voice.active && voice.pending && voice.phase === 'listening' ? (
-              <article className="msg msg--user msg--live" aria-label="Transcription en cours">
-                <div className="msg__who">
-                  <span>Vous</span>
-                  <span className="badge badge--accent">micro</span>
-                </div>
-                <div className="msg__bubble">
-                  {voice.pending}
-                  <span className="typing" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </div>
-              </article>
-            ) : null}
-
-            {voice.streaming && voice.answer ? (
-              <article className="msg msg--assistant" aria-label="Réponse vocale en cours">
-                <div className="msg__who">
-                  <span>Kwes</span>
-                  <span className="badge badge--accent">voix</span>
-                </div>
-                <div className="msg__bubble">{voice.answer}</div>
-              </article>
-            ) : null}
-
-            {sending && !streaming && !typing ? (
-              <p className="typing" role="status">
-                <i />
-                <i />
-                <i />
-                <span style={{ marginLeft: 8 }}>Kwes traite votre demande…</span>
-              </p>
-            ) : null}
-
-            <div ref={bottomRef} />
           </div>
+        </header>
 
-          <div className="chat-compose">
-            {sendError ? (
-              <p className="notice notice--danger" role="alert" style={{ marginBottom: 10 }}>
-                {sendError} — votre message a été replacé dans le brouillon.
-              </p>
-            ) : null}
-            {notice ? (
-              <p className="notice notice--info" role="status" style={{ marginBottom: 10 }}>
-                {notice}
-              </p>
-            ) : null}
-            {connection === 'offline' ? (
-              <p className="notice notice--warning" style={{ marginBottom: 10 }}>
-                <Icon name="alert" size={16} />
-                <span>
-                  Connexion temps réel perdue. Envois via REST et affichage progressif local ;
-                  reconnexion automatique.
-                </span>
-              </p>
-            ) : null}
+        <div className="convo__thread" aria-live="polite" aria-busy={sending}>
+          {loadingMessages && messages.length === 0 ? (
+            <p className="convo__hint">Chargement de la conversation…</p>
+          ) : null}
 
-            <VoiceDock voice={voice} enabled={prefs.voiceEnabled} notice={voiceError} />
+          {messagesError ? (
+            <p className="convo__hint convo__hint--error" role="alert">
+              {messagesError}{' '}
+              <button
+                type="button"
+                className="convo__link"
+                onClick={() => setMessagesNonce((value) => value + 1)}
+              >
+                Réessayer
+              </button>
+            </p>
+          ) : null}
 
-            <Composer
-              value={draft}
-              onChange={setDraft}
-              onSubmit={() => {
-                void sendMessage(draft);
+          {!loadingMessages && messages.length === 0 && !messagesError && !typing && !streaming ? (
+            <div className="convo__empty">
+              <p>{conversationId ? 'Cette conversation est vide.' : 'Que souhaitez-vous faire ?'}</p>
+            </div>
+          ) : null}
+
+          {messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              onCopy={(item) => {
+                void handleCopy(item);
               }}
-              busy={sending}
-              onStop={() => abortRef.current?.abort()}
-              micAllowed={prefs.voiceEnabled}
-              autoFocus
-              placeholder={conversationId ? 'Poursuivre la conversation…' : 'Décrivez votre objectif…'}
-              hint="Entrée pour envoyer · votre brouillon est conservé"
+              onRetry={retry}
             />
-            {sourcesLabel(messages.at(-1)?.metadata) ? (
-              <p className="meta" style={{ marginTop: 6 }}>
-                Mission liée : {sourcesLabel(messages.at(-1)?.metadata)}
-              </p>
-            ) : null}
-          </div>
-        </section>
-      </div>
+          ))}
+
+          {typing ? (
+            <MessageBubble
+              message={{ ...typing.message, content: typing.message.content.slice(0, typing.shown) }}
+              onCopy={() => undefined}
+              streaming
+            />
+          ) : null}
+
+          {streaming ? (
+            <MessageBubble
+              message={{
+                id: 'streaming',
+                conversation_id: conversationId ?? 'pending',
+                role: 'assistant',
+                content: streaming,
+                created_at: new Date().toISOString(),
+              }}
+              onCopy={() => undefined}
+              streaming
+            />
+          ) : null}
+
+          {busy && !typing ? <p className="convo__status">Kwes écrit…</p> : null}
+
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="convo__compose">
+          {sendError ? (
+            <p className="convo__hint convo__hint--error" role="alert">
+              {sendError} Votre message est resté dans le champ.
+            </p>
+          ) : null}
+          {deleteError ? (
+            <p className="convo__hint convo__hint--error" role="alert">
+              {deleteError}
+            </p>
+          ) : null}
+          {notice ? (
+            <p className="convo__hint" role="status">
+              {notice}
+            </p>
+          ) : null}
+
+          <Composer
+            value={draft}
+            onChange={setDraft}
+            onSubmit={() => {
+              void sendMessage(draft);
+            }}
+            busy={sending}
+            onVoice={() => {
+              window.location.hash = href({ name: 'voice' });
+            }}
+            onStop={() => abortRef.current?.abort()}
+            micAllowed={prefs.voiceEnabled}
+            autoFocus
+            placeholder={conversationId ? 'Poursuivre la conversation…' : 'Écrivez à Kwes…'}
+            hint="Entrée pour envoyer, Maj+Entrée pour revenir à la ligne."
+          />
+        </div>
+      </section>
+
+      <ConfirmDialog
+        open={pendingDelete}
+        title="Supprimer cette conversation ?"
+        description="La conversation et ses messages seront supprimés définitivement."
+        confirmLabel="Supprimer"
+        tone="danger"
+        busy={deleting}
+        onCancel={() => setPendingDelete(false)}
+        onConfirm={() => void removeConversation()}
+      />
     </div>
   );
 }

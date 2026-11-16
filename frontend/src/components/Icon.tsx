@@ -33,7 +33,10 @@ export type IconName =
   | 'external'
   | 'menu'
   | 'install'
-  | 'share';
+  | 'share'
+  | 'edit'
+  | 'more'
+  | 'waveform';
 
 const PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3.5 10.5 12 3.5l8.5 7v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1z" />,
@@ -141,6 +144,24 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M12 15V3.5" />
       <path d="m8 7 4-3.5L16 7" />
       <path d="M6.5 11.5H4.5v8h15v-8h-2" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4 20h4.2L19 9.2a2.1 2.1 0 0 0-3-3L5.2 17z" />
+      <path d="m14.5 7.7 2.8 2.8" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5.5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="18.5" cy="12" r="1.6" />
+    </>
+  ),
+  waveform: (
+    <>
+      <path d="M4 10.5v3M8 7.5v9M12 4.5v15M16 8.5v7M20 11v2" />
     </>
   ),
 };

@@ -37,7 +37,7 @@ const MENU: MenuEntry[] = [
   { label: 'Réglages', route: { name: 'settings' }, icon: 'settings' },
 ];
 
-const CAPTION_MAX = 92;
+const CAPTION_MAX = 150;
 
 /** Première phrase de la réponse, sans mise en forme, pour la ligne unique. */
 function captionFromAnswer(answer: string): string {
@@ -62,6 +62,7 @@ export function VoiceScreen() {
 
   const voice = useVoiceConversation({
     language: prefs.language,
+    voiceId: prefs.voiceId,
     onUserMessage: () => undefined,
     onAssistantMessage: () => undefined,
   });

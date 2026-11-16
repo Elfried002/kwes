@@ -59,7 +59,7 @@ export interface ChatRequest {
   conversation_id: string | null;
   message: string;
   language: string;
-  mode: 'auto' | 'text' | 'voice';
+  mode: 'auto' | 'text' | 'voice' | 'mission';
 }
 
 export interface ChatResponse {

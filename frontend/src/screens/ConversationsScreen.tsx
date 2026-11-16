@@ -5,16 +5,18 @@ import {
   errorMessage,
   listConversations,
 } from '../lib/api';
-import { formatDateTime, formatRelative, truncate } from '../lib/format';
+import { formatRelative, truncate } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePreferences } from '../lib/prefs';
 import { href, navigate } from '../lib/router';
 import { useKwes } from '../state/KwesProvider';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 
-/** Écran « Vos échanges » : l'historique des conversations, en langage courant. */
+/**
+ * Historique des conversations : une liste, rien de plus.
+ * Titre tronqué, date relative discrète, suppression au survol.
+ */
 export function ConversationsScreen() {
   const { refreshKey, bumpRefresh } = useKwes();
   const prefs = usePreferences();
@@ -61,90 +63,73 @@ export function ConversationsScreen() {
   };
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <span className="page-head__eyebrow">Retrouver</span>
-          <h1>Vos échanges</h1>
-          <p>Tout ce que vous avez dit à Kwes est gardé ici, sur votre compte.</p>
-        </div>
-        <button type="button" className="btn btn--primary" onClick={() => void create()} disabled={creating}>
+    <div className="hist">
+      <header className="hist__head">
+        <h1>Récentes</h1>
+        <button type="button" className="hist__new" onClick={() => void create()} disabled={creating}>
           <Icon name="plus" size={16} />
-          {creating ? 'Ouverture…' : 'Commencer un échange'}
+          {creating ? 'Ouverture…' : 'Nouvelle conversation'}
         </button>
-      </div>
+      </header>
 
       {actionError ? (
-        <p className="notice notice--danger" role="alert" style={{ marginBottom: 14 }}>
+        <p className="hist__error" role="alert">
           {actionError}
         </p>
       ) : null}
 
       {loading && !data ? (
-        <div className="stack" aria-hidden="true">
-          <div className="skeleton skeleton--row" />
-          <div className="skeleton skeleton--row" />
-          <div className="skeleton skeleton--row" />
-        </div>
+        <p className="hist__hint">Chargement…</p>
       ) : error ? (
-        <p className="notice notice--warning" role="alert">
-          <Icon name="alert" size={16} />
-          <span>
-            Impossible de charger vos échanges : {errorMessage(error)}{' '}
-            <button type="button" className="btn btn--ghost btn--sm" onClick={reload}>
-              Réessayer
-            </button>
-          </span>
+        <p className="hist__hint hist__hint--error" role="alert">
+          {errorMessage(error)}{' '}
+          <button type="button" className="hist__link" onClick={reload}>
+            Réessayer
+          </button>
         </p>
       ) : conversations.length === 0 ? (
-        <EmptyState
-          title="Aucun échange pour l’instant"
-          icon={<Icon name="history" size={26} />}
-          action={
-            <a className="btn btn--soft" href={href({ name: 'chat' })}>
-              Parler à Kwes
+        <div className="hist__hint">
+          <p>Aucune conversation pour l’instant.</p>
+          <p>
+            <a className="hist__link" href={href({ name: 'chat' })}>
+              Écrire à Kwes
             </a>
-          }
-        >
-          Votre première conversation apparaîtra ici dès que vous aurez écrit à Kwes.
-        </EmptyState>
+          </p>
+        </div>
       ) : (
-        <div className="list" role="list">
-          {conversations.map((conversation) => (
-            <div className="list__row card--hover" role="listitem" key={conversation.id}>
-              <div className="list__main">
-                <a className="list__title" href={href({ name: 'chat', conversationId: conversation.id })}>
-                  {truncate(conversation.title?.trim() || 'Sans titre', 90)}
-                </a>
-                <div className="list__meta">
-                  <span>{formatRelative(conversation.updated_at)}</span>
-                  <span title={formatDateTime(conversation.created_at)}>
-                    commencé le {formatDateTime(conversation.created_at)}
-                  </span>
-                </div>
-              </div>
-              <div className="list__side">
-                <a className="btn btn--sm" href={href({ name: 'chat', conversationId: conversation.id })}>
-                  Reprendre
+        <ul className="hist__list">
+          {conversations.map((conversation) => {
+            const label = truncate(conversation.title?.trim() || 'Sans titre', 40);
+            return (
+              <li className="hist__row" key={conversation.id}>
+                <a
+                  className="hist__link-main"
+                  href={href({ name: 'chat', conversationId: conversation.id })}
+                  title={conversation.title?.trim() || 'Sans titre'}
+                >
+                  <span className="hist__convo">{label}</span>
+                  <time className="hist__date" dateTime={conversation.updated_at}>
+                    {formatRelative(conversation.updated_at)}
+                  </time>
                 </a>
                 <button
                   type="button"
-                  className="btn btn--danger btn--sm"
+                  className="hist__remove"
                   onClick={() => setPendingDelete(conversation.id)}
-                  aria-label={`Supprimer l’échange ${conversation.title ?? 'sans titre'}`}
+                  aria-label={`Supprimer ${label}`}
+                  title="Supprimer"
                 >
-                  <Icon name="trash" size={13} />
-                  Supprimer
+                  <Icon name="trash" size={15} />
                 </button>
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Supprimer cet échange ?"
+        title="Supprimer cette conversation ?"
         description="La conversation et ses messages seront supprimés définitivement."
         confirmLabel="Supprimer"
         tone="danger"

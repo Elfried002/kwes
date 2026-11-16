@@ -101,6 +101,12 @@ export function reduceVoice(
 
     case 'MIC_READY':
       if (!state.active) return state;
+      // Un redémarrage de la reconnaissance ne doit jamais interrompre un tour
+      // en cours : sinon la phase repasserait à `listening` pendant que Kwes
+      // parle, et plus rien ne pourrait couper l'audio.
+      if (state.phase === 'thinking' || state.phase === 'speaking' || state.streaming) {
+        return { ...state, error: null };
+      }
       return { ...state, phase: 'listening', error: null };
 
     case 'MIC_FAILED':
@@ -299,6 +305,102 @@ export function stripMarkdownForSpeech(text: string): string {
     .replace(/\*+/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/* ------------------------------------------------------------------ */
+/* Premier contact : la découverte                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Le tout premier message de Kwes, joué dès l'ouverture du mode vocal.
+ * Une phrase de présentation, puis UNE question — jamais deux.
+ */
+export const FIRST_CONTACT_MESSAGE =
+  "Bonjour, moi c'est Kwes — votre assistant personnel. " +
+  'Pour commencer, qu’est-ce que vous faites dans la vie ?';
+
+/** Clé locale : la découverte ne se rejoue pas à chaque ouverture. */
+export const FIRST_CONTACT_KEY = 'kwes.voice.firstContact';
+
+/** Stockage minimal : `localStorage` en vrai, un objet factice en test. */
+export interface KeyValueStore {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+}
+
+export function defaultStore(): KeyValueStore | null {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return null;
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Kwes s'est-il déjà présenté sur cet appareil ? */
+export function hasMetKwes(store: KeyValueStore | null = defaultStore()): boolean {
+  if (!store) return false;
+  try {
+    return store.getItem(FIRST_CONTACT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Marque la présentation comme faite ; rend `false` si le stockage refuse. */
+export function markKwesMet(store: KeyValueStore | null = defaultStore()): boolean {
+  if (!store) return false;
+  try {
+    store.setItem(FIRST_CONTACT_KEY, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Faut-il prendre la parole en premier ? Uniquement à la première session
+ * vocale : ni en veille (l'utilisateur a demandé le silence), ni si le mode est
+ * déjà actif.
+ */
+export function shouldOpenDiscovery(input: {
+  metBefore: boolean;
+  standby: boolean;
+  active: boolean;
+}): boolean {
+  return !input.metBefore && !input.standby && !input.active;
+}
+
+/* ------------------------------------------------------------------ */
+/* Barge-in : distinguer la voix de l'utilisateur de l'écho du haut-parleur */
+/* ------------------------------------------------------------------ */
+
+function speechWords(text: string): string[] {
+  return (text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+/**
+ * La phrase reconnue ressemble-t-elle à ce que Kwes est en train de dire ?
+ * Si oui, c'est le haut-parleur qui revient dans le micro : couper l'audio
+ * serait une auto-interruption, pas un barge-in.
+ */
+export function looksLikeEcho(heard: string, spoken: string): boolean {
+  const heardWords = speechWords(heard);
+  if (heardWords.length === 0) return false;
+  const spokenWords = new Set(speechWords(spoken));
+  if (spokenWords.size === 0) return false;
+  let found = 0;
+  for (const word of heardWords) {
+    if (spokenWords.has(word)) found += 1;
+  }
+  return found / heardWords.length >= 0.6;
 }
 
 /** Libellés accessibles (aria-live discret). */

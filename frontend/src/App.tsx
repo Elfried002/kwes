@@ -73,6 +73,8 @@ function RoutedApp() {
   if (!session) {
     if (recovery) return <PasswordRecoveryScreen />;
     if (route.name === 'auth') return <LoginScreen key={route.mode} initialMode={route.mode} />;
+    // Accès direct au mode vocal : on demande la connexion, puis on entre dans la voix.
+    if (route.name === 'voice') return <LoginScreen initialMode="signin" />;
     return <PublicHome />;
   }
 

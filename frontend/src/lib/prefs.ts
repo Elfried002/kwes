@@ -8,12 +8,15 @@ export interface Preferences {
   language: 'fr' | 'en';
   voiceEnabled: boolean;
   notificationsEnabled: boolean;
+  /** Voix ElevenLabs choisie (`null` = voix par défaut du serveur). */
+  voiceId: string | null;
 }
 
 const DEFAULTS: Preferences = {
   language: 'fr',
   voiceEnabled: true,
   notificationsEnabled: false,
+  voiceId: null,
 };
 
 function read(): Preferences {
@@ -30,6 +33,10 @@ function read(): Preferences {
         typeof candidate.notificationsEnabled === 'boolean'
           ? candidate.notificationsEnabled
           : DEFAULTS.notificationsEnabled,
+      voiceId:
+        typeof candidate.voiceId === 'string' && candidate.voiceId.trim()
+          ? candidate.voiceId.trim()
+          : null,
     };
   } catch {
     return DEFAULTS;

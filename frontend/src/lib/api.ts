@@ -413,7 +413,11 @@ export interface SynthesizedSpeech {
 }
 
 /** POST /voice/synthesize — audio base64 ElevenLabs, repli texte explicite. */
-export async function synthesizeSpeech(text: string, signal?: AbortSignal): Promise<SynthesizedSpeech> {
+export async function synthesizeSpeech(
+  text: string,
+  signal?: AbortSignal,
+  voiceId?: string | null,
+): Promise<SynthesizedSpeech> {
   const payload = await request<{
     text?: string;
     audio_base64?: string | null;
@@ -424,7 +428,7 @@ export async function synthesizeSpeech(text: string, signal?: AbortSignal): Prom
     mock?: boolean;
   }>('/voice/synthesize', {
     method: 'POST',
-    body: { text },
+    body: voiceId ? { text, voice_id: voiceId } : { text },
     signal,
     timeoutMs: 45_000,
   });
@@ -437,6 +441,65 @@ export async function synthesizeSpeech(text: string, signal?: AbortSignal): Prom
     reason: typeof payload.reason === 'string' ? payload.reason : null,
     voiceId: typeof payload.voice_id === 'string' ? payload.voice_id : null,
     mock: payload.mock === true,
+  };
+}
+
+export interface VoiceOption {
+  id: string;
+  name: string;
+  gender: string | null;
+  language: string | null;
+  accent: string | null;
+  description: string | null;
+  previewUrl?: string | null;
+}
+
+export interface VoiceCatalog {
+  voices: VoiceOption[];
+  mock: boolean;
+  cached: boolean;
+  reason: string | null;
+  defaultVoiceId: string | null;
+}
+
+function normalizeVoice(raw: unknown): VoiceOption | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Record<string, unknown>;
+  const id = typeof item.id === 'string' ? item.id.trim() : '';
+  if (!id) return null;
+  const text = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() ? value.trim() : null;
+  return {
+    id,
+    name: text(item.name) ?? id,
+    gender: text(item.gender),
+    language: text(item.language),
+    accent: text(item.accent),
+    description: text(item.description),
+    previewUrl: text(item.preview_url ?? item.previewUrl),
+  };
+}
+
+/** GET /voice/voices — catalogue des voix disponibles pour les réglages. */
+export async function listVoices(signal?: AbortSignal): Promise<VoiceCatalog> {
+  const payload = await request<{
+    voices?: unknown;
+    mock?: boolean;
+    cached?: boolean;
+    reason?: string | null;
+    default_voice_id?: string | null;
+  }>('/voice/voices', { signal, timeoutMs: 12_000 });
+
+  const voices = Array.isArray(payload.voices)
+    ? payload.voices.map(normalizeVoice).filter((voice): voice is VoiceOption => voice !== null)
+    : [];
+
+  return {
+    voices,
+    mock: payload.mock === true,
+    cached: payload.cached === true,
+    reason: typeof payload.reason === 'string' ? payload.reason : null,
+    defaultVoiceId: typeof payload.default_voice_id === 'string' ? payload.default_voice_id : null,
   };
 }
 

@@ -1,5 +1,13 @@
-import { useState } from 'react';
-import { API_BASE_URL, errorMessage, isApiError, listIntegrations } from '../lib/api';
+import { useEffect, useRef, useState } from 'react';
+import {
+  API_BASE_URL,
+  errorMessage,
+  isApiError,
+  listIntegrations,
+  listVoices,
+  synthesizeSpeech,
+  type VoiceOption,
+} from '../lib/api';
 import { signOut, useSession } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
 import { useApi } from '../lib/hooks';
@@ -34,6 +42,36 @@ function Switch({
   );
 }
 
+/** Phrase courte lue par la prévisualisation : utile, jamais un texte de démo. */
+const VOICE_PREVIEW_TEXT = 'Bonjour, c’est Kwes. Voilà comment je sonne quand je vous parle.';
+
+function genderLabel(gender: string | null): string {
+  if (gender === 'male') return 'voix masculine';
+  if (gender === 'female') return 'voix féminine';
+  if (gender === 'neutral') return 'voix neutre';
+  return '';
+}
+
+function languageLabel(language: string | null): string {
+  if (!language) return '';
+  if (language === 'fr') return 'français';
+  if (language === 'en') return 'anglais';
+  if (language === 'es') return 'espagnol';
+  if (language === 'de') return 'allemand';
+  return language;
+}
+
+/** Résumé lisible d'une voix : langue, accent, timbre. */
+function voiceSummary(voice: VoiceOption): string {
+  const parts = [
+    languageLabel(voice.language),
+    voice.accent ? `accent ${voice.accent}` : '',
+    genderLabel(voice.gender),
+    voice.description ?? '',
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
+
 export function SettingsScreen() {
   const session = useSession();
   const prefs = usePreferences();
@@ -42,6 +80,83 @@ export function SettingsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const integrations = useApi((signal) => listIntegrations(signal), []);
+  const voices = useApi((signal) => listVoices(signal), []);
+
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      const audio = previewAudioRef.current;
+      if (audio) {
+        audio.onended = null;
+        audio.onerror = null;
+        audio.pause();
+      }
+      previewAudioRef.current = null;
+    };
+  }, []);
+
+  /** Prévisualisation réelle : même route que la conversation vocale. */
+  const previewVoice = async (voiceId: string | null): Promise<void> => {
+    if (previewingId) return;
+    setPreviewError(null);
+    setPreviewingId(voiceId ?? '__default__');
+    try {
+      const speech = await synthesizeSpeech(VOICE_PREVIEW_TEXT, undefined, voiceId);
+      // Repli : le service premium peut être indisponible (quota, panne).
+      // On prononce alors l'extrait avec la voix de l'appareil pour que
+      // l'utilisateur entende quand même une voix, sans mensonge sur la source.
+      if (!speech.audioBase64) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(VOICE_PREVIEW_TEXT);
+          utterance.lang = 'fr-FR';
+          const french = window.speechSynthesis
+            .getVoices()
+            .find((voice) => voice.lang?.toLowerCase().startsWith('fr'));
+          if (french) utterance.voice = french;
+          utterance.onend = () => setPreviewingId(null);
+          utterance.onerror = () => setPreviewingId(null);
+          setPreviewError(
+            'Voix de votre appareil : le service premium est indisponible pour le moment.',
+          );
+          window.speechSynthesis.speak(utterance);
+          return;
+        }
+        setPreviewingId(null);
+        setPreviewError(
+          speech.reason
+            ? `Aucun extrait audio : ${speech.reason}`
+            : 'Le service vocal n’a renvoyé aucun audio.',
+        );
+        return;
+      }
+      const previous = previewAudioRef.current;
+      if (previous) {
+        previous.onended = null;
+        previous.onerror = null;
+        previous.pause();
+      }
+      const audio = new Audio(
+        `data:${speech.mimeType ?? 'audio/mpeg'};base64,${speech.audioBase64}`,
+      );
+      previewAudioRef.current = audio;
+      const done = (message?: string): void => {
+        setPreviewingId(null);
+        if (message) setPreviewError(message);
+      };
+      audio.onended = () => done();
+      audio.onerror = () => done('Extrait audio illisible par ce navigateur.');
+      await audio.play().catch(() => {
+        done('Lecture bloquée par le navigateur : cliquez à nouveau sur « Écouter ».');
+      });
+    } catch (cause) {
+      setPreviewingId(null);
+      setPreviewError(`Prévisualisation impossible : ${errorMessage(cause)}`);
+    }
+  };
 
   const setPreference = <K extends keyof Preferences>(key: K, value: Preferences[K]): void => {
     updatePreferences({ [key]: value } as Partial<Preferences>);
@@ -91,6 +206,13 @@ export function SettingsScreen() {
       setError('Le stockage de ce navigateur est inaccessible.');
     }
   };
+
+  const voiceOptions = voices.data?.voices ?? [];
+  const storedVoiceMissing =
+    prefs.voiceId !== null &&
+    voiceOptions.length > 0 &&
+    !voiceOptions.some((option) => option.id === prefs.voiceId);
+  const selectedVoice = voiceOptions.find((option) => option.id === prefs.voiceId) ?? null;
 
   const wsEndpoint = buildWsUrl('•••').replace('token=%E2%80%A2%E2%80%A2%E2%80%A2', 'session=<session>');
   const dependencies = health?.dependencies ? Object.entries(health.dependencies) : [];
@@ -219,10 +341,99 @@ export function SettingsScreen() {
           <p className="notice notice--info" style={{ marginTop: 14 }}>
             <Icon name="alert" size={16} />
             <span>
-              La lecture à voix haute n’est pas encore disponible : Kwes ne joue aucun son qui ne
-              serait pas réellement produit.
+              Kwes ne joue que ce que le service vocal renvoie réellement. Si l’audio est
+              indisponible, la réponse reste affichée en texte — rien n’est simulé.
             </span>
           </p>
+        </section>
+
+        <section className="card card--pad" aria-labelledby="voice-picker-title">
+          <div className="panel-title">
+            <h2 id="voice-picker-title">La voix de Kwes</h2>
+            {voiceOptions.length > 0 ? (
+              <span className="badge">
+                {voiceOptions.length} voix
+              </span>
+            ) : null}
+          </div>
+
+          {voices.loading && !voices.data ? (
+            <div className="skeleton skeleton--row" aria-hidden="true" />
+          ) : voices.error ? (
+            <p className="notice notice--warning">
+              <Icon name="alert" size={16} />
+              <span>Impossible de lister les voix : {errorMessage(voices.error)}</span>
+            </p>
+          ) : voiceOptions.length === 0 ? (
+            <p className="muted" style={{ fontSize: '0.8125rem' }}>
+              Aucune voix n’est proposée pour le moment.{' '}
+              {voices.data?.reason ?? 'Le service vocal n’est pas configuré côté serveur.'}
+            </p>
+          ) : (
+            <>
+              <p className="muted" style={{ fontSize: '0.8125rem' }}>
+                Choisissez la voix qui vous parle. Le réglage est conservé sur cet appareil et
+                s’applique dès le prochain échange vocal.
+              </p>
+
+              <div className="row" style={{ marginTop: 12, flexWrap: 'wrap', gap: 10 }}>
+                <label className="sr-only" htmlFor="settings-voice">
+                  Voix utilisée quand Kwes parle
+                </label>
+                <select
+                  id="settings-voice"
+                  className="select"
+                  value={prefs.voiceId ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setPreference('voiceId', value ? value : null);
+                    setPreviewError(null);
+                  }}
+                >
+                  <option value="">Voix par défaut de Kwes</option>
+                  {storedVoiceMissing && prefs.voiceId ? (
+                    <option value={prefs.voiceId}>
+                      {prefs.voiceId} (voix enregistrée, indisponible)
+                    </option>
+                  ) : null}
+                  {voiceOptions.map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void previewVoice(prefs.voiceId)}
+                  disabled={previewingId !== null}
+                >
+                  <Icon name={previewingId ? 'activity' : 'mic'} size={15} />
+                  {previewingId ? 'Lecture…' : 'Écouter'}
+                </button>
+              </div>
+
+              <p className="meta" style={{ marginTop: 10 }}>
+                {selectedVoice
+                  ? `${selectedVoice.name} — ${voiceSummary(selectedVoice) || 'voix ElevenLabs'}.`
+                  : 'Voix par défaut du service vocal.'}
+              </p>
+
+              {previewError ? (
+                <p className="notice notice--danger" role="alert" style={{ marginTop: 10 }}>
+                  <Icon name="alert" size={16} />
+                  <span>{previewError}</span>
+                </p>
+              ) : null}
+
+              {voices.data?.mock ? (
+                <p className="meta" style={{ marginTop: 8 }}>
+                  Le service vocal n’est pas configuré : aucun extrait ne peut être écouté.
+                </p>
+              ) : null}
+            </>
+          )}
         </section>
 
         <section className="card card--pad" aria-labelledby="integrations-title">

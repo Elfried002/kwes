@@ -87,6 +87,26 @@ export function initials(email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
+function capitalize(value: string): string {
+  if (!value) return '';
+  return value.charAt(0).toLocaleUpperCase('fr-FR') + value.slice(1).toLocaleLowerCase('fr-FR');
+}
+
+/**
+ * Prénom affichable : le nom du profil s'il existe, sinon la partie locale de
+ * l'e-mail (« elfried.kwes@… » → « Elfried »). Chaîne vide si rien d'exploitable.
+ */
+export function firstName(email: string | null | undefined, displayName?: string | null): string {
+  const name = (displayName ?? '').trim();
+  if (name) return capitalize(name.split(/\s+/)[0] ?? '');
+
+  const mail = (email ?? '').trim();
+  if (!mail.includes('@')) return '';
+  const local = mail.split('@')[0] ?? '';
+  const token = local.split(/[._+-]/)[0] ?? '';
+  return capitalize(token.replace(/[0-9]+$/, ''));
+}
+
 export function greeting(date = new Date()): string {
   const hour = date.getHours();
   if (hour < 6) return 'Bonne nuit';

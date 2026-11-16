@@ -9,13 +9,6 @@ interface MessageBubbleProps {
   streaming?: boolean;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  user: 'Vous',
-  assistant: 'Kwes',
-  tool: 'Outil',
-  system: 'Système',
-};
-
 interface SourceItem {
   title: string;
   url?: string;
@@ -39,55 +32,64 @@ function readSources(metadata: Record<string, unknown> | null | undefined): Sour
     .slice(0, 5);
 }
 
+/**
+ * Un tour de parole : bulle simple, horodatage discret, actions au survol.
+ * Aucun cadre autour des réponses de Kwes — seul le message de l'utilisateur
+ * porte un fond contrasté.
+ */
 export function MessageBubble({ message, onCopy, onRetry, streaming = false }: MessageBubbleProps) {
-  const metadata = message.metadata ?? null;
-  const simulated = metadata?.simulated === true;
-  const sources = readSources(metadata);
-  const roleLabel = ROLE_LABELS[message.role] ?? message.role;
+  const sources = readSources(message.metadata ?? null);
+  const isAssistant = message.role === 'assistant';
 
   return (
-    <article className={`msg msg--${message.role}`} aria-label={`Message de ${roleLabel}`}>
-      <div className="msg__who">
-        <span>{roleLabel}</span>
-        <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
-      </div>
-      <div className="msg__bubble">
+    <article
+      className={`turn turn--${message.role}`}
+      aria-label={isAssistant ? 'Réponse de Kwes' : 'Votre message'}
+    >
+      <div className="turn__bubble">
         {message.content}
-        {streaming ? <span className="typing" aria-hidden="true"><i /><i /><i /></span> : null}
+        {streaming ? <span className="turn__caret" aria-hidden="true" /> : null}
       </div>
-
-      {simulated ? (
-        <p className="meta">Affichage progressif local — WebSocket indisponible, contenu final reçu par REST.</p>
-      ) : null}
 
       {sources.length > 0 ? (
-        <div className="msg__foot" style={{ flexWrap: 'wrap' }}>
-          <span className="meta">Sources :</span>
+        <p className="turn__sources">
+          <span>Sources</span>
           {sources.map((source) =>
             source.url ? (
-              <a key={`${source.title}-${source.url}`} className="meta" href={source.url} target="_blank" rel="noreferrer noopener">
+              <a key={`${source.title}-${source.url}`} href={source.url} target="_blank" rel="noreferrer noopener">
                 {source.title}
               </a>
             ) : (
-              <span key={source.title} className="meta">
-                {source.title}
-              </span>
+              <span key={source.title}>{source.title}</span>
             ),
           )}
-        </div>
+        </p>
       ) : null}
 
-      <div className="msg__foot">
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => onCopy(message)}>
-          <Icon name="copy" size={12} />
-          Copier
-        </button>
-        {onRetry && message.role === 'assistant' ? (
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => onRetry(message)}>
-            <Icon name="refresh" size={12} />
-            Recommencer
+      <div className="turn__meta">
+        <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
+        <span className="turn__actions">
+          <button
+            type="button"
+            className="turn__action"
+            onClick={() => onCopy(message)}
+            aria-label="Copier le message"
+            title="Copier"
+          >
+            <Icon name="copy" size={14} />
           </button>
-        ) : null}
+          {isAssistant && onRetry ? (
+            <button
+              type="button"
+              className="turn__action"
+              onClick={() => onRetry(message)}
+              aria-label="Recommencer cette réponse"
+              title="Recommencer"
+            >
+              <Icon name="refresh" size={14} />
+            </button>
+          ) : null}
+        </span>
       </div>
     </article>
   );

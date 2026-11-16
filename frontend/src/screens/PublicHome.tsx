@@ -272,11 +272,11 @@ export function PublicHome() {
               </p>
 
               <div className="site-hero__actions">
-                <a className="btn btn--primary btn--lg" href="#/inscription">
-                  Créer un compte
+                <a className="btn btn--primary btn--lg" href="#/parler">
+                  Parler à Kwes
                 </a>
-                <a className="btn btn--lg" href="#/connexion">
-                  Se connecter
+                <a className="btn btn--lg" href="#/inscription">
+                  Créer un compte
                 </a>
               </div>
 

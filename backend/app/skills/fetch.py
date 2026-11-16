@@ -76,7 +76,9 @@ def domain_allowlisted(host: str, allowlist: list[str]) -> bool:
     return False
 
 
-def validate_url_shape(url: str, allowlist: list[str]) -> str:
+def validate_url_shape(
+    url: str, allowlist: list[str], *, enforce_allowlist: bool = True
+) -> str:
     """Validation statique (aucune résolution DNS, aucun réseau)."""
     if not isinstance(url, str) or not url.strip():
         raise SkillValidationError("URL manquante.")
@@ -105,7 +107,7 @@ def validate_url_shape(url: str, allowlist: list[str]) -> str:
         ip = None
     if ip is not None and (not ip.is_global or ip.is_loopback or ip.is_link_local or ip.is_private):
         raise SkillValidationError("Adresse IP privée, locale ou réservée refusée.")
-    if not domain_allowlisted(host, allowlist):
+    if enforce_allowlist and not domain_allowlisted(host, allowlist):
         raise SkillValidationError(f"Domaine non autorisé: {host}")
     return candidate
 
@@ -138,6 +140,10 @@ class ReadableContent:
 
 class _Extractor(HTMLParser):
     SKIP_TAGS = {"script", "style", "noscript", "template", "svg", "iframe", "object"}
+    # Zones de contenu principal : sur une grosse page, le texte utile y est
+    # (le reste est menu, barre latérale, pied de page). On privilégie ce bloc
+    # quand il contient assez de texte, sinon on retombe sur le document entier.
+    CONTENT_TAGS = {"main", "article"}
     BLOCK_TAGS = {
         "p", "div", "section", "article", "header", "footer", "li", "tr",
         "h1", "h2", "h3", "h4", "h5", "h6", "br", "hr", "blockquote", "pre",
@@ -149,6 +155,8 @@ class _Extractor(HTMLParser):
         self._in_title = False
         self.title_parts: list[str] = []
         self.text_parts: list[str] = []
+        self.scoped_parts: list[str] = []
+        self._scope_depth = 0
         self.links: list[dict[str, str]] = []
         self._current_href: str | None = None
         self._link_text: list[str] = []
@@ -166,14 +174,20 @@ class _Extractor(HTMLParser):
             if href:
                 self._current_href = href
                 self._link_text = []
+        if tag in self.CONTENT_TAGS:
+            self._scope_depth += 1
         if tag in self.BLOCK_TAGS:
             self.text_parts.append("\n")
+            if self._scope_depth:
+                self.scoped_parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
         if tag in self.SKIP_TAGS and self._skip_depth:
             self._skip_depth -= 1
             return
+        if tag in self.CONTENT_TAGS and self._scope_depth:
+            self._scope_depth -= 1
         if tag == "title":
             self._in_title = False
         if tag == "a" and self._current_href:
@@ -194,10 +208,13 @@ class _Extractor(HTMLParser):
         cleaned = data.strip()
         if cleaned:
             self.text_parts.append(cleaned + " ")
+            if self._scope_depth:
+                self.scoped_parts.append(cleaned + " ")
 
     # -- sortie ---------------------------------------------------------
     def result(self, base_url: str) -> ReadableContent:
-        raw_text = "".join(self.text_parts)
+        scoped = "".join(self.scoped_parts).strip()
+        raw_text = "".join(self.scoped_parts) if len(scoped) >= 400 else "".join(self.text_parts)
         raw_text = re.sub(r"[ \t]+", " ", raw_text)
         raw_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
         title = " ".join("".join(self.title_parts).split())[:300]
@@ -248,12 +265,13 @@ async def safe_fetch(
     url: str,
     *,
     allowlist: list[str],
+    enforce_allowlist: bool = True,
     timeout: float = 15.0,
     max_bytes: int = 2_000_000,
     max_redirects: int = 4,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> FetchedPage:
-    current = validate_url_shape(url, allowlist)
+    current = validate_url_shape(url, allowlist, enforce_allowlist=enforce_allowlist)
     timeout_cfg = httpx.Timeout(timeout)
     started = asyncio.get_running_loop().time()
 
@@ -277,7 +295,9 @@ async def safe_fetch(
                 location = response.headers.get("location", "")
                 if not location:
                     raise SkillProviderError("Redirection sans destination.")
-                current = validate_url_shape(urljoin(current, location), allowlist)
+                current = validate_url_shape(
+                    urljoin(current, location), allowlist, enforce_allowlist=enforce_allowlist
+                )
                 continue
 
             body = response.content[:max_bytes]
@@ -312,6 +332,7 @@ def make_fetcher(allowlist: list[str], settings: Any) -> Any:
         return await safe_fetch(
             url,
             allowlist=allowlist,
+            enforce_allowlist=not getattr(settings, "browser_open_web", False),
             timeout=min(20.0, settings.skill_default_timeout_seconds),
             max_bytes=settings.fetch_max_bytes,
             max_redirects=settings.fetch_max_redirects,

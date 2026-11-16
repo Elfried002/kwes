@@ -164,6 +164,10 @@ class PolicyEngine:
         host = (domain or "").strip().lower().rstrip(".")
         if not host or "/" in host or "@" in host:
             return False
+        # Mode web ouvert : n'importe quel hôte public. Les contrôles SSRF
+        # (IP privées, metadata, ports, redirections) restent dans `fetch.py`.
+        if getattr(self.settings, "browser_open_web", False):
+            return True
         allowlist = self.settings.browser_domain_allowlist
         return any(host == allowed or host.endswith("." + allowed) for allowed in allowlist)
 

@@ -124,9 +124,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         llm = DeepSeekClient(settings)
         application.state.llm = llm
         orchestrator = build_orchestrator(
-            settings=settings, db=db, registry=registry, queue=queue, llm=llm
+            settings=settings,
+            db=db,
+            registry=registry,
+            queue=queue,
+            llm=llm,
+            fetcher=application.state.fetcher,
         )
-        orchestrator.fetcher = application.state.fetcher
         application.state.orchestrator = orchestrator
 
         worker = TaskWorker(

@@ -212,7 +212,9 @@ async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
             break
         url = candidate["url"]
         try:
-            validate_url_shape(url, ctx.allowlist)
+            validate_url_shape(
+                url, ctx.allowlist, enforce_allowlist=not getattr(ctx.settings, "browser_open_web", False)
+            )
         except SkillValidationError:
             host = urlsplit(url).hostname or url[:60]
             if host not in skipped:

@@ -39,9 +39,10 @@ async def render_fetch(
     allowlist: list[str],
     timeout: float = 20.0,
     wait_until: str = "networkidle",
+    enforce_allowlist: bool = True,
 ) -> FetchedPage:
     """Charge la page avec exécution JavaScript et renvoie le HTML rendu."""
-    validated = validate_url_shape(url, allowlist)
+    validated = validate_url_shape(url, allowlist, enforce_allowlist=enforce_allowlist)
 
     from playwright.async_api import async_playwright
 
@@ -68,7 +69,7 @@ async def render_fetch(
                         if route.request.resource_type in {"media", "font"}:
                             await route.abort()
                             return
-                        validate_url_shape(target, allowlist)
+                        validate_url_shape(target, allowlist, enforce_allowlist=enforce_allowlist)
                     except SkillValidationError:
                         blocked["count"] += 1
                         await route.abort()
@@ -140,7 +141,12 @@ def make_browser_fetcher(allowlist: list[str], settings: Any) -> Any:
     async def _fetch(url: str) -> FetchedPage:
         if mode != "httpx" and render_available():
             try:
-                return await render_fetch(url, allowlist=allowlist, timeout=timeout)
+                return await render_fetch(
+                    url,
+                    allowlist=allowlist,
+                    timeout=timeout,
+                    enforce_allowlist=not getattr(settings, "browser_open_web", False),
+                )
             except SkillProviderError:
                 if mode == "playwright":
                     raise
@@ -148,6 +154,7 @@ def make_browser_fetcher(allowlist: list[str], settings: Any) -> Any:
         return await safe_fetch(
             url,
             allowlist=allowlist,
+            enforce_allowlist=not getattr(settings, "browser_open_web", False),
             timeout=timeout,
             max_bytes=settings.fetch_max_bytes,
             max_redirects=settings.fetch_max_redirects,

@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     max_message_chars: int = 8000
     dev_endpoints: bool = False  # active POST /dev/token — dev uniquement
     browser_render: Literal["auto", "playwright", "httpx"] = "auto"  # rendu des pages lues par browser_readonly
+    # Lecture de n'importe quel site public, au lieu de la seule allowlist.
+    # Les garde-fous SSRF restent actifs (IP privées, metadata, ports, redirections).
+    browser_open_web: bool = False
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 180
     rate_limit_chat_per_minute: int = 40

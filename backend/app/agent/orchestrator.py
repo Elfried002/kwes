@@ -1643,6 +1643,7 @@ def build_orchestrator(
     registry: SkillRegistry,
     queue: Any,
     llm: LLMClient | None = None,
+    fetcher: FetchFn | None = None,
 ) -> Orchestrator:
     llm = llm or DeepSeekClient(settings)
     policy = PolicyEngine(settings)
@@ -1655,6 +1656,9 @@ def build_orchestrator(
         llm=llm,
         planner=planner,
         queue=queue,
+        # Sans ce passage, l'orchestrateur reconstruisait un fetcher httpx et le
+        # rendu Chromium (Playwright) n'était jamais utilisé en conversation.
+        fetcher=fetcher,
     )
 
 

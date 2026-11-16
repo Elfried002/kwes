@@ -28,8 +28,11 @@ async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
     objective = payload.get("objective") or ""
     max_chars = int(payload.get("max_chars") or 8000)
 
-    # Validation statique immédiate (avant tout accès réseau injecté).
-    validated = validate_url_shape(url, ctx.allowlist)
+    # Validation statique immédiate (avant tout accès réseau injecté). En mode
+    # web ouvert, seule la validation SSRF subsiste : pas de liste de domaines.
+    validated = validate_url_shape(
+        url, ctx.allowlist, enforce_allowlist=not getattr(ctx.settings, "browser_open_web", False)
+    )
     ctx.logger.info("browser_readonly url=%s", validated[:160])
 
     try:

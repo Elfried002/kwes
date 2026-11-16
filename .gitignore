@@ -35,3 +35,11 @@ pnpm-debug.log*
 *.sqlite
 *.db
 /var/
+
+# secrets locaux et artefacts de démo
+.env.production
+.demo_jwt
+.demo_account
+.supabase_service_key
+.last_supabase_token
+.frontend/.env.production

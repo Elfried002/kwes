@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import ExpiredSignatureError, JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,26 +43,82 @@ class CurrentUser:
         return str(self.id)
 
 
-def decode_token(token: str, settings: Settings) -> dict[str, Any]:
-    secret = settings.jwt_secret
-    if not secret:
-        # Échec fermé : aucune vérification possible sans secret.
-        logger.error("JWT secret manquant pour app_env=%s", settings.app_env)
-        raise Unauthenticated("Configuration d'authentification invalide.")
+def _jwks_cache(settings: Settings) -> dict[str, Any]:
+    """Récupère et met en cache (10 min) le JWKS Supabase (clés ES256)."""
+    import json
+    import time
+    import urllib.request
 
-    options = {"verify_aud": bool(settings.jwt_audience), "verify_exp": True}
+    global _JWKS
+    now = time.time()
+    cached = _JWKS.get("data")
+    if cached and now - _JWKS.get("at", 0) < 600:
+        return cached
+    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+    with urllib.request.urlopen(url, timeout=8) as r:  # noqa: S310 — URL de configuration
+        data = json.loads(r.read().decode("utf-8"))
+    _JWKS = {"data": data, "at": now}
+    return data
+
+
+_JWKS: dict[str, Any] = {}
+
+
+def _decode_supabase_es256(token: str, settings: Settings) -> dict[str, Any]:
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    keys = _jwks_cache(settings).get("keys", [])
+    jwk = next((k for k in keys if k.get("kid") == kid), None)
+    if jwk is None:
+        _JWKS.clear()
+        keys = _jwks_cache(settings).get("keys", [])
+        jwk = next((k for k in keys if k.get("kid") == kid), None)
+    if jwk is None:
+        raise Unauthenticated("Clé de signature inconnue.")
+    payload = jwt.decode(
+        token,
+        jwk,
+        algorithms=["ES256"],
+        audience="authenticated",
+        options={"verify_aud": True, "verify_exp": True},
+    )
+    return payload
+
+
+def decode_token(token: str, settings: Settings) -> dict[str, Any]:
+    """Vérifie un JWT : ES256 via JWKS Supabase, sinon HS256 (dev/tests)."""
     try:
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=[settings.jwt_algorithm],
-            audience=settings.jwt_audience or None,
-            options=options,
-        )
-    except ExpiredSignatureError as exc:
-        raise Unauthenticated("Session expirée.") from exc
+        header = jwt.get_unverified_header(token)
     except JWTError as exc:
         raise Unauthenticated("Jeton invalide.") from exc
+
+    alg = str(header.get("alg") or "")
+
+    if alg == "ES256" and settings.supabase_url:
+        try:
+            payload = _decode_supabase_es256(token, settings)
+        except ExpiredSignatureError as exc:
+            raise Unauthenticated("Session expirée.") from exc
+        except JWTError as exc:
+            raise Unauthenticated("Jeton invalide.") from exc
+    else:
+        secret = settings.jwt_secret
+        if not secret:
+            logger.error("JWT secret manquant pour app_env=%s", settings.app_env)
+            raise Unauthenticated("Configuration d'authentification invalide.")
+        options = {"verify_aud": bool(settings.jwt_audience), "verify_exp": True}
+        try:
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=[settings.jwt_algorithm],
+                audience=settings.jwt_audience or None,
+                options=options,
+            )
+        except ExpiredSignatureError as exc:
+            raise Unauthenticated("Session expirée.") from exc
+        except JWTError as exc:
+            raise Unauthenticated("Jeton invalide.") from exc
 
     if "exp" not in payload:
         raise Unauthenticated("Jeton sans expiration.")
@@ -87,6 +143,24 @@ async def resolve_user(
 
     profile = await session.get(Profile, user_id)
     if profile is None:
+        # Sur Supabase, la ligne auth.users existe déjà (créée à l'inscription).
+        # En local (PostgreSQL nu), il faut la créer pour satisfaire la clé
+        # étrangère profiles.id -> auth.users.id.
+        try:
+            await session.execute(
+                text(
+                    "insert into auth.users (id, email) values (:id, :email) "
+                    "on conflict (id) do nothing"
+                ),
+                {"id": str(user_id), "email": email},
+            )
+            # Commit immédiat : la ligne d'authentification doit exister avant
+            # l'insertion du profil, sinon la clé étrangère fait échouer la
+            # transaction entière et la première connexion renvoie 401.
+            await session.commit()
+        except Exception:  # noqa: BLE001 — schéma auth absent (SQLite) ou droits insuffisants
+            await session.rollback()
+
         profile = Profile(
             id=user_id,
             display_name=str(payload.get("name") or payload.get("display_name") or "") or None,

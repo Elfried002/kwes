@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { API_BASE_URL, errorMessage, isApiError, listIntegrations } from '../lib/api';
-import { clearSession, useSession } from '../lib/auth';
+import { signOut, useSession } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { updatePreferences, usePreferences, type Preferences } from '../lib/prefs';
@@ -87,7 +87,7 @@ export function SettingsScreen() {
     }
   };
 
-  const wsEndpoint = buildWsUrl('•••').replace('token=%E2%80%A2%E2%80%A2%E2%80%A2', 'token=<jwt>');
+  const wsEndpoint = buildWsUrl('•••').replace('token=%E2%80%A2%E2%80%A2%E2%80%A2', 'session=<session>');
 
   return (
     <div className="page">
@@ -122,8 +122,12 @@ export function SettingsScreen() {
             <dd>{session?.email || '—'}</dd>
             <dt>Identifiant</dt>
             <dd className="mono">{session?.userId || '—'}</dd>
-            <dt>Jeton expire</dt>
-            <dd>{session?.expiresAt ? formatDateTime(new Date(session.expiresAt * 1000).toISOString()) : 'sans claim exp'}</dd>
+            <dt>Session expire</dt>
+            <dd>
+              {session?.expiresAt
+                ? formatDateTime(new Date(session.expiresAt * 1000).toISOString())
+                : 'non communiquée'}
+            </dd>
             <dt>Langue</dt>
             <dd>
               <label className="sr-only" htmlFor="settings-language">
@@ -255,18 +259,18 @@ export function SettingsScreen() {
             <dt>WebSocket</dt>
             <dd className="mono">{wsEndpoint}</dd>
             <dt>Authentification</dt>
-            <dd>Bearer JWT — jamais de clé fournisseur côté client</dd>
+            <dd>Supabase Auth — jamais de clé fournisseur côté client</dd>
           </dl>
           <p className="meta" style={{ marginTop: 10 }}>
-            Le jeton est stocké dans ce navigateur uniquement et présenté à chaque requête privée. La
-            déconnexion le supprime immédiatement.
+            Votre session est gérée par Supabase Auth dans ce navigateur et présentée à chaque
+            requête privée. La déconnexion la révoque immédiatement.
           </p>
           <button
             type="button"
             className="btn btn--danger"
             style={{ marginTop: 12 }}
             onClick={() => {
-              clearSession();
+              void signOut();
             }}
           >
             <Icon name="logout" size={15} />

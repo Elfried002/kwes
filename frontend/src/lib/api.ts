@@ -195,38 +195,6 @@ export function getHealth(signal?: AbortSignal): Promise<Health> {
   return request<Health>('/health', { auth: false, signal, timeoutMs: 8000 });
 }
 
-/* ---------- Auth dev ---------- */
-
-export interface DevTokenResponse {
-  access_token?: string;
-  token?: string;
-  email?: string;
-}
-
-/**
- * Endpoint de développement optionnel. S'il n'existe pas (404/501), l'écran de
- * connexion propose de coller un JWT signé côté serveur. Aucun secret n'est
- * manipulé dans le navigateur.
- */
-export async function requestDevToken(email: string, signal?: AbortSignal): Promise<string> {
-  const payload = await request<DevTokenResponse>('/dev/token', {
-    method: 'POST',
-    body: { email },
-    auth: false,
-    signal,
-    timeoutMs: 10_000,
-  });
-  const token = payload.access_token ?? payload.token;
-  if (!token) {
-    throw new ApiError({
-      message: "L'endpoint dev n'a pas renvoyé de jeton exploitable.",
-      code: 'VALIDATION_ERROR',
-      status: 200,
-    });
-  }
-  return token;
-}
-
 /* ---------- Conversations ---------- */
 
 export function listConversations(signal?: AbortSignal): Promise<Conversation[]> {

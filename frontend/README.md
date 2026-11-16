@@ -21,17 +21,23 @@ npm run dev                 # http://127.0.0.1:5173
 | `npm run typecheck` | vérification TypeScript stricte |
 | `npm test` | Vitest (machine à états + mapping WebSocket) |
 
-Variables : seule `VITE_API_BASE_URL` (non secrète) est exposée au bundle. Aucune clé
-DeepSeek / ElevenLabs / Supabase service role ne doit être placée dans une variable `VITE_*`.
+Variables : `VITE_API_BASE_URL`, `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (URL du projet et
+clé anonyme, publiques par conception) sont exposées au bundle. Aucune clé DeepSeek / ElevenLabs /
+Supabase `service_role` ne doit être placée dans une variable `VITE_*`.
 
-## Authentification (dev)
+## Authentification
 
-1. `POST {API}/dev/token` avec `{ "email": "..." }` si le backend expose cet endpoint de dev ;
-2. sinon, coller un JWT HS256 signé côté serveur avec `DEV_JWT_SECRET`.
+Gérée par Supabase Auth (`@supabase/supabase-js`, client dans `src/lib/supabase.ts`) :
+connexion e-mail + mot de passe, création de compte avec confirmation e-mail, Google OAuth et
+mot de passe oublié (`resetPasswordForEmail`). Aucun jeton n'est saisi à la main dans l'interface.
 
-Le navigateur ne décode que les claims publics (`sub`, `email`, `exp`) et stocke le jeton dans
-`localStorage` (`kwes.session.v1`). Aucun secret de signature n'est présent côté client.
-Un `401` efface la session et renvoie à l'écran de connexion.
+- `src/lib/auth.ts` expose la session sous la forme stable `{ token, email, userId, expiresAt }`
+  (`token` = `access_token` Supabase, présenté à l'API) et se met à jour via `onAuthStateChange`.
+- La session est rafraîchie automatiquement (`autoRefreshToken`), restaurée au rechargement
+  (`persistSession`) et reprise des liens de retour (`detectSessionInUrl`).
+- Un `401` de l'API Kwes déconnecte l'utilisateur et renvoie à l'écran de connexion.
+- Côté Supabase, il faut activer la confirmation d'e-mail, le fournisseur Google et autoriser
+  l'URL de retour (`/`) dans *Authentication → URL Configuration*.
 
 ## Écrans
 

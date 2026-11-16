@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     # --- Authentification ----------------------------------------------
     dev_jwt_secret: str = DEFAULT_DEV_JWT_SECRET
     supabase_jwt_secret: str = ""
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_leeway_seconds: int = 30
     jwt_audience: str = ""  # vide = pas de vérification d'audience

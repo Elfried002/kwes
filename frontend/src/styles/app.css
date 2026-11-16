@@ -1729,6 +1729,194 @@ ol {
   color: var(--muted);
 }
 
+.login__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: rgba(8, 6, 28, 0.5);
+}
+
+.login__tab {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--fs-small);
+  font-weight: 580;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.login__tab:hover {
+  color: var(--text);
+}
+
+.login__tab[aria-selected='true'] {
+  background: linear-gradient(135deg, var(--action-from), var(--action-to));
+  color: var(--kwes-white);
+  box-shadow: 0 8px 22px -14px rgba(38, 123, 255, 0.9);
+}
+
+.login__tab:focus-visible,
+.link-button:focus-visible,
+.field__action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.login__row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.link-button {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-family: inherit;
+  font-size: var(--fs-small);
+  font-weight: 540;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-button:hover:not(:disabled) {
+  color: #c6dbff;
+}
+
+.link-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+}
+
+.login__divider::before,
+.login__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.login__google {
+  gap: 10px;
+}
+
+.login--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.login--single .login__form {
+  min-height: 100dvh;
+}
+
+.field__with-action {
+  position: relative;
+  display: flex;
+}
+
+.field__with-action .input {
+  padding-right: 88px;
+}
+
+.field__action {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 560;
+  cursor: pointer;
+}
+
+.field__action:hover {
+  color: var(--text);
+  background: rgba(140, 155, 255, 0.1);
+}
+
+.pw-meter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 8px 0 4px;
+}
+
+.pw-meter span {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(140, 155, 255, 0.18);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.pw-meter[data-score='1'] span:nth-child(-n + 1) {
+  background: var(--danger);
+}
+
+.pw-meter[data-score='2'] span:nth-child(-n + 2) {
+  background: var(--warning);
+}
+
+.pw-meter[data-score='3'] span:nth-child(-n + 3) {
+  background: var(--accent-cyan);
+}
+
+.pw-meter[data-score='4'] span {
+  background: var(--success);
+}
+
+.boot {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.boot__spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(140, 155, 255, 0.25);
+  border-top-color: var(--accent-cyan);
+  animation: boot-spin 900ms linear infinite;
+}
+
+@keyframes boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot__spinner {
+    animation: none;
+  }
+}
+
 details.disclosure summary {
   cursor: pointer;
   color: var(--muted-strong);
@@ -1952,27 +2140,25 @@ details.disclosure[open] summary {
 
   .login__pitch {
     border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 28px 20px 24px;
-    align-items: center;
-    text-align: center;
+    border-bottom: 0;
+    padding: 22px 20px 6px;
+    align-items: flex-start;
+    text-align: left;
     gap: var(--sp-2);
   }
 
-  .login__orb {
-    width: min(190px, 52vw);
+  .login__orb,
+  .login__pitch p {
+    display: none;
   }
 
   .login__pitch h1 {
-    font-size: 1.6rem;
-  }
-
-  .login__pitch p {
-    font-size: var(--fs-small);
+    font-size: 1.4rem;
+    max-width: none;
   }
 
   .login__form {
-    padding: 24px 20px 40px;
+    padding: 14px 20px 40px;
   }
 
   .list__row {

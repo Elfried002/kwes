@@ -1,0 +1,202 @@
+/* Kwes — mode vocal continu.
+ * Chargé uniquement par <VoiceDock /> (écran Conversation).
+ * Toutes les animations sont neutralisées par prefers-reduced-motion.
+ */
+
+.voice-dock {
+  position: relative;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(38, 123, 255, 0.12), transparent 60%),
+    var(--surface-glass);
+  backdrop-filter: blur(12px);
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+
+.voice-dock.is-active {
+  border-color: rgba(92, 231, 255, 0.38);
+  box-shadow: 0 0 0 1px rgba(92, 231, 255, 0.12), var(--shadow-soft);
+}
+
+.voice-dock[data-phase='speaking'].is-active {
+  border-color: rgba(107, 88, 255, 0.45);
+}
+
+.voice-dock--unsupported {
+  border-style: dashed;
+  background: var(--surface);
+}
+
+.voice-dock__head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.voice-dock__orb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+}
+
+/* HybridOrb est en width:100% sans hauteur : on contraint le conteneur carré. */
+.voice-dock__orb > .orb {
+  width: 100%;
+  height: 100%;
+}
+
+.voice-dock__orb canvas {
+  display: block;
+}
+
+.voice-dock__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.voice-dock__title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.voice-dock__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: var(--fs-small);
+  color: var(--muted-strong);
+}
+
+/* Pastille d'état : la couleur ne porte jamais l'information seule (le texte l'explicite). */
+.voice-dock__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: 0 0 auto;
+}
+
+.voice-dock__dot--listening {
+  background: var(--accent-cyan);
+}
+
+.voice-dock__dot--thinking {
+  background: var(--accent);
+}
+
+.voice-dock__dot--speaking {
+  background: var(--accent-violet);
+}
+
+.voice-dock.is-active .voice-dock__dot--listening,
+.voice-dock.is-active .voice-dock__dot--speaking {
+  animation: voice-pulse 1.8s var(--ease) infinite;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(92, 231, 255, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(92, 231, 255, 0);
+  }
+}
+
+.voice-dock__transcript {
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--accent-cyan);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: rgba(92, 231, 255, 0.06);
+  font-size: var(--fs-small);
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.voice-dock__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.voice-dock__mic {
+  min-height: 40px;
+}
+
+.voice-dock__mic.is-listening {
+  border-color: rgba(92, 231, 255, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(92, 231, 255, 0.25);
+}
+
+.voice-dock__hint,
+.voice-dock__notice,
+.voice-dock__phase {
+  margin: 8px 0 0;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.voice-dock__phase {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.voice-dock__notice {
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--warning-soft);
+  color: var(--text-soft);
+}
+
+.voice-dock__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--muted-strong);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .voice-dock {
+    padding: 12px;
+  }
+
+  .voice-dock__orb {
+    width: 44px;
+    height: 44px;
+  }
+
+  .voice-dock__actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-dock,
+  .voice-dock.is-active .voice-dock__dot {
+    transition: none;
+    animation: none;
+  }
+}

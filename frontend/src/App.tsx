@@ -22,15 +22,15 @@ function titleFor(route: Route): string {
     case 'auth':
       return 'Connexion';
     case 'chat':
-      return 'Chat';
+      return 'Parler';
     case 'conversations':
-      return 'Conversations';
+      return 'Vos échanges';
     case 'tasks':
-      return 'Activités';
+      return 'Ce qu’il fait';
     case 'task':
-      return 'Mission';
+      return 'Ce qu’il fait';
     case 'approvals':
-      return 'Validations';
+      return 'Il attend votre accord';
     case 'settings':
       return 'Réglages';
   }

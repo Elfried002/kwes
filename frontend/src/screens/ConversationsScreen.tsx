@@ -5,7 +5,7 @@ import {
   errorMessage,
   listConversations,
 } from '../lib/api';
-import { formatDateTime, formatRelative, truncate, conversationStatusLabel } from '../lib/format';
+import { formatDateTime, formatRelative, truncate } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { usePreferences } from '../lib/prefs';
 import { href, navigate } from '../lib/router';
@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 
+/** Écran « Vos échanges » : l'historique des conversations, en langage courant. */
 export function ConversationsScreen() {
   const { refreshKey, bumpRefresh } = useKwes();
   const prefs = usePreferences();
@@ -63,13 +64,13 @@ export function ConversationsScreen() {
     <div className="page">
       <div className="page-head">
         <div>
-          <span className="page-head__eyebrow">Historique</span>
-          <h1>Conversations</h1>
-          <p>Chaque échange est conservé côté serveur et rattaché à votre profil.</p>
+          <span className="page-head__eyebrow">Retrouver</span>
+          <h1>Vos échanges</h1>
+          <p>Tout ce que vous avez dit à Kwes est gardé ici, sur votre compte.</p>
         </div>
         <button type="button" className="btn btn--primary" onClick={() => void create()} disabled={creating}>
           <Icon name="plus" size={16} />
-          {creating ? 'Création…' : 'Nouvelle conversation'}
+          {creating ? 'Ouverture…' : 'Commencer un échange'}
         </button>
       </div>
 
@@ -89,7 +90,7 @@ export function ConversationsScreen() {
         <p className="notice notice--warning" role="alert">
           <Icon name="alert" size={16} />
           <span>
-            Impossible de charger les conversations : {errorMessage(error)}{' '}
+            Impossible de charger vos échanges : {errorMessage(error)}{' '}
             <button type="button" className="btn btn--ghost btn--sm" onClick={reload}>
               Réessayer
             </button>
@@ -97,20 +98,20 @@ export function ConversationsScreen() {
         </p>
       ) : conversations.length === 0 ? (
         <EmptyState
-          title="Aucune conversation"
+          title="Aucun échange pour l’instant"
           icon={<Icon name="history" size={26} />}
           action={
             <a className="btn btn--soft" href={href({ name: 'chat' })}>
-              Démarrer une conversation
+              Parler à Kwes
             </a>
           }
         >
-          Vos échanges apparaîtront ici dès le premier message envoyé au backend.
+          Votre première conversation apparaîtra ici dès que vous aurez écrit à Kwes.
         </EmptyState>
       ) : (
         <div className="list" role="list">
           {conversations.map((conversation) => (
-            <div className="list__row" role="listitem" key={conversation.id}>
+            <div className="list__row card--hover" role="listitem" key={conversation.id}>
               <div className="list__main">
                 <a className="list__title" href={href({ name: 'chat', conversationId: conversation.id })}>
                   {truncate(conversation.title?.trim() || 'Sans titre', 90)}
@@ -118,20 +119,19 @@ export function ConversationsScreen() {
                 <div className="list__meta">
                   <span>{formatRelative(conversation.updated_at)}</span>
                   <span title={formatDateTime(conversation.created_at)}>
-                    créée le {formatDateTime(conversation.created_at)}
+                    commencé le {formatDateTime(conversation.created_at)}
                   </span>
-                  <span className="badge">{conversationStatusLabel(conversation.status)}</span>
                 </div>
               </div>
               <div className="list__side">
                 <a className="btn btn--sm" href={href({ name: 'chat', conversationId: conversation.id })}>
-                  Ouvrir
+                  Reprendre
                 </a>
                 <button
                   type="button"
                   className="btn btn--danger btn--sm"
                   onClick={() => setPendingDelete(conversation.id)}
-                  aria-label={`Supprimer la conversation ${conversation.title ?? 'sans titre'}`}
+                  aria-label={`Supprimer l’échange ${conversation.title ?? 'sans titre'}`}
                 >
                   <Icon name="trash" size={13} />
                   Supprimer
@@ -144,8 +144,8 @@ export function ConversationsScreen() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Supprimer cette conversation ?"
-        description="La suppression applique la politique de rétention du backend et retire les données dérivées définies. Cette action est irréversible."
+        title="Supprimer cet échange ?"
+        description="La conversation et ses messages seront supprimés définitivement."
         confirmLabel="Supprimer"
         tone="danger"
         busy={deleting}

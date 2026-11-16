@@ -18,7 +18,19 @@ from sqlalchemy import select
 from app.agent.deepseek import DeepSeekClient
 from app.agent.orchestrator import build_orchestrator
 from app.agent.voice import build_voice_provider
-from app.api import approvals, chat, conversations, dev, health, memory, notifications, skills, tasks, voice
+from app.api import (
+    approvals,
+    chat,
+    conversations,
+    dev,
+    devices,
+    health,
+    memory,
+    notifications,
+    skills,
+    tasks,
+    voice,
+)
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.middleware import KwesHttpMiddleware
@@ -178,6 +190,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(approvals.router, prefix=prefix, dependencies=private_deps)
     app.include_router(notifications.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(devices.router, prefix=prefix)
     if settings.app_env in ("dev", "test") and settings.dev_endpoints:
         app.include_router(dev.router, prefix=prefix)
     app.include_router(ws_router, prefix=prefix)

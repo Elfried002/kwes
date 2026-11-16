@@ -16,7 +16,7 @@ import type { Approval } from '../lib/types';
 
 const APPROVAL_STATUS_LABELS: Record<string, string> = {
   pending: 'En attente',
-  approved: 'Approuvée',
+  approved: 'Acceptée',
   rejected: 'Refusée',
   expired: 'Expirée',
 };
@@ -59,8 +59,8 @@ export function ApprovalsScreen() {
       );
       setActionNotice(
         decision === 'approve'
-          ? `Validation envoyée pour « ${approval.summary} ». La mission reprendra selon le serveur.`
-          : `Refus envoyé pour « ${approval.summary} ».`,
+          ? `C’est noté : Kwes peut faire « ${approval.summary} ».`
+          : `C’est noté : Kwes ne fera pas « ${approval.summary} ».`,
       );
       bumpRefresh();
       reload();
@@ -81,16 +81,18 @@ export function ApprovalsScreen() {
     <div className="page">
       <div className="page-head">
         <div>
-          <span className="page-head__eyebrow">Contrôle</span>
-          <h1>Validations</h1>
+          <span className="page-head__eyebrow">À vous de décider</span>
+          <h1>Il attend votre accord</h1>
           <p>
-            Toute action sensible attend votre décision. Le policy engine reste côté serveur ;
-            l’approbation est liée à un hash de charge utile et expire.
+            Kwes s’arrête dès qu’une action peut avoir des conséquences. Lisez ce qu’il veut faire,
+            puis acceptez ou refusez. Chaque demande expire si vous ne répondez pas.
           </p>
         </div>
         <div className="row">
           <span className={`badge ${pending.length > 0 ? 'badge--warning' : 'badge--success'}`}>
-            {pending.length} en attente
+            {pending.length === 0
+              ? 'Rien en attente'
+              : `${pending.length} demande${pending.length > 1 ? 's' : ''}`}
           </span>
           <button type="button" className="btn" onClick={reload} disabled={loading}>
             <Icon name="refresh" size={16} />
@@ -114,7 +116,7 @@ export function ApprovalsScreen() {
         <p className="notice notice--warning" role="alert">
           <Icon name="alert" size={16} />
           <span>
-            Impossible de charger les validations : {errorMessage(error)}{' '}
+            Impossible de charger les demandes : {errorMessage(error)}{' '}
             <button type="button" className="btn btn--ghost btn--sm" onClick={reload}>
               Réessayer
             </button>
@@ -129,62 +131,78 @@ export function ApprovalsScreen() {
         <>
           <section aria-labelledby="pending-title" className="stack" style={{ marginBottom: 'var(--sp-6)' }}>
             <div className="panel-title">
-              <h2 id="pending-title">En attente de votre décision</h2>
+              <h2 id="pending-title">Ce qu’il veut faire</h2>
             </div>
 
             {pending.length === 0 ? (
-              <EmptyState title="Aucune validation en attente" icon={<Icon name="shield" size={26} />}>
-                Kwes vous sollicitera ici avant toute action sensible.
+              <EmptyState title="Rien à décider pour le moment" icon={<Icon name="shield" size={26} />}>
+                Kwes vous préviendra ici avant toute action délicate.
               </EmptyState>
             ) : (
               pending.map((approval) => {
                 const expired = isExpired(approval);
                 return (
-                  <article className="approval" key={approval.id} aria-labelledby={`approval-${approval.id}`}>
+                  <article
+                    className="approval"
+                    key={approval.id}
+                    aria-labelledby={`approval-${approval.id}`}
+                  >
                     <div className="approval__head">
                       <span className={`badge ${expired ? 'badge--danger' : 'badge--warning'}`}>
                         {expired ? 'Expirée' : formatCountdown(approval.expires_at)}
                       </span>
-                      <span className="badge">{approval.action_type}</span>
                     </div>
                     <h3 id={`approval-${approval.id}`} className="approval__summary">
                       {approval.summary}
                     </h3>
-                    <div className="row row--between">
-                      <span className="meta">
-                        Mission{' '}
-                        <a href={href({ name: 'task', id: approval.task_id })} className="mono">
-                          {approval.task_id.slice(0, 8)}…
-                        </a>
-                        {approval.expires_at ? ` · échéance ${formatDateTime(approval.expires_at)}` : ''}
-                      </span>
-                      {approval.payload_hash ? (
-                        <span className="approval__hash" title={approval.payload_hash}>
-                          hash {approval.payload_hash.slice(0, 16)}…
+                    <div className="approval__meta">
+                      <a className="meta" href={href({ name: 'task', id: approval.task_id })}>
+                        Voir le travail en cours
+                      </a>
+                      {approval.expires_at ? (
+                        <span className="meta">
+                          Valable jusqu’au {formatDateTime(approval.expires_at)}
                         </span>
                       ) : null}
                     </div>
-                    <div className="row" style={{ justifyContent: 'flex-end' }}>
-                      <button
-                        type="button"
-                        className="btn btn--danger"
-                        onClick={() => setPendingDecision({ approval, decision: 'reject' })}
-                        disabled={busyId !== null || expired}
-                      >
-                        Refuser
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--primary"
-                        onClick={() => setPendingDecision({ approval, decision: 'approve' })}
-                        disabled={busyId !== null || expired}
-                      >
-                        <Icon name="check" size={15} />
-                        Approuver
-                      </button>
+                    <div className="approval__foot">
+                      {approval.action_type || approval.payload_hash ? (
+                        <details className="disclosure">
+                          <summary>Détails</summary>
+                          <p className="meta">
+                            {approval.action_type ? `Type d’action : ${approval.action_type}` : ''}
+                            {approval.payload_hash
+                              ? ` · Empreinte de la demande : ${approval.payload_hash.slice(0, 16)}…`
+                              : ''}
+                          </p>
+                        </details>
+                      ) : (
+                        <span />
+                      )}
+                      <div className="row">
+                        <button
+                          type="button"
+                          className="btn btn--danger"
+                          onClick={() => setPendingDecision({ approval, decision: 'reject' })}
+                          disabled={busyId !== null || expired}
+                        >
+                          Refuser
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--primary"
+                          onClick={() => setPendingDecision({ approval, decision: 'approve' })}
+                          disabled={busyId !== null || expired}
+                        >
+                          <Icon name="check" size={15} />
+                          Accepter
+                        </button>
+                      </div>
                     </div>
                     {expired ? (
-                      <p className="meta">Cette demande a expiré ; une nouvelle validation sera nécessaire.</p>
+                      <p className="meta">
+                        Cette demande a expiré. Kwes vous en préparera une nouvelle s’il en a besoin.
+                      </p>
                     ) : null}
                   </article>
                 );
@@ -194,12 +212,12 @@ export function ApprovalsScreen() {
 
           <section aria-labelledby="history-title">
             <div className="panel-title">
-              <h2 id="history-title">Historique des décisions</h2>
+              <h2 id="history-title">Décisions passées</h2>
               <span className="meta">{history.length}</span>
             </div>
             {history.length === 0 ? (
               <p className="muted" style={{ fontSize: '0.8125rem' }}>
-                Aucune décision enregistrée pour le moment.
+                Vous n’avez encore rien eu à décider.
               </p>
             ) : (
               <div className="list">
@@ -208,16 +226,17 @@ export function ApprovalsScreen() {
                     <div className="list__main">
                       <span className="list__title">{approval.summary}</span>
                       <div className="list__meta">
-                        <span className={`badge ${approval.status === 'approved' ? 'badge--success' : approval.status === 'rejected' ? 'badge--danger' : ''}`}>
+                        <span
+                          className={`badge ${approval.status === 'approved' ? 'badge--success' : approval.status === 'rejected' ? 'badge--danger' : ''}`}
+                        >
                           {APPROVAL_STATUS_LABELS[approval.status] ?? approval.status}
                         </span>
-                        <span>{approval.action_type}</span>
-                        <span>décidé {formatRelative(approval.decided_at)}</span>
+                        <span>{formatRelative(approval.decided_at)}</span>
                       </div>
                     </div>
                     <div className="list__side">
                       <a className="btn btn--ghost btn--sm" href={href({ name: 'task', id: approval.task_id })}>
-                        Mission
+                        Voir
                       </a>
                     </div>
                   </div>
@@ -230,13 +249,13 @@ export function ApprovalsScreen() {
 
       <ConfirmDialog
         open={pendingDecision !== null}
-        title={pendingDecision?.decision === 'approve' ? 'Approuver cette action ?' : 'Refuser cette action ?'}
+        title={pendingDecision?.decision === 'approve' ? 'Accepter cette action ?' : 'Refuser cette action ?'}
         description={
           pendingDecision?.decision === 'approve'
-            ? `« ${pendingDecision?.approval.summary ?? ''} » — l’approbation autorise le serveur à exécuter cette action liée au hash de charge utile.`
-            : `« ${pendingDecision?.approval.summary ?? ''} » — le refus empêche l’exécution de cette action.`
+            ? `Kwes pourra faire « ${pendingDecision?.approval.summary ?? ''} ». Votre accord part tout de suite et ne peut plus être retiré.`
+            : `Kwes ne fera pas « ${pendingDecision?.approval.summary ?? ''} ». Vous pourrez le lui redemander plus tard.`
         }
-        confirmLabel={pendingDecision?.decision === 'approve' ? 'Approuver' : 'Refuser'}
+        confirmLabel={pendingDecision?.decision === 'approve' ? 'Accepter' : 'Refuser'}
         tone={pendingDecision?.decision === 'approve' ? 'primary' : 'danger'}
         busy={busyId !== null}
         onCancel={() => setPendingDecision(null)}

@@ -235,6 +235,212 @@ export function sendChat(input: ChatRequest, signal?: AbortSignal): Promise<Chat
   });
 }
 
+export interface ChatStreamInput {
+  conversation_id?: string | null;
+  message: string;
+  language?: string;
+  mode?: 'auto' | 'direct' | 'mission';
+}
+
+export interface ChatStreamMeta {
+  conversation_id?: string;
+  message_id?: string;
+}
+
+export interface ChatStreamDone {
+  conversation_id?: string;
+  message_id?: string;
+  response?: string;
+  intent?: string;
+  status?: string;
+  task_id?: string | null;
+  mock?: boolean;
+}
+
+export interface ChatStreamHandlers {
+  onMeta?: (meta: ChatStreamMeta) => void;
+  onDelta: (text: string, meta: ChatStreamMeta) => void;
+  onDone?: (payload: ChatStreamDone) => void;
+  /** Événement `error` émis par le serveur (après ouverture du flux). */
+  onError?: (error: ApiError) => void;
+}
+
+function parseSseBlock(block: string): { event: string; data: Record<string, unknown> } | null {
+  let event = 'message';
+  const dataLines: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+  }
+  if (dataLines.length === 0) return null;
+  try {
+    const parsed: unknown = JSON.parse(dataLines.join('\n'));
+    if (!parsed || typeof parsed !== 'object') return null;
+    return { event, data: parsed as Record<string, unknown> };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /chat/stream : lit le flux SSE et appelle les callbacks au fil de l'eau.
+ * Ne lève pas pour un `error` applicatif (rapporté via `onError`) ; lève
+ * seulement pour un échec réseau/HTTP avant l'ouverture du flux.
+ */
+export async function streamChat(
+  input: ChatStreamInput,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = getToken();
+  if (!token) {
+    throw new ApiError({
+      message: 'Vous devez être connecté pour effectuer cette action.',
+      code: 'UNAUTHENTICATED',
+      status: 401,
+    });
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/chat/stream`, {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversation_id: input.conversation_id ?? null,
+        message: input.message,
+        language: input.language ?? null,
+        mode: input.mode ?? 'auto',
+      }),
+      signal,
+      credentials: 'omit',
+      cache: 'no-store',
+    });
+  } catch (cause) {
+    if (signal?.aborted) {
+      throw new ApiError({ message: 'Requête annulée.', code: 'ABORTED', status: 0 });
+    }
+    throw new ApiError({
+      message: `Backend injoignable (${API_BASE_URL}). Vérifie que le serveur est démarré.`,
+      code: 'NETWORK',
+      status: 0,
+      retryable: true,
+      details: cause instanceof Error ? cause.name : undefined,
+    });
+  }
+
+  if (!response.ok) {
+    const payload = await parseBody(response);
+    const error = normalizeError(payload, response.status);
+    if (response.status === 401) window.dispatchEvent(new CustomEvent('kwes:unauthorized'));
+    throw error;
+  }
+  if (!response.body) {
+    throw new ApiError({ message: 'Flux de réponse indisponible.', code: 'STREAM_UNAVAILABLE', status: 0 });
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const frame = parseSseBlock(block);
+        if (frame) {
+          const meta: ChatStreamMeta = {
+            conversation_id:
+              typeof frame.data.conversation_id === 'string' ? frame.data.conversation_id : undefined,
+            message_id: typeof frame.data.message_id === 'string' ? frame.data.message_id : undefined,
+          };
+          if (frame.event === 'delta') {
+            if (meta.conversation_id) handlers.onMeta?.(meta);
+            const delta = typeof frame.data.delta === 'string' ? frame.data.delta : '';
+            if (delta) handlers.onDelta(delta, meta);
+          } else if (frame.event === 'done') {
+            if (meta.conversation_id) handlers.onMeta?.(meta);
+            handlers.onDone?.({
+              conversation_id: meta.conversation_id,
+              message_id: meta.message_id,
+              response: typeof frame.data.response === 'string' ? frame.data.response : undefined,
+              intent: typeof frame.data.intent === 'string' ? frame.data.intent : undefined,
+              status: typeof frame.data.status === 'string' ? frame.data.status : undefined,
+              task_id: typeof frame.data.task_id === 'string' ? frame.data.task_id : null,
+              mock: frame.data.mock === true,
+            });
+          } else if (frame.event === 'error') {
+            handlers.onError?.(
+              new ApiError({
+                message:
+                  typeof frame.data.message === 'string'
+                    ? frame.data.message
+                    : 'Le flux de réponse a échoué.',
+                code: typeof frame.data.code === 'string' ? frame.data.code : 'STREAM_ERROR',
+                status: 0,
+                retryable: frame.data.retryable !== false,
+              }),
+            );
+          }
+        }
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/* ---------- Voix ---------- */
+
+export interface SynthesizedSpeech {
+  text: string;
+  audioBase64: string | null;
+  mimeType: string | null;
+  fallback: boolean;
+  reason?: string | null;
+  voiceId?: string | null;
+  mock: boolean;
+}
+
+/** POST /voice/synthesize — audio base64 ElevenLabs, repli texte explicite. */
+export async function synthesizeSpeech(text: string, signal?: AbortSignal): Promise<SynthesizedSpeech> {
+  const payload = await request<{
+    text?: string;
+    audio_base64?: string | null;
+    mime_type?: string | null;
+    fallback?: boolean;
+    reason?: string | null;
+    voice_id?: string | null;
+    mock?: boolean;
+  }>('/voice/synthesize', {
+    method: 'POST',
+    body: { text },
+    signal,
+    timeoutMs: 45_000,
+  });
+
+  return {
+    text: typeof payload.text === 'string' ? payload.text : text,
+    audioBase64: typeof payload.audio_base64 === 'string' ? payload.audio_base64 : null,
+    mimeType: typeof payload.mime_type === 'string' ? payload.mime_type : null,
+    fallback: payload.fallback !== false,
+    reason: typeof payload.reason === 'string' ? payload.reason : null,
+    voiceId: typeof payload.voice_id === 'string' ? payload.voice_id : null,
+    mock: payload.mock === true,
+  };
+}
+
+
 /* ---------- Tasks ---------- */
 
 export function listTasks(signal?: AbortSignal): Promise<Task[]> {

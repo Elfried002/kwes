@@ -12,11 +12,11 @@ import type { Task, TaskStatus } from '../lib/types';
 type FilterKey = 'all' | 'active' | 'awaiting' | 'completed' | 'failed';
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
-  { key: 'all', label: 'Toutes' },
+  { key: 'all', label: 'Tout' },
   { key: 'active', label: 'En cours' },
-  { key: 'awaiting', label: 'En attente' },
-  { key: 'completed', label: 'Terminées' },
-  { key: 'failed', label: 'Échouées' },
+  { key: 'awaiting', label: 'Votre accord attendu' },
+  { key: 'completed', label: 'Terminé' },
+  { key: 'failed', label: 'N’a pas abouti' },
 ];
 
 function matches(task: Task, filter: FilterKey): boolean {
@@ -51,11 +51,11 @@ export function TasksScreen() {
     <div className="page">
       <div className="page-head">
         <div>
-          <span className="page-head__eyebrow">Activités</span>
-          <h1>Missions</h1>
+          <span className="page-head__eyebrow">Son travail</span>
+          <h1>Ce que Kwes fait</h1>
           <p>
-            Progression, statut et résultat proviennent du serveur. L’Orb suit les événements
-            <code className="mono"> task.*</code> en temps réel.
+            Voici ce sur quoi il travaille, ce qu’il a terminé et ce qui attend votre accord. Chaque
+            ligne s’ouvre sur le détail de son avancement.
           </p>
         </div>
         <button type="button" className="btn" onClick={reload} disabled={loading}>
@@ -64,7 +64,7 @@ export function TasksScreen() {
         </button>
       </div>
 
-      <div className="filters" role="group" aria-label="Filtrer les missions">
+      <div className="filters" role="group" aria-label="Filtrer son travail">
         {FILTERS.map((entry) => {
           const count = tasks.filter((task) => matches(task, entry.key)).length;
           return (
@@ -85,7 +85,7 @@ export function TasksScreen() {
         <p className="notice notice--warning" role="alert">
           <Icon name="alert" size={16} />
           <span>
-            Impossible de charger les missions : {errorMessage(error)}{' '}
+            Impossible de charger son travail : {errorMessage(error)}{' '}
             <button type="button" className="btn btn--ghost btn--sm" onClick={reload}>
               Réessayer
             </button>
@@ -98,10 +98,10 @@ export function TasksScreen() {
           <div className="skeleton skeleton--row" />
         </div>
       ) : visible.length === 0 ? (
-        <EmptyState title="Aucune mission dans ce filtre" icon={<Icon name="activity" size={26} />}>
+        <EmptyState title="Rien dans cette vue" icon={<Icon name="activity" size={26} />}>
           {tasks.length === 0
-            ? 'Les missions apparaîtront ici dès qu’une demande en créera une côté serveur.'
-            : 'Changez de filtre pour consulter les autres missions.'}
+            ? 'Dès que vous confiez quelque chose à Kwes, son travail apparaît ici.'
+            : 'Changez de filtre pour voir le reste de son travail.'}
         </EmptyState>
       ) : (
         <div className="list" role="list">
@@ -116,16 +116,14 @@ export function TasksScreen() {
                     ? 'progress__bar progress__bar--warning'
                     : 'progress__bar';
             return (
-              <div className="list__row" role="listitem" key={task.id}>
+              <div className="list__row card--hover" role="listitem" key={task.id}>
                 <div className="list__main">
                   <a className="list__title" href={href({ name: 'task', id: task.id })}>
                     {task.title}
                   </a>
                   <div className="list__meta">
                     <StatusPill status={task.status} />
-                    {task.priority ? <span>Priorité {task.priority}</span> : null}
-                    <span>MAJ {formatRelative(task.updated_at)}</span>
-                    {task.error_code ? <span className="badge badge--danger">{task.error_code}</span> : null}
+                    <span>Mis à jour {formatRelative(task.updated_at)}</span>
                   </div>
                   <div className="progress-row" style={{ marginTop: 4, maxWidth: 520 }}>
                     <div
@@ -134,7 +132,7 @@ export function TasksScreen() {
                       aria-valuenow={progress}
                       aria-valuemin={0}
                       aria-valuemax={100}
-                      aria-label={`Progression de ${task.title}`}
+                      aria-label={`Avancement de ${task.title}`}
                     >
                       <div className={barClass} style={{ width: `${progress}%` }} />
                     </div>
@@ -143,7 +141,7 @@ export function TasksScreen() {
                 </div>
                 <div className="list__side">
                   <a className="btn btn--sm" href={href({ name: 'task', id: task.id })}>
-                    Détail
+                    Voir
                   </a>
                 </div>
               </div>

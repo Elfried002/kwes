@@ -1,4 +1,4 @@
-"""Infrastructure : schéma des 13 tables, adaptateurs MOCK, worker, voix."""
+"""Infrastructure : schéma des 15 tables, adaptateurs MOCK, worker, voix."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from app.worker.queue import MemoryTaskQueue
 from app.worker.worker import TaskWorker
 
 
-def test_thirteen_tables_exist_with_expected_names() -> None:
+def test_all_tables_exist_with_expected_names() -> None:
     expected = {
         "profiles",
         "conversations",
@@ -34,9 +34,11 @@ def test_thirteen_tables_exist_with_expected_names() -> None:
         "integrations",
         "audit_logs",
         "notifications",
+        "device_connectors",
+        "device_commands",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 13
+    assert len(ALL_MODELS) == 15  # 13 métier + device_connectors + device_commands
 
 
 def test_task_columns_match_data_model() -> None:

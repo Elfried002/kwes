@@ -8,6 +8,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { HybridOrb } from '../components/orb/HybridOrb';
+import { BrandMark } from '../components/BrandMark';
+import { InstallApp } from '../components/InstallApp';
 import { Icon, type IconName } from '../components/Icon';
 
 /**
@@ -225,7 +227,7 @@ export function PublicHome() {
       <header className="site-head" data-scrolled={scrolled ? 'true' : 'false'}>
         <div className="wrap site-head__inner">
           <a className="site-brand" href="#/" aria-label="Kwes — accueil">
-            <img src="/brand/Kwes_Favicon_192.png" alt="" width={32} height={32} />
+            <BrandMark size={32} />
             <span>Kwes</span>
           </a>
 
@@ -242,6 +244,7 @@ export function PublicHome() {
           </nav>
 
           <div className="site-head__actions">
+            <InstallApp variant="ghost" size="sm" className="site-head__install" />
             <a className="btn btn--ghost btn--sm" href="#/connexion">
               Se connecter
             </a>
@@ -544,6 +547,14 @@ export function PublicHome() {
               <a className="btn btn--lg" href="#/connexion">
                 J’ai déjà un compte
               </a>
+            </div>
+
+            <div className="site-cta__install">
+              <p>
+                Ou installez Kwes directement : une icône sur votre écran d’accueil, un affichage
+                plein écran, aucun magasin d’applications.
+              </p>
+              <InstallApp variant="soft" />
             </div>
           </div>
         </section>

@@ -291,6 +291,54 @@ class Notification(Base):
     )
 
 
+
+
+class DeviceConnector(Base):
+    """Appareil ou connecteur déclaré par l'utilisateur (Android, desktop, cloud)."""
+
+    __tablename__ = "device_connectors"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    connector_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    connector_version: Mapped[str] = mapped_column(String(32), nullable=False, default="0.1.0")
+    capabilities: Mapped[list] = mapped_column(JSON_DOC, nullable=False, default=list)
+    permissions: Mapped[dict] = mapped_column(JSON_DOC, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class DeviceCommand(Base):
+    """Commande adressée à un connecteur, avec résultat réel obligatoire."""
+
+    __tablename__ = "device_commands"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    connector_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("device_connectors.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    capability: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON_DOC, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    result: Mapped[dict | None] = mapped_column(JSON_DOC, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approval_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("approvals.id", ondelete="SET NULL"), nullable=True
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 ALL_MODELS = [
     Profile,
     Conversation,
@@ -305,4 +353,6 @@ ALL_MODELS = [
     Integration,
     AuditLog,
     Notification,
+    DeviceConnector,
+    DeviceCommand,
 ]

@@ -9,6 +9,7 @@ import {
 import { clampProgress, formatDateTime, formatTime } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { href } from '../lib/router';
+import { activitySentence, taskStateLabel, workSentence } from '../lib/plain-language';
 import { useKwes } from '../state/KwesProvider';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Icon } from '../components/Icon';
@@ -69,9 +70,9 @@ export function TaskDetailScreen({ id }: { id: string }) {
         <div className="page-head">
           <div>
             <a className="meta" href={href({ name: 'tasks' })}>
-              ← Toutes les missions
+              ← Ce que Kwes fait
             </a>
-            <h1>Mission indisponible</h1>
+            <h1>Ce travail n’est pas disponible</h1>
           </div>
         </div>
         <p className="notice notice--warning" role="alert">
@@ -84,7 +85,7 @@ export function TaskDetailScreen({ id }: { id: string }) {
             Réessayer
           </button>
           <a className="btn btn--ghost" href={href({ name: 'tasks' })}>
-            Retour aux activités
+            Revenir à son travail
           </a>
         </div>
       </div>
@@ -101,22 +102,24 @@ export function TaskDetailScreen({ id }: { id: string }) {
       <div className="page-head">
         <div>
           <a className="meta" href={href({ name: 'tasks' })}>
-            ← Toutes les missions
+            ← Ce que Kwes fait
           </a>
           <h1 style={{ marginTop: 6, fontSize: '1.85rem' }}>{task.title}</h1>
           <div className="row" style={{ marginTop: 8 }}>
             <StatusPill status={task.status} />
-            {task.priority ? <span className="badge">Priorité {task.priority}</span> : null}
             {task.conversation_id ? (
-              <a className="btn btn--ghost btn--sm" href={href({ name: 'chat', conversationId: task.conversation_id })}>
+              <a
+                className="btn btn--ghost btn--sm"
+                href={href({ name: 'chat', conversationId: task.conversation_id })}
+              >
                 <Icon name="chat" size={14} />
-                Conversation liée
+                Voir l’échange
               </a>
             ) : null}
             {task.status === 'awaiting_approval' ? (
               <a className="btn btn--soft btn--sm" href={href({ name: 'approvals' })}>
                 <Icon name="shield" size={14} />
-                Ouvrir les validations
+                Il attend votre accord
               </a>
             ) : null}
           </div>
@@ -152,7 +155,7 @@ export function TaskDetailScreen({ id }: { id: string }) {
               disabled={action !== null}
             >
               <Icon name="cancel" size={15} />
-              Annuler la mission
+              Arrêter
             </button>
           ) : null}
         </div>
@@ -160,7 +163,7 @@ export function TaskDetailScreen({ id }: { id: string }) {
 
       {actionError ? (
         <p className="notice notice--danger" role="alert" style={{ marginBottom: 14 }}>
-          {actionError} — l’état affiché reste celui confirmé par le serveur.
+          {actionError} — l’état affiché reste celui enregistré par Kwes.
         </p>
       ) : null}
 
@@ -168,7 +171,7 @@ export function TaskDetailScreen({ id }: { id: string }) {
         <div className="stack">
           <section className="card card--pad" aria-labelledby="progress-title">
             <div className="panel-title">
-              <h2 id="progress-title">Progression</h2>
+              <h2 id="progress-title">Où il en est</h2>
               <span className="meta">{progress} %</span>
             </div>
             <div
@@ -177,20 +180,26 @@ export function TaskDetailScreen({ id }: { id: string }) {
               aria-valuenow={progress}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="Progression de la mission"
+              aria-label="Avancement de ce travail"
             >
               <div
                 className={`progress__bar ${task.status === 'completed' ? 'progress__bar--success' : task.status === 'failed' ? 'progress__bar--danger' : task.status === 'awaiting_approval' ? 'progress__bar--warning' : ''}`}
                 style={{ width: `${progress}%` }}
               />
             </div>
+            <p style={{ marginTop: 10, color: 'var(--text-soft)', fontSize: '0.875rem' }}>
+              {workSentence(task.status, progress)}
+            </p>
 
             {task.error_code ? (
               <p className="notice notice--danger" style={{ marginTop: 14 }}>
                 <Icon name="alert" size={16} />
                 <span>
-                  Échec signalé par le serveur · code <strong>{task.error_code}</strong>. Aucun résultat
-                  n’est déclaré réussi.
+                  Kwes n’a pas pu terminer. Aucun résultat n’est annoncé comme réussi.
+                  <details className="disclosure" style={{ marginTop: 6 }}>
+                    <summary>Détails</summary>
+                    <span className="mono">{task.error_code}</span>
+                  </details>
                 </span>
               </p>
             ) : null}
@@ -207,12 +216,12 @@ export function TaskDetailScreen({ id }: { id: string }) {
 
           <section className="card card--pad" aria-labelledby="steps-title">
             <div className="panel-title">
-              <h2 id="steps-title">Étapes</h2>
+              <h2 id="steps-title">Ce qu’il a fait</h2>
               <span className="meta">{steps.length} étape(s)</span>
             </div>
             {steps.length === 0 ? (
               <p className="muted" style={{ fontSize: '0.8125rem' }}>
-                Aucune étape exposée par l’API pour cette mission.
+                Kwes n’a pas encore détaillé les étapes de ce travail.
               </p>
             ) : (
               <ol className="timeline">
@@ -227,15 +236,26 @@ export function TaskDetailScreen({ id }: { id: string }) {
                         <div className="step__title">
                           {step.title}
                           <StepPill status={step.status} />
-                          {step.skill_id ? <span className="meta">skill {step.skill_id}</span> : null}
                         </div>
-                        <p className="meta">
-                          Clé {step.step_key}
-                          {typeof step.attempt_count === 'number' ? ` · ${step.attempt_count} tentative(s)` : ''}
-                          {' · '}
-                          {formatDateTime(step.updated_at)}
-                        </p>
-                        {output ? <pre className="step__out">{output}</pre> : null}
+                        <p className="meta">{formatDateTime(step.updated_at)}</p>
+                        {output ? (
+                          <div className="step__result">
+                            <span className="meta">Ce qu’il en est ressorti</span>
+                            <pre className="step__out">{output}</pre>
+                          </div>
+                        ) : null}
+                        {step.skill_id || step.step_key ? (
+                          <details className="disclosure">
+                            <summary>Détails</summary>
+                            <p className="meta">
+                              {step.step_key ? `Repère : ${step.step_key}` : ''}
+                              {step.skill_id ? ` · Outil : ${step.skill_id}` : ''}
+                              {typeof step.attempt_count === 'number'
+                                ? ` · ${step.attempt_count} passage(s)`
+                                : ''}
+                            </p>
+                          </details>
+                        ) : null}
                       </div>
                     </li>
                   );
@@ -248,50 +268,50 @@ export function TaskDetailScreen({ id }: { id: string }) {
         <aside className="stack">
           <section className="card card--pad" aria-labelledby="meta-title">
             <h2 id="meta-title" style={{ fontSize: '1rem', marginBottom: 10 }}>
-              Détails
+              L’essentiel
             </h2>
             <dl className="kv">
               <dt>Objectif</dt>
               <dd>{task.goal || '—'}</dd>
-              <dt>Statut</dt>
-              <dd>{task.status}</dd>
-              <dt>Créée</dt>
-              <dd>{formatDateTime(task.created_at)}</dd>
-              <dt>Démarrée</dt>
+              <dt>État</dt>
+              <dd>{taskStateLabel(task.status)}</dd>
+              <dt>Commencé</dt>
               <dd>{formatDateTime(task.started_at)}</dd>
-              <dt>Terminée</dt>
+              <dt>Terminé</dt>
               <dd>{formatDateTime(task.completed_at)}</dd>
-              <dt>ID</dt>
-              <dd className="mono">{task.id}</dd>
             </dl>
+            <details className="disclosure" style={{ marginTop: 12 }}>
+              <summary>Détails techniques</summary>
+              <dl className="kv">
+                <dt>Référence</dt>
+                <dd className="mono">{task.id}</dd>
+                <dt>État interne</dt>
+                <dd className="mono">{task.status}</dd>
+                <dt>Créé</dt>
+                <dd>{formatDateTime(task.created_at)}</dd>
+              </dl>
+            </details>
           </section>
 
           <section className="card card--pad" aria-labelledby="events-title">
             <div className="panel-title">
-              <h2 id="events-title">Événements</h2>
+              <h2 id="events-title">Dernières nouvelles</h2>
               <span className="badge">{events.length}</span>
             </div>
             <p className="meta" style={{ marginBottom: 8 }}>
-              Reçus via WebSocket pendant cette session.
+              Ce que Kwes a signalé pendant cette visite.
             </p>
             {events.length === 0 ? (
               <p className="muted" style={{ fontSize: '0.8125rem' }}>
-                Aucun événement reçu. La progression affichée provient de la dernière lecture REST.
+                Rien de nouveau pour l’instant. L’avancement affiché vient de la dernière
+                actualisation.
               </p>
             ) : (
               <ul className="event-log">
                 {events.map((event) => (
                   <li key={event.event_id || `${event.event}-${event.timestamp}`}>
                     <time dateTime={event.timestamp}>{formatTime(event.timestamp)}</time>
-                    <span>
-                      {event.event}
-                      {typeof (event.data as Record<string, unknown>).status === 'string'
-                        ? ` · ${String((event.data as Record<string, unknown>).status)}`
-                        : ''}
-                      {typeof (event.data as Record<string, unknown>).progress === 'number'
-                        ? ` · ${String((event.data as Record<string, unknown>).progress)} %`
-                        : ''}
-                    </span>
+                    <span>{activitySentence(event.event, event.data as Record<string, unknown>)}</span>
                   </li>
                 ))}
               </ul>
@@ -302,10 +322,10 @@ export function TaskDetailScreen({ id }: { id: string }) {
 
       <ConfirmDialog
         open={confirmCancel}
-        title="Annuler cette mission ?"
-        description="L’annulation est demandée au serveur ; l’état final sera celui confirmé par l’API. Les étapes en cours seront interrompues."
-        confirmLabel="Annuler la mission"
-        cancelLabel="Conserver"
+        title="Arrêter ce travail ?"
+        description="Kwes s’arrêtera et ne continuera pas les étapes en cours. Cette décision est transmise tout de suite."
+        confirmLabel="Arrêter"
+        cancelLabel="Continuer"
         tone="danger"
         busy={action === 'cancel'}
         onCancel={() => setConfirmCancel(false)}

@@ -5,11 +5,13 @@ import { usePrefersReducedMotion } from '../lib/hooks';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { href, navigate } from '../lib/router';
 import { isRecord, type Conversation, type ConversationDeltaData, type Message } from '../lib/types';
+import { useVoiceConversation } from '../lib/use-voice-conversation';
 import { useKwes } from '../state/KwesProvider';
 import { Composer } from '../components/Composer';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { MessageBubble } from '../components/MessageBubble';
+import { VoiceDock } from '../components/VoiceDock';
 import { HybridOrb } from '../components/orb/HybridOrb';
 
 interface TypingState {
@@ -61,6 +63,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   const [draft, setDraft] = useState(() => readDraft(conversationId ?? 'new'));
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [streaming, setStreaming] = useState('');
   const [typing, setTyping] = useState<TypingState | null>(null);
@@ -69,6 +72,55 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const conversationRef = useRef<string | undefined>(conversationId);
   conversationRef.current = conversationId;
+
+  // Mode vocal continu : micro navigateur → SSE → ElevenLabs, phrase par phrase.
+  const voice = useVoiceConversation({
+    conversationId,
+    language: prefs.language,
+    onUserMessage: (text) => {
+      setSendError(null);
+      setVoiceError(null);
+      setNotice(null);
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `voice-user-${Date.now()}`,
+          conversation_id: conversationRef.current ?? 'pending',
+          role: 'user',
+          content: text,
+          created_at: new Date().toISOString(),
+          metadata: { voice: true, optimistic: true },
+        },
+      ]);
+    },
+    onAssistantMessage: (text, info) => {
+      const target = info.conversationId ?? conversationRef.current;
+      setMessages((previous) => {
+        const duplicate = previous.some(
+          (message) => message.role === 'assistant' && message.content.trim() === text.trim(),
+        );
+        return duplicate
+          ? previous
+          : [
+              ...previous,
+              {
+                id: info.messageId ?? `voice-assistant-${Date.now()}`,
+                conversation_id: target ?? 'pending',
+                role: 'assistant',
+                content: text,
+                created_at: new Date().toISOString(),
+                metadata: { voice: true, mock: info.mock ?? false },
+              },
+            ];
+      });
+      bumpRefresh();
+      if (target && !conversationRef.current) {
+        navigate({ name: 'chat', conversationId: target }, { replace: true });
+      }
+    },
+    onError: (message) => setVoiceError(message),
+    onNotice: (message) => setNotice(message),
+  });
 
   const conversation = conversations.find((item) => item.id === conversationId) ?? null;
   const title = conversation?.title?.trim() || (conversationId ? 'Conversation' : 'Nouvelle conversation');
@@ -182,9 +234,9 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   }, [typing]);
 
   useEffect(() => {
-    if (messages.length === 0 && !typing && !streaming) return;
+    if (messages.length === 0 && !typing && !streaming && !voice.answer && !voice.pending) return;
     bottomRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'end' });
-  }, [messages, typing, streaming, reducedMotion]);
+  }, [messages, typing, streaming, voice.answer, voice.pending, reducedMotion]);
 
   const sendMessage = async (raw: string): Promise<void> => {
     const text = raw.trim();
@@ -447,6 +499,33 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               </article>
             ) : null}
 
+            {voice.active && voice.pending && voice.phase === 'listening' ? (
+              <article className="msg msg--user msg--live" aria-label="Transcription en cours">
+                <div className="msg__who">
+                  <span>Vous</span>
+                  <span className="badge badge--accent">micro</span>
+                </div>
+                <div className="msg__bubble">
+                  {voice.pending}
+                  <span className="typing" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                </div>
+              </article>
+            ) : null}
+
+            {voice.streaming && voice.answer ? (
+              <article className="msg msg--assistant" aria-label="Réponse vocale en cours">
+                <div className="msg__who">
+                  <span>Kwes</span>
+                  <span className="badge badge--accent">voix</span>
+                </div>
+                <div className="msg__bubble">{voice.answer}</div>
+              </article>
+            ) : null}
+
             {sending && !streaming && !typing ? (
               <p className="typing" role="status">
                 <i />
@@ -479,6 +558,8 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                 </span>
               </p>
             ) : null}
+
+            <VoiceDock voice={voice} enabled={prefs.voiceEnabled} notice={voiceError} />
 
             <Composer
               value={draft}

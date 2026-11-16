@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { errorMessage, listTasks, sendChat } from '../lib/api';
-import { formatRelative, greeting, truncate } from '../lib/format';
+import { clampProgress, formatRelative, greeting, truncate } from '../lib/format';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { href, navigate } from '../lib/router';
 import { useKwes } from '../state/KwesProvider';
@@ -10,7 +10,6 @@ import { Composer } from '../components/Composer';
 import { StatusPill } from '../components/StatusPill';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
-import { clampProgress } from '../lib/format';
 import type { Task } from '../lib/types';
 
 const ACTIVE_STATUSES = new Set(['queued', 'planning', 'running', 'awaiting_approval', 'paused']);
@@ -27,7 +26,6 @@ export function HomeScreen() {
     probeHealth,
     connection,
     serverStatus,
-    health,
     setMicActive,
   } = useKwes();
   const prefs = usePreferences();
@@ -98,24 +96,33 @@ export function HomeScreen() {
     }
   };
 
+  const liveUpdates = connection === 'online';
+
   return (
     <div className="page">
       <section className="home-hero" aria-labelledby="home-title">
         <div className="home-hero__copy">
-          <span className="page-head__eyebrow">{greeting()} · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-          <h1 id="home-title">Votre intelligence. Vos actions. Votre monde.</h1>
+          <span className="page-head__eyebrow">
+            {greeting()} ·{' '}
+            {new Date().toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </span>
+          <h1 id="home-title">Qu’est-ce qu’on fait aujourd’hui ?</h1>
           <p className="home-hero__lede">
-            Confiez un objectif à Kwes : il planifie, exécute avec des outils limités et vous demande
-            votre validation pour toute action sensible. L’Orb indique l’état réel de l’agent.
+            Dites-le avec vos mots. Kwes s’en occupe, vous montre où il en est, et vous demande votre
+            accord dès qu’une action peut avoir des conséquences.
           </p>
           <div className="home-hero__actions">
             <a className="btn btn--primary" href={href({ name: 'chat' })}>
               <Icon name="chat" size={17} />
-              Ouvrir la conversation
+              Parler à Kwes
             </a>
             <a className="btn" href={href({ name: 'tasks' })}>
               <Icon name="activity" size={17} />
-              Voir les activités
+              Voir ce qu’il fait
             </a>
           </div>
         </div>
@@ -125,7 +132,7 @@ export function HomeScreen() {
             state={orbState}
             className="orb--hero"
             onActivate={() => navigate({ name: 'chat' })}
-            label="Hybrid Orb Kwes — ouvrir la conversation"
+            label="Orb Kwes — ouvrir la conversation"
           />
           <OrbStatus showCaption />
         </div>
@@ -135,12 +142,11 @@ export function HomeScreen() {
         <section className="card card--pad" aria-labelledby="quick-title">
           <div className="panel-title">
             <h2 id="quick-title">Demander à Kwes</h2>
-            <span className="badge">Mode auto</span>
           </div>
 
           {error ? (
             <p className="notice notice--danger" role="alert" style={{ marginBottom: 12 }}>
-              {error} — votre brouillon est conservé localement.
+              {error} — votre brouillon est conservé sur cet appareil.
             </p>
           ) : null}
 
@@ -154,15 +160,15 @@ export function HomeScreen() {
             onStop={() => abortRef.current?.abort()}
             placeholder="Ex. : prépare un plan de lancement pour un service de veille concurrentielle"
             micAllowed={prefs.voiceEnabled}
-            hint="Le message part réellement vers POST /chat · brouillon conservé en cas d’échec"
+            hint="Votre message part directement à Kwes · brouillon conservé en cas d’échec"
           />
 
-          {connection !== 'online' ? (
+          {!liveUpdates ? (
             <p className="notice notice--info" style={{ marginTop: 14 }}>
               <Icon name="alert" size={16} />
               <span>
-                WebSocket non connecté ({connection}). L’envoi reste possible via REST ; la progression
-                des missions sera actualisée par requêtes, sans streaming temps réel.
+                La liaison en direct est interrompue. Vous pouvez continuer à écrire : Kwes vous
+                répondra, et son avancement se mettra à jour à chaque actualisation.
               </span>
             </p>
           ) : null}
@@ -170,7 +176,7 @@ export function HomeScreen() {
           <div className="divider" />
 
           <div className="panel-title">
-            <h3>Missions actives</h3>
+            <h3>Ce qu’il fait en ce moment</h3>
             <a className="meta" href={href({ name: 'tasks' })}>
               Tout voir
             </a>
@@ -184,11 +190,11 @@ export function HomeScreen() {
           ) : tasksError ? (
             <p className="notice notice--warning">
               <Icon name="alert" size={16} />
-              <span>Impossible de charger les missions : {tasksError}</span>
+              <span>Impossible de charger son travail pour le moment : {tasksError}</span>
             </p>
           ) : activeTasks.length === 0 ? (
             <p className="muted" style={{ fontSize: '0.8125rem' }}>
-              Aucune mission active pour le moment. Formulez un objectif pour en démarrer une.
+              Kwes ne travaille sur rien pour le moment. Dites-lui ce que vous voulez accomplir.
             </p>
           ) : (
             <div className="mission-list">
@@ -200,7 +206,7 @@ export function HomeScreen() {
                   </div>
                   <div className="mission__meta">
                     <span>{formatRelative(task.updated_at)}</span>
-                    <span>{clampProgress(task.progress)} %</span>
+                    <span>{clampProgress(task.progress)} % du travail</span>
                   </div>
                   <div className="progress" aria-hidden="true">
                     <div
@@ -217,7 +223,7 @@ export function HomeScreen() {
         <aside className="stack">
           <section className="card card--pad" aria-labelledby="status-title">
             <div className="panel-title">
-              <h2 id="status-title">État du système</h2>
+              <h2 id="status-title">Est-ce que tout va bien ?</h2>
               <button
                 type="button"
                 className="btn btn--ghost btn--sm"
@@ -232,38 +238,47 @@ export function HomeScreen() {
             </div>
             <div className="stack stack--sm" style={{ fontSize: '0.8125rem' }}>
               <div className="row row--between">
-                <span className="muted">WebSocket</span>
-                <span className={`badge badge--${connection === 'online' ? 'success' : connection === 'offline' ? 'danger' : 'warning'}`}>
-                  {connection === 'online' ? 'Connecté' : connection === 'offline' ? 'Hors ligne' : connection === 'unauthorized' ? 'Session expirée' : 'Connexion'}
+                <span className="muted">Kwes répond</span>
+                <span
+                  className={`badge badge--${serverStatus === 'ok' ? 'success' : serverStatus === 'unreachable' ? 'danger' : 'warning'}`}
+                >
+                  {serverStatus === 'ok'
+                    ? 'Oui'
+                    : serverStatus === 'degraded'
+                      ? 'Lentement'
+                      : serverStatus === 'unreachable'
+                        ? 'Non'
+                        : 'Je vérifie…'}
                 </span>
               </div>
               <div className="row row--between">
-                <span className="muted">API</span>
-                <span className={`badge badge--${serverStatus === 'ok' ? 'success' : serverStatus === 'unreachable' ? 'danger' : 'warning'}`}>
-                  {serverStatus === 'ok' ? 'Opérationnelle' : serverStatus === 'degraded' ? 'Dégradée' : serverStatus === 'unreachable' ? 'Injoignable' : 'Inconnue'}
+                <span className="muted">Mises à jour en direct</span>
+                <span
+                  className={`badge badge--${liveUpdates ? 'success' : connection === 'offline' ? 'danger' : 'warning'}`}
+                >
+                  {liveUpdates ? 'Oui' : connection === 'offline' ? 'Non' : 'En attente'}
                 </span>
               </div>
-              {health?.dependencies
-                ? Object.entries(health.dependencies).map(([name, value]) => (
-                    <div className="row row--between" key={name}>
-                      <span className="muted">{name}</span>
-                      <span className={`badge badge--${value === 'ok' ? 'success' : 'warning'}`}>{value ?? '—'}</span>
-                    </div>
-                  ))
-                : null}
-              {health?.version ? <p className="meta">Version backend {health.version}</p> : null}
+              <p className="meta" style={{ marginTop: 4 }}>
+                {liveUpdates
+                  ? 'Kwes vous montre son avancement au fur et à mesure.'
+                  : 'L’avancement s’affichera à chaque actualisation de la page.'}
+              </p>
             </div>
           </section>
 
           <section className="card card--pad" aria-labelledby="limits-title">
             <h2 id="limits-title" style={{ fontSize: '1rem', marginBottom: 8 }}>
-              Périmètre de l’assistant
+              Ce que Kwes fait, et ce qu’il ne fait pas
             </h2>
-            <ul className="stack stack--sm" style={{ listStyle: 'none', fontSize: '0.8125rem', color: 'var(--muted-strong)' }}>
-              <li>· Chat texte réel via le backend, streaming selon WebSocket.</li>
-              <li>· Missions, étapes et progression issues de l’API.</li>
-              <li>· Validation obligatoire avant action sensible.</li>
-              <li>· Pas de paiement, d’appel sortant ni d’accès bancaire.</li>
+            <ul
+              className="stack stack--sm"
+              style={{ listStyle: 'none', fontSize: '0.8125rem', color: 'var(--muted-strong)' }}
+            >
+              <li>· Vous écrivez, il répond et agit pour vous.</li>
+              <li>· Vous voyez chaque étape de son travail.</li>
+              <li>· Rien de délicat sans votre accord.</li>
+              <li>· Aucun paiement, aucun appel, aucun accès à vos comptes.</li>
             </ul>
           </section>
         </aside>
@@ -276,12 +291,12 @@ export function HomeScreen() {
             icon={<Icon name="spark" size={26} />}
             action={
               <a className="btn btn--soft" href={href({ name: 'chat' })}>
-                Démarrer une conversation
+                Parler à Kwes
               </a>
             }
           >
-            Aucune conversation ni mission enregistrée. Les données affichées proviendront uniquement
-            de votre backend Kwes.
+            Rien encore ici. Commencez par écrire à Kwes : tout ce qu’il fera apparaîtra dans votre
+            espace.
           </EmptyState>
         </div>
       ) : null}

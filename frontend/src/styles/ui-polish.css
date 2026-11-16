@@ -1,0 +1,482 @@
+/* Kwes — finitions de l'espace connecté.
+ *
+ * Ce fichier ne remplace aucune règle existante : il ajoute la marque animée,
+ * les micro-mouvements, le bouton d'installation et quelques ajustements de
+ * mise en page. Tout est désactivé avec prefers-reduced-motion.
+ */
+
+/* ---------- Marque animée (anneau + particules de l'Orb, en miniature) ---------- */
+
+.brand-orb {
+  --orb-a: #5ce7ff;
+  --orb-b: #267bff;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  isolation: isolate;
+  vertical-align: middle;
+}
+
+.brand-orb[data-state='thinking'] {
+  --orb-a: #a99bff;
+  --orb-b: #6b58ff;
+}
+
+.brand-orb[data-state='executing'] {
+  --orb-a: #7fd2ff;
+  --orb-b: #4c6bff;
+}
+
+.brand-orb[data-state='speaking'],
+.brand-orb[data-state='response'] {
+  --orb-a: #c9b8ff;
+  --orb-b: #6b58ff;
+}
+
+.brand-orb[data-state='waiting_approval'] {
+  --orb-a: #ffd79a;
+  --orb-b: #b57a24;
+}
+
+.brand-orb[data-state='success'] {
+  --orb-a: #9df5d6;
+  --orb-b: #2aa77e;
+}
+
+.brand-orb[data-state='error'] {
+  --orb-a: #ffb3bf;
+  --orb-b: #a33a52;
+}
+
+.brand-orb__halo {
+  position: absolute;
+  inset: -22%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--orb-a) 34%, transparent), transparent 70%);
+  opacity: 0.72;
+  animation: brand-breathe 6.5s ease-in-out infinite;
+}
+
+.brand-orb__core {
+  width: 44%;
+  height: 44%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #ffffff, var(--orb-a) 46%, var(--orb-b) 82%);
+  box-shadow: 0 0 12px -1px color-mix(in srgb, var(--orb-a) 62%, transparent);
+  animation: brand-pulse 5.5s ease-in-out infinite;
+}
+
+.brand-orb__ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(140, 175, 255, 0.28);
+}
+
+.brand-orb__ring--outer {
+  inset: 6%;
+  border-top-color: color-mix(in srgb, var(--orb-a) 78%, transparent);
+  animation: brand-spin 16s linear infinite;
+}
+
+.brand-orb__ring--inner {
+  inset: 22%;
+  border-bottom-color: color-mix(in srgb, var(--orb-b) 70%, transparent);
+  animation: brand-spin 10s linear infinite reverse;
+}
+
+.brand-orb__particle {
+  position: absolute;
+  inset: 0;
+  animation: brand-spin 19s linear infinite;
+}
+
+.brand-orb__particle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(50% - 1.5px);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--orb-a);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--orb-a) 85%, transparent);
+}
+
+.brand-orb__particle--2 {
+  animation-duration: 27s;
+  animation-delay: -8s;
+}
+
+.brand-orb__particle--3 {
+  animation-duration: 35s;
+  animation-delay: -19s;
+}
+
+.brand-orb__particle--3::before {
+  width: 2px;
+  height: 2px;
+  opacity: 0.75;
+}
+
+@keyframes brand-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brand-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes brand-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+.site-brand .brand-orb {
+  filter: drop-shadow(0 0 10px rgba(38, 123, 255, 0.35));
+}
+
+/* ---------- Micro-mouvements ---------- */
+
+:root {
+  /* Le libellé « Il attend votre accord » tient sur une ligne. */
+  --sidebar-w: 262px;
+}
+
+.home-hero h1 {
+  font-size: clamp(1.75rem, 2.9vw, 2.3rem);
+}
+
+.nav__item {
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform 180ms var(--ease);
+}
+
+.nav__item:hover {
+  transform: translateX(2px);
+}
+
+.nav__icon {
+  transition: transform 180ms var(--ease), opacity 180ms var(--ease);
+}
+
+.nav__item:hover .nav__icon,
+.nav__item[aria-current='page'] .nav__icon {
+  transform: scale(1.06);
+  opacity: 1;
+}
+
+.mission {
+  transition:
+    transform 200ms var(--ease),
+    border-color 200ms var(--ease),
+    background 200ms var(--ease);
+}
+
+.mission:hover {
+  transform: translateY(-2px);
+}
+
+.card--hover,
+.list__row {
+  transition:
+    background-color 180ms var(--ease),
+    transform 180ms var(--ease);
+}
+
+.list__row:hover {
+  transform: translateY(-1px);
+}
+
+.btn {
+  transition:
+    transform var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    box-shadow 200ms var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+
+.btn--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px -14px rgba(38, 123, 255, 0.95);
+}
+
+.btn--primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.brand:hover .brand-orb__core {
+  animation-duration: 2.4s;
+}
+
+/* ---------- Détails repliables ---------- */
+
+details.disclosure summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+details.disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+details.disclosure summary::after {
+  content: '+';
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+details.disclosure[open] summary::after {
+  content: '–';
+}
+
+details.disclosure[open] summary {
+  color: var(--text-soft);
+}
+
+/* ---------- Bouton « Installer l'application » ---------- */
+
+.install {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.install__btn {
+  white-space: nowrap;
+}
+
+.install__help {
+  display: none;
+  width: min(340px, 100%);
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-soft);
+  color: var(--text-soft);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+
+.install__help.is-open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: install-in 200ms var(--ease) both;
+}
+
+.install__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.install__step svg {
+  display: inline-block;
+  vertical-align: -2px;
+}
+
+.install__num {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid rgba(120, 160, 255, 0.35);
+  color: var(--accent-cyan);
+  font-size: 0.6875rem;
+  font-weight: 650;
+}
+
+.install__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--success);
+  font-size: var(--fs-small);
+}
+
+.install__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 52ch;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+
+.install__note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+@keyframes install-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.site-head__install {
+  flex: none;
+}
+
+.site-cta__install {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--sp-5);
+}
+
+.site-cta__install p {
+  max-width: 54ch;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  text-align: center;
+}
+
+.site-cta__install .install {
+  align-items: center;
+}
+
+/* L'en-tête public reste lisible : le bouton d'installation s'efface avant les
+ * autres appels à l'action, puis revient dans la section finale. */
+@media (max-width: 1180px) {
+  .site-head__install {
+    display: none;
+  }
+}
+
+/* ---------- Accord : lignes de contexte plus lisibles ---------- */
+
+.approval__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin: 2px 0 4px;
+}
+
+.approval__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.nav__item {
+  font-size: 0.9rem;
+}
+
+.approval__meta a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Navigation mobile : pastille des accords en attente ---------- */
+
+.bottom-nav__item {
+  position: relative;
+  transition: color 160ms var(--ease), transform 160ms var(--ease);
+}
+
+.bottom-nav__item:hover {
+  color: var(--text);
+}
+
+.bottom-nav__dot {
+  position: absolute;
+  top: 7px;
+  left: calc(50% + 7px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(255, 199, 116, 0.75);
+}
+
+/* ---------- Petits écrans ---------- */
+
+@media (max-width: 520px) {
+  .install {
+    width: 100%;
+  }
+
+  .install__help {
+    width: 100%;
+  }
+
+  .approval__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .site-cta__install .install {
+    width: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  /* L'état de connexion est déjà dans la barre mobile : pas de doublon. */
+  .page-head .connection {
+    display: none;
+  }
+}
+
+/* ---------- Mouvement réduit ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-orb__halo,
+  .brand-orb__core,
+  .brand-orb__ring,
+  .brand-orb__particle {
+    animation: none !important;
+  }
+
+  .nav__item:hover,
+  .mission:hover,
+  .list__row:hover,
+  .btn--primary:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .install__help.is-open {
+    animation: none;
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { clearSession, completePasswordRecovery } from '../lib/auth';
 import { authErrorMessage, passwordScore, validatePassword } from '../lib/auth-errors';
 import { supabase, supabaseConfigured, SUPABASE_CONFIG_ERROR } from '../lib/supabase';
@@ -9,11 +9,15 @@ import type { AuthMode } from '../lib/router';
 
 type Mode = AuthMode;
 
-/** État du fournisseur Google, détecté sans redirection ni blocage de l'écran. */
-type GoogleState = 'unknown' | 'available' | 'unavailable';
-
 function redirectTo(): string {
   return `${window.location.origin}/`;
+}
+
+/** Message unique et court quand le fournisseur Google n'est pas activé côté Supabase. */
+const GOOGLE_DISABLED_MESSAGE = 'La connexion Google n’est pas encore activée sur ce projet.';
+
+function isProviderDisabled(...texts: Array<string | undefined>): boolean {
+  return texts.some((text) => !!text && /provider is not enabled|unsupported provider/i.test(text));
 }
 
 function GoogleMark() {
@@ -94,44 +98,6 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
   const [busy, setBusy] = useState<'email' | 'google' | 'reset' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [googleState, setGoogleState] = useState<GoogleState>('unknown');
-
-  /*
-   * Détection non bloquante : l'URL d'autorisation Google est demandée à Supabase,
-   * puis sondée sans suivre la redirection. Un 4xx signifie que le fournisseur
-   * n'est pas encore activé ; un cas indéterminé laisse le bouton actif.
-   */
-  useEffect(() => {
-    if (!supabaseConfigured) return;
-    let cancelled = false;
-    void supabase.auth
-      .signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo(), skipBrowserRedirect: true } })
-      .then(async ({ data, error: failure }) => {
-        if (cancelled || failure || !data?.url) return;
-        try {
-          const probe = await fetch(data.url, {
-            method: 'GET',
-            redirect: 'manual',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(4000),
-          });
-          if (cancelled) return;
-          if (probe.type === 'opaqueredirect' || probe.status === 0) {
-            setGoogleState('available');
-          } else if (probe.status >= 400) {
-            setGoogleState('unavailable');
-          }
-        } catch {
-          /* Sonde impossible (CORS, délai) : on ne conclut pas. */
-        }
-      })
-      .catch(() => {
-        /* Réseau indisponible : le bouton reste actif et l'erreur s'affichera au clic. */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const resetFeedback = (): void => {
     setError(null);
@@ -238,23 +204,28 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
     if (requireConfig()) return;
     setBusy('google');
     try {
+      // Tentative réelle : Supabase construit l'URL d'autorisation Google.
       const { data, error: failure } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: redirectTo(), skipBrowserRedirect: true },
       });
       if (failure) {
-        setError(authErrorMessage(failure));
+        setError(
+          isProviderDisabled(failure.message, failure.code)
+            ? GOOGLE_DISABLED_MESSAGE
+            : authErrorMessage(failure),
+        );
         return;
       }
       const url = data?.url;
       if (!url) {
-        setError('La connexion Google n’a pas pu être initialisée. Réessayez dans un instant.');
+        setError('La connexion Google n’a pas pu démarrer. Réessayez dans un instant.');
         return;
       }
       /*
-       * Sonde non bloquante : si le fournisseur n'est pas activé côté Supabase,
-       * l'URL renvoie un 400 JSON. On affiche alors un message français dans
-       * l'écran plutôt que d'envoyer l'utilisateur sur une page d'erreur brute.
+       * Vérification avant redirection : si le fournisseur n'est pas activé côté
+       * Supabase, l'URL renvoie une erreur JSON. On l'affiche proprement ici au
+       * lieu d'envoyer la personne sur une page d'erreur brute.
        */
       try {
         const probe = await fetch(url, {
@@ -271,20 +242,15 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
             payload = null;
           }
           const serverMessage = typeof payload?.msg === 'string' ? payload.msg : '';
-          setGoogleState('unavailable');
           setError(
-            authErrorMessage({
-              status: probe.status,
-              message: serverMessage,
-              code: /provider is not enabled|unsupported provider/i.test(serverMessage)
-                ? 'provider_disabled'
-                : undefined,
-            }),
+            isProviderDisabled(serverMessage)
+              ? GOOGLE_DISABLED_MESSAGE
+              : 'La connexion Google n’a pas pu démarrer pour le moment.',
           );
           return;
         }
       } catch {
-        /* Sonde impossible (CORS, délai) : on laisse la redirection standard décider. */
+        /* Sonde impossible (CORS, délai) : on laisse la redirection décider. */
       }
       window.location.assign(url);
     } catch (cause) {
@@ -340,11 +306,11 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
           <Icon name="shield" size={13} />
           Connexion sécurisée
         </span>
-        <h1 id="login-title">Votre intelligence. Vos actions. Votre monde.</h1>
+        <h1 id="login-title">Votre espace personnel.</h1>
         <p>
-          Kwes converse, planifie et exécute des missions avec des outils volontairement limités.
-          Chaque action sensible attend votre validation. L’Orb reflète l’état réel de l’agent, jamais
-          le texte du modèle.
+          Kwes vous aide à passer d’une idée à un résultat. Il travaille avec des moyens
+          volontairement limités, vous montre son avancement et s’arrête pour vous demander votre
+          accord dès qu’une action devient délicate.
         </p>
         <ul className="login__trust">
           <li>
@@ -384,7 +350,7 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
                 ? 'Indiquez l’adresse e-mail de votre compte : nous vous envoyons un lien sécurisé pour choisir un nouveau mot de passe.'
                 : mode === 'signup'
                   ? 'Quelques secondes suffisent. Vos identifiants sont gérés par notre fournisseur d’authentification, jamais par l’agent.'
-                  : 'Connectez-vous pour retrouver vos conversations, vos missions et vos validations.'}
+                  : 'Connectez-vous pour retrouver vos échanges et votre travail en cours.'}
             </p>
           </div>
 
@@ -622,21 +588,11 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
                   type="button"
                   className="btn btn--soft btn--block login__google"
                   onClick={() => void handleGoogle()}
-                  disabled={busy !== null || !supabaseConfigured || googleState === 'unavailable'}
-                  aria-describedby={googleState === 'unavailable' ? 'google-status' : undefined}
+                  disabled={busy !== null || !supabaseConfigured}
                 >
                   <GoogleMark />
-                  {busy === 'google' ? 'Redirection…' : 'Continuer avec Google'}
-                  {googleState === 'unavailable' ? (
-                    <span className="badge badge--soon">Bientôt disponible</span>
-                  ) : null}
+                  {busy === 'google' ? 'Ouverture de Google…' : 'Continuer avec Google'}
                 </button>
-                {googleState === 'unavailable' ? (
-                  <p className="field__hint" id="google-status">
-                    La connexion Google n’est pas encore activée. Créez votre compte avec une adresse
-                    e-mail : l’accès Google sera proposé dès son ouverture.
-                  </p>
-                ) : null}
               </div>
             </>
           )}

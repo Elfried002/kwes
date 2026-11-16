@@ -2,7 +2,10 @@ import type { ReactNode } from 'react';
 import { clearSession, useSession } from '../lib/auth';
 import { initials } from '../lib/format';
 import { href, type Route } from '../lib/router';
+import { listApprovals } from '../lib/api';
+import { useApi } from '../lib/hooks';
 import { useKwes, type UiConnection } from '../state/KwesProvider';
+import { BrandMark } from './BrandMark';
 import { Icon, type IconName } from './Icon';
 
 interface NavEntry {
@@ -12,16 +15,23 @@ interface NavEntry {
   icon: IconName;
 }
 
+/**
+ * Cinq entrées, en français courant. Aucun terme interne (mission, tâche,
+ * validation, activité, conversation) : l'utilisateur voit ce que Kwes fait,
+ * pas comment il est construit.
+ */
 const NAV: NavEntry[] = [
   { label: 'Accueil', shortLabel: 'Accueil', route: { name: 'home' }, icon: 'home' },
-  { label: 'Chat', shortLabel: 'Chat', route: { name: 'chat' }, icon: 'chat' },
-  { label: 'Conversations', shortLabel: 'Historique', route: { name: 'conversations' }, icon: 'history' },
-  { label: 'Activités', shortLabel: 'Activités', route: { name: 'tasks' }, icon: 'activity' },
-  { label: 'Validations', shortLabel: 'Validation', route: { name: 'approvals' }, icon: 'shield' },
+  { label: 'Parler', shortLabel: 'Parler', route: { name: 'chat' }, icon: 'chat' },
+  { label: 'Ce qu’il fait', shortLabel: 'Travail', route: { name: 'tasks' }, icon: 'activity' },
+  {
+    label: 'Il attend votre accord',
+    shortLabel: 'Accord',
+    route: { name: 'approvals' },
+    icon: 'shield',
+  },
   { label: 'Réglages', shortLabel: 'Réglages', route: { name: 'settings' }, icon: 'settings' },
 ];
-
-const MOBILE_NAV = [NAV[0], NAV[1], NAV[3], NAV[4], NAV[5]].filter((entry): entry is NavEntry => Boolean(entry));
 
 function isActive(route: Route, target: Route): boolean {
   switch (target.name) {
@@ -29,8 +39,6 @@ function isActive(route: Route, target: Route): boolean {
       return route.name === 'home';
     case 'chat':
       return route.name === 'chat';
-    case 'conversations':
-      return route.name === 'conversations';
     case 'tasks':
       return route.name === 'tasks' || route.name === 'task';
     case 'approvals':
@@ -63,11 +71,11 @@ export function ConnectionBadge({ compact = false }: { compact?: boolean }) {
   const label = CONNECTION_LABELS[connection];
   const detail =
     connection === 'offline' && reconnectAttempt > 0
-      ? `Tentative ${reconnectAttempt} · reconnexion automatique`
+      ? 'Kwes essaie de se reconnecter tout seul.'
       : serverStatus === 'degraded'
-        ? 'Un service backend est dégradé'
+        ? 'Un service de Kwes répond lentement en ce moment.'
         : serverStatus === 'unreachable'
-          ? 'API health injoignable'
+          ? 'Kwes ne répond pas pour le moment.'
           : undefined;
 
   return (
@@ -80,7 +88,9 @@ export function ConnectionBadge({ compact = false }: { compact?: boolean }) {
 
 export function AppShell({ children, route }: { children: ReactNode; route: Route }) {
   const session = useSession();
-  const { orbMeta, lastError, clearError } = useKwes();
+  const { orbState, orbMeta, lastError, clearError, refreshKey } = useKwes();
+  const approvals = useApi((signal) => listApprovals(signal), [], { refreshKey });
+  const waiting = (approvals.data ?? []).filter((approval) => approval.status === 'pending').length;
 
   return (
     <>
@@ -91,15 +101,15 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
       <div className="app-shell">
         <aside className="sidebar" aria-label="Navigation principale">
           <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
-            <img className="brand__mark" src="/brand/Kwes_Favicon_192.png" alt="" width={38} height={38} />
+            <BrandMark size={38} state={orbState} />
             <span>
               <span className="brand__name">Kwes</span>
-              <span className="brand__tag">Personal AI Agent</span>
+              <span className="brand__tag">Assistant personnel</span>
             </span>
           </a>
 
           <nav className="nav" aria-label="Sections">
-            <span className="nav__label">Espace de travail</span>
+            <span className="nav__label">Votre espace</span>
             {NAV.map((entry) => (
               <a
                 key={entry.label}
@@ -109,6 +119,11 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
               >
                 <Icon name={entry.icon} size={18} className="nav__icon" />
                 {entry.label}
+                {entry.route.name === 'approvals' && waiting > 0 ? (
+                  <span className="nav__count" aria-label={`${waiting} demande(s) en attente`}>
+                    {waiting}
+                  </span>
+                ) : null}
               </a>
             ))}
           </nav>
@@ -142,7 +157,7 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
         <div>
           <header className="mobile-bar">
             <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
-              <img className="brand__mark" src="/brand/Kwes_Favicon_192.png" alt="" width={30} height={30} />
+              <BrandMark size={30} state={orbState} />
               <span className="brand__name">Kwes</span>
             </a>
             <div className="mobile-bar__status">
@@ -156,7 +171,7 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
       </div>
 
       <nav className="bottom-nav" aria-label="Navigation mobile">
-        {MOBILE_NAV.map((entry) => (
+        {NAV.map((entry) => (
           <a
             key={entry.label}
             className="bottom-nav__item"
@@ -165,6 +180,9 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
           >
             <Icon name={entry.icon} size={20} />
             {entry.shortLabel}
+            {entry.route.name === 'approvals' && waiting > 0 ? (
+              <span className="bottom-nav__dot" aria-hidden="true" />
+            ) : null}
           </a>
         ))}
       </nav>

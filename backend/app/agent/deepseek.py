@@ -15,7 +15,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Protocol, Sequence
+from typing import Any, AsyncIterator, Protocol, Sequence
 
 import httpx
 
@@ -76,6 +76,27 @@ class LLMClient(Protocol):
         max_tokens: int = 1200,
         timeout: float | None = None,
     ) -> LLMResult: ...
+
+
+def chunk_for_stream(text: str, *, size: int = 18) -> list[str]:
+    """Découpe un texte en morceaux de taille bornée, sans couper les mots.
+
+    Utilisé pour le mode MOCK : ce n'est pas une simulation d'exécution, c'est
+    le même texte déterministe servi en plusieurs événements SSE. Le mode réel
+    utilise les tokens du fournisseur.
+    """
+    chunks: list[str] = []
+    buffer = ""
+    for word in text.split(" "):
+        candidate = f"{buffer} {word}" if buffer else word
+        if len(candidate) > size and buffer:
+            chunks.append(buffer + " ")
+            buffer = word
+        else:
+            buffer = candidate
+    if buffer:
+        chunks.append(buffer)
+    return [c for c in chunks if c]
 
 
 def _last_user_message(messages: Sequence[dict[str, Any]]) -> str:
@@ -144,6 +165,79 @@ class DeepSeekClient:
             model=str(payload.get("model") or self.settings.deepseek_model),
             mock=False,
         )
+
+    # ------------------------------------------------------------------
+    async def stream_chat(
+        self,
+        messages: Sequence[dict[str, Any]],
+        *,
+        temperature: float | None = None,
+        max_tokens: int = 1200,
+        timeout: float | None = None,
+    ) -> AsyncIterator[str]:
+        """Diffuse la réponse du modèle token par token (SSE OpenAI-compatible).
+
+        Mode MOCK : le texte déterministe est servi en morceaux de mots, jamais
+        un contenu inventé. Toute erreur fournisseur est remontée en LLMError.
+        """
+        if self.mock:
+            result = self._mock(messages, json_mode=False, purpose="chat", tools=None)
+            for chunk in chunk_for_stream(result.content):
+                yield chunk
+                await asyncio.sleep(0)
+            return
+
+        body: dict[str, Any] = {
+            "model": self.settings.deepseek_model,
+            "messages": [dict(m) for m in messages],
+            "temperature": self.settings.deepseek_temperature if temperature is None else temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        url = f"{self.settings.deepseek_base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.settings.deepseek_api_key}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+        request_timeout = timeout or self.settings.deepseek_timeout_seconds
+
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(request_timeout), transport=self._transport
+        ) as client:
+            try:
+                async with client.stream("POST", url, json=body, headers=headers) as response:
+                    if response.status_code >= 400:
+                        await response.aread()
+                        logger.warning("DeepSeek stream status=%s", response.status_code)
+                        raise LLMError(
+                            "Fournisseur LLM saturé ou indisponible.",
+                            retryable=response.status_code == 429 or response.status_code >= 500,
+                        )
+                    async for line in response.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        payload_text = line[5:].strip()
+                        if not payload_text or payload_text == "[DONE]":
+                            if payload_text == "[DONE]":
+                                break
+                            continue
+                        try:
+                            payload = json.loads(payload_text)
+                        except json.JSONDecodeError:
+                            logger.warning("Flux LLM : ligne JSON ignorée.")
+                            continue
+                        choices = payload.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        chunk = delta.get("content")
+                        if isinstance(chunk, str) and chunk:
+                            yield chunk
+            except (httpx.TimeoutException, asyncio.TimeoutError) as exc:
+                raise LLMTimeout() from exc
+            except httpx.HTTPError as exc:
+                raise LLMError("Connexion au fournisseur LLM impossible.", retryable=True) from exc
 
     # ------------------------------------------------------------------
     async def _post(self, body: dict[str, Any], *, timeout: float | None) -> dict[str, Any]:

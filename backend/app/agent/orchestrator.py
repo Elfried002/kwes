@@ -13,7 +13,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +58,17 @@ class ChatOutcome:
     response: str
     intent: str
     task: Task | None = None
+
+
+@dataclass
+class ChatStreamEvent:
+    """Événement SSE émis par `Orchestrator.stream_chat`.
+
+    `event` ∈ {"delta", "done", "error"} — contrat /chat/stream.
+    """
+
+    event: str
+    data: dict[str, Any]
 
 
 class TaskControl:
@@ -235,6 +246,23 @@ class Orchestrator:
     async def _direct_reply(
         self, message: str, history: Sequence[dict[str, str]], language: str | None
     ) -> str:
+        messages = self._direct_messages(message, history, language)
+        try:
+            result = await self.llm.chat(messages, max_tokens=800)
+            content = (result.content or "").strip()
+            if not content:
+                raise LLMError("Réponse vide.")
+            return content
+        except LLMError as exc:
+            logger.warning("LLM indisponible pour réponse directe: %s", exc.code)
+            raise ProviderUnavailable(
+                "Le service de réponse est temporairement indisponible.",
+                {"provider": "deepseek"},
+            ) from exc
+
+    def _direct_messages(
+        self, message: str, history: Sequence[dict[str, str]], language: str | None
+    ) -> list[dict[str, str]]:
         # Date/heure injectées côté serveur : le modèle n'a aucune notion du temps
         # réel et hallucine sinon une date (constaté en production le 16/11).
         now = datetime.now(timezone.utc)
@@ -250,18 +278,7 @@ class Orchestrator:
         messages: list[dict[str, str]] = [{"role": "system", "content": system}]
         messages.extend(history[-8:])
         messages.append({"role": "user", "content": message})
-        try:
-            result = await self.llm.chat(messages, max_tokens=800)
-            content = (result.content or "").strip()
-            if not content:
-                raise LLMError("Réponse vide.")
-            return content
-        except LLMError as exc:
-            logger.warning("LLM indisponible pour réponse directe: %s", exc.code)
-            raise ProviderUnavailable(
-                "Le service de réponse est temporairement indisponible.",
-                {"provider": "deepseek"},
-            ) from exc
+        return messages
 
     async def _mission_acknowledgement(self, session: AsyncSession, task: Task) -> str:
         steps = sorted(task.steps, key=_step_sort_key)
@@ -270,6 +287,189 @@ class Orchestrator:
             lines.append(f"{index}. {step.title} ({self._skill_name(step)})")
         lines.append("Suivez l'avancement en temps réel ; je vous préviens à la fin.")
         return "\n".join(lines)
+
+    # ==================================================================
+    # Chat streaming (SSE)
+    # ==================================================================
+    async def get_conversation_for_user(
+        self, session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID
+    ) -> Conversation:
+        """Vérifie l'appartenance d'une conversation sans la créer."""
+        return await self._get_or_create_conversation(
+            session, user, conversation_id=conversation_id, title=None, language=None
+        )
+
+    async def stream_chat(
+        self,
+        session: AsyncSession,
+        user: CurrentUser,
+        *,
+        message: str,
+        conversation_id: uuid.UUID | None,
+        language: str | None,
+        mode: str = "auto",
+    ) -> AsyncIterator[ChatStreamEvent]:
+        """Variante streaming de `handle_chat` (SSE : delta / done / error).
+
+        Réutilise la même classification d'intention, le même prompt et la même
+        persistance que la route non-streaming : le message assistant persisté
+        est exactement la concaténation des deltas émis (puis `.strip()`).
+        """
+        text = (message or "").strip()
+        if not text:
+            raise ValidationFailed("Le message ne peut pas être vide.")
+        if len(text) > self.settings.max_message_chars:
+            raise ValidationFailed(
+                "Le message dépasse la taille maximale autorisée.",
+                {"max_chars": self.settings.max_message_chars},
+            )
+
+        conversation = await self._get_or_create_conversation(
+            session, user, conversation_id=conversation_id, title=truncate(text, 80), language=language
+        )
+        history = await self._load_history(session, conversation.id, limit=12)
+        user_message = Message(
+            conversation_id=conversation.id,
+            user_id=user.id,
+            role="user",
+            content=text,
+            content_type="text",
+        )
+        session.add(user_message)
+        await session.flush()
+
+        if mode == "mission":
+            intent = "mission"
+        elif mode == "direct":
+            intent = "direct"
+        else:
+            intent = await self.classifier.classify(text)
+
+        base_meta: dict[str, Any] = {"conversation_id": str(conversation.id)}
+
+        if intent == "mission":
+            task = await self._create_mission(session, user, conversation, text, history)
+            response = await self._mission_acknowledgement(session, task)
+            assistant_message = Message(
+                conversation_id=conversation.id,
+                user_id=user.id,
+                role="assistant",
+                content=response,
+                content_type="text",
+                meta={"intent": intent, "task_id": str(task.id), "mock": self.settings.llm_is_mock},
+            )
+            session.add(assistant_message)
+            conversation.updated_at = utcnow()
+            await session.commit()
+            # Pas d'événement `conversation.delta` : ce client reçoit déjà les deltas
+            # par le flux SSE (canal unique, pas de doublon). `completed` reste publié
+            # pour que les autres onglets/écrans rafraîchissent.
+            await self.events.publish(
+                user.id,
+                "conversation.completed",
+                {
+                    **base_meta,
+                    "message_id": str(assistant_message.id),
+                    "content": response,
+                    "task_id": str(task.id),
+                },
+            )
+            await self.queue.enqueue(task.id)
+            yield ChatStreamEvent(
+                "delta",
+                {**base_meta, "message_id": str(assistant_message.id), "delta": response, "intent": intent},
+            )
+            yield ChatStreamEvent(
+                "done",
+                {
+                    **base_meta,
+                    "message_id": str(assistant_message.id),
+                    "response": response,
+                    "intent": intent,
+                    "status": task.status,
+                    "task_id": str(task.id),
+                    "mock": self.settings.llm_is_mock,
+                },
+            )
+            return
+
+        messages = self._direct_messages(text, history, language)
+        chunks: list[str] = []
+        try:
+            async for chunk in self._stream_tokens(messages):
+                if not chunk:
+                    continue
+                chunks.append(chunk)
+                yield ChatStreamEvent("delta", {**base_meta, "delta": chunk, "intent": "direct"})
+        except (LLMError, ProviderUnavailable) as exc:
+            logger.warning("Streaming LLM interrompu: %s", type(exc).__name__)
+            yield ChatStreamEvent(
+                "error",
+                {
+                    **base_meta,
+                    "code": "PROVIDER_UNAVAILABLE",
+                    "message": "Le service de réponse est temporairement indisponible.",
+                    "retryable": True,
+                },
+            )
+            return
+
+        response = "".join(chunks).strip()
+        if not response:
+            yield ChatStreamEvent(
+                "error",
+                {
+                    **base_meta,
+                    "code": "EMPTY_RESPONSE",
+                    "message": "Le modèle n'a renvoyé aucun contenu.",
+                    "retryable": True,
+                },
+            )
+            return
+
+        assistant_message = Message(
+            conversation_id=conversation.id,
+            user_id=user.id,
+            role="assistant",
+            content=response,
+            content_type="text",
+            meta={"intent": "direct", "mock": self.settings.llm_is_mock, "streamed": True},
+        )
+        session.add(assistant_message)
+        conversation.updated_at = utcnow()
+        await session.commit()
+
+        # Canal unique : les deltas ont été livrés par SSE à ce client ; on ne les
+        # republie pas sur le WebSocket (sinon bulle en double côté interface).
+        await self.events.publish(
+            user.id,
+            "conversation.completed",
+            {**base_meta, "message_id": str(assistant_message.id), "content": response},
+        )
+        yield ChatStreamEvent(
+            "done",
+            {
+                **base_meta,
+                "message_id": str(assistant_message.id),
+                "response": response,
+                "intent": "direct",
+                "status": "completed",
+                "mock": self.settings.llm_is_mock,
+            },
+        )
+
+    async def _stream_tokens(self, messages: Sequence[dict[str, Any]]) -> AsyncIterator[str]:
+        """Tokens du LLM ; repli sur une réponse complète si le client ne streame pas."""
+        streamer = getattr(self.llm, "stream_chat", None)
+        if callable(streamer):
+            async for chunk in streamer(messages, max_tokens=800):
+                yield chunk
+            return
+        result = await self.llm.chat(list(messages), max_tokens=800)
+        content = (result.content or "").strip()
+        if not content:
+            raise LLMError("Réponse vide.")
+        yield content
 
     # ==================================================================
     # Conversations / messages
@@ -1339,6 +1539,7 @@ def build_orchestrator(
 
 __all__ = [
     "ChatOutcome",
+    "ChatStreamEvent",
     "Orchestrator",
     "Plan",
     "PlanStep",

@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
-import { STEP_STATUS_LABELS, TASK_STATUS_LABELS, type StepStatus, type TaskStatus } from '../lib/types';
-import { stepTone, taskTone } from '../lib/format';
+import type { StepStatus, TaskStatus } from '../lib/types';
+import { stepStateLabel, stepStateTone, taskStateLabel, taskStateTone } from '../lib/plain-language';
 
 export function StatusPill({ status }: { status: TaskStatus }) {
-  return <span className={`badge badge--${taskTone(status)}`}>{TASK_STATUS_LABELS[status] ?? status}</span>;
+  return <span className={`badge badge--${taskStateTone(status)}`}>{taskStateLabel(status)}</span>;
 }
 
 export function StepPill({ status }: { status: StepStatus }) {
-  return <span className={`badge badge--${stepTone(status)}`}>{STEP_STATUS_LABELS[status] ?? status}</span>;
+  return <span className={`badge badge--${stepStateTone(status)}`}>{stepStateLabel(status)}</span>;
 }
 
 export function ToneBadge({

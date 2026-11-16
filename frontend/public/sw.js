@@ -2,7 +2,7 @@
  * Stratégie : navigation = réseau puis cache index (SPA), assets = cache d'abord,
  * API = jamais mise en cache (les données de l'agent ne doivent pas être périmées).
  */
-const CACHE = 'kwes-shell-v1';
+const CACHE = 'kwes-shell-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

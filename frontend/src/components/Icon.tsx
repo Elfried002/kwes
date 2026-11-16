@@ -30,7 +30,9 @@ export type IconName =
   | 'check'
   | 'alert'
   | 'clock'
-  | 'external';
+  | 'external'
+  | 'install'
+  | 'share';
 
 const PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3.5 10.5 12 3.5l8.5 7v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1z" />,
@@ -125,6 +127,20 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   external: <path d="M13 4h7v7M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />,
+  install: (
+    <>
+      <path d="M12 3v11" />
+      <path d="m7.5 9.5 4.5 4.5 4.5-4.5" />
+      <path d="M4.5 20.5h15" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M12 15V3.5" />
+      <path d="m8 7 4-3.5L16 7" />
+      <path d="M6.5 11.5H4.5v8h15v-8h-2" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, className }: IconProps) {

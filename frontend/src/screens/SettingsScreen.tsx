@@ -4,9 +4,11 @@ import { signOut, useSession } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { updatePreferences, usePreferences, type Preferences } from '../lib/prefs';
+import { useKwes } from '../state/KwesProvider';
 import { buildWsUrl } from '../lib/ws';
 import { ConnectionBadge } from '../components/AppShell';
 import { Icon } from '../components/Icon';
+import { InstallApp } from '../components/InstallApp';
 
 function Switch({
   checked,
@@ -35,6 +37,7 @@ function Switch({
 export function SettingsScreen() {
   const session = useSession();
   const prefs = usePreferences();
+  const { health } = useKwes();
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +45,7 @@ export function SettingsScreen() {
 
   const setPreference = <K extends keyof Preferences>(key: K, value: Preferences[K]): void => {
     updatePreferences({ [key]: value } as Partial<Preferences>);
-    setNotice('Préférence enregistrée localement.');
+    setNotice('C’est enregistré sur cet appareil.');
     setError(null);
   };
 
@@ -53,19 +56,19 @@ export function SettingsScreen() {
       return;
     }
     if (!('Notification' in window)) {
-      setError('Les notifications ne sont pas prises en charge par ce navigateur.');
+      setError('Ce navigateur ne propose pas les notifications.');
       return;
     }
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         setPreference('notificationsEnabled', true);
-        setNotice('Notifications navigateur autorisées. Kwes n’en envoie que si le backend en produit.');
+        setNotice('Notifications autorisées. Kwes n’envoie que de vraies nouvelles.');
       } else {
-        setError('Permission de notification refusée par le navigateur.');
+        setError('Vous avez refusé les notifications. Vous pouvez changer d’avis dans les réglages du navigateur.');
       }
     } catch {
-      setError('Impossible de demander la permission de notification.');
+      setError('Impossible de demander l’autorisation pour les notifications.');
     }
   };
 
@@ -81,13 +84,16 @@ export function SettingsScreen() {
         localStorage.removeItem(key);
         removed += 1;
       }
-      setNotice(`${removed} brouillon(s) local(aux) supprimé(s).`);
+      setNotice(
+        removed === 0 ? 'Aucun brouillon à supprimer.' : `${removed} brouillon(s) supprimé(s).`,
+      );
     } catch {
-      setError('Le stockage local est inaccessible dans ce contexte.');
+      setError('Le stockage de ce navigateur est inaccessible.');
     }
   };
 
   const wsEndpoint = buildWsUrl('•••').replace('token=%E2%80%A2%E2%80%A2%E2%80%A2', 'session=<session>');
+  const dependencies = health?.dependencies ? Object.entries(health.dependencies) : [];
 
   return (
     <div className="page">
@@ -95,7 +101,7 @@ export function SettingsScreen() {
         <div>
           <span className="page-head__eyebrow">Compte</span>
           <h1>Réglages</h1>
-          <p>Préférences locales et état réel des intégrations exposées par l’API.</p>
+          <p>Votre compte, vos préférences et l’application.</p>
         </div>
         <ConnectionBadge />
       </div>
@@ -112,6 +118,22 @@ export function SettingsScreen() {
       ) : null}
 
       <div className="settings-grid">
+        <section className="card card--pad" aria-labelledby="install-title">
+          <div className="panel-title">
+            <h2 id="install-title">Installer l’application</h2>
+          </div>
+          <p className="muted" style={{ fontSize: '0.8125rem' }}>
+            Kwes s’installe comme une application : une icône sur votre écran d’accueil, un écran
+            plein, et l’ouverture plus rapide. Aucun magasin d’applications n’est nécessaire.
+          </p>
+          <div className="row" style={{ marginTop: 12 }}>
+            <InstallApp variant="primary" showInstalledNote showUnsupportedNote />
+          </div>
+          <p className="meta" style={{ marginTop: 10 }}>
+            Sur ordinateur, l’installation se propose dans la barre d’adresse du navigateur.
+          </p>
+        </section>
+
         <section className="card card--pad" aria-labelledby="profile-title">
           <div className="panel-title">
             <h2 id="profile-title">Profil</h2>
@@ -120,9 +142,7 @@ export function SettingsScreen() {
           <dl className="kv">
             <dt>E-mail</dt>
             <dd>{session?.email || '—'}</dd>
-            <dt>Identifiant</dt>
-            <dd className="mono">{session?.userId || '—'}</dd>
-            <dt>Session expire</dt>
+            <dt>Connexion valable jusqu’au</dt>
             <dd>
               {session?.expiresAt
                 ? formatDateTime(new Date(session.expiresAt * 1000).toISOString())
@@ -131,7 +151,7 @@ export function SettingsScreen() {
             <dt>Langue</dt>
             <dd>
               <label className="sr-only" htmlFor="settings-language">
-                Langue de l’interface et des requêtes
+                Langue de l’interface et des messages
               </label>
               <select
                 id="settings-language"
@@ -145,8 +165,23 @@ export function SettingsScreen() {
             </dd>
           </dl>
           <p className="meta" style={{ marginTop: 10 }}>
-            L’édition du profil sera exposée par une route dédiée ; aucune écriture simulée n’est faite ici.
+            La modification du profil arrivera plus tard. Rien n’est simulé ici.
           </p>
+        </section>
+
+        <section className="card card--pad" aria-labelledby="history-title">
+          <div className="panel-title">
+            <h2 id="history-title">Vos échanges</h2>
+          </div>
+          <p className="muted" style={{ fontSize: '0.8125rem' }}>
+            Retrouvez une conversation passée et reprenez-la là où vous l’avez laissée.
+          </p>
+          <div className="row" style={{ marginTop: 12 }}>
+            <a className="btn" href="#/conversations">
+              <Icon name="history" size={15} />
+              Voir mes échanges
+            </a>
+          </div>
         </section>
 
         <section className="card card--pad" aria-labelledby="voice-title">
@@ -157,10 +192,7 @@ export function SettingsScreen() {
           <div className="setting">
             <div className="setting__text">
               <strong id="voice-label">Voix et dictée</strong>
-              <span>
-                Active le bouton micro (dictée navigateur, après autorisation explicite) et prépare la
-                lecture audio.
-              </span>
+              <span>Affiche le bouton micro pour dicter vos messages au lieu de les écrire.</span>
             </div>
             <Switch
               checked={prefs.voiceEnabled}
@@ -171,10 +203,10 @@ export function SettingsScreen() {
 
           <div className="setting">
             <div className="setting__text">
-              <strong id="notif-label">Notifications navigateur</strong>
+              <strong id="notif-label">Notifications</strong>
               <span>
-                La permission n’est demandée qu’à l’activation. Aucune notification n’est générée
-                localement : elles proviennent des événements serveur.
+                Le navigateur demandera votre accord au moment de l’activation. Kwes n’envoie que de
+                vraies nouvelles.
               </span>
             </div>
             <Switch
@@ -187,15 +219,15 @@ export function SettingsScreen() {
           <p className="notice notice--info" style={{ marginTop: 14 }}>
             <Icon name="alert" size={16} />
             <span>
-              La synthèse vocale ElevenLabs n’est pas encore exposée par une route de l’API :
-              aucun son n’est simulé et l’Orb ne passe en « Parle » qu’à la lecture d’un audio réel.
+              La lecture à voix haute n’est pas encore disponible : Kwes ne joue aucun son qui ne
+              serait pas réellement produit.
             </span>
           </p>
         </section>
 
         <section className="card card--pad" aria-labelledby="integrations-title">
           <div className="panel-title">
-            <h2 id="integrations-title">Intégrations</h2>
+            <h2 id="integrations-title">Connexions</h2>
             <span className="badge">Lecture seule</span>
           </div>
 
@@ -206,14 +238,14 @@ export function SettingsScreen() {
               <Icon name="alert" size={16} />
               <span>
                 {isApiError(integrations.error) && integrations.error.status === 404
-                  ? 'L’API n’expose pas encore de route /integrations (contrat P0). Aucune intégration ne peut être affichée ni connectée depuis cette interface.'
-                  : `Intégrations indisponibles : ${errorMessage(integrations.error)}`}
+                  ? 'Aucune connexion n’est encore proposée sur ce projet.'
+                  : `Impossible de lister vos connexions : ${errorMessage(integrations.error)}`}
               </span>
             </p>
           ) : (integrations.data ?? []).length === 0 ? (
             <p className="muted" style={{ fontSize: '0.8125rem' }}>
-              Aucune intégration connectée. Les fournisseurs et périmètres (scopes) seront affichés ici
-              lorsqu’ils existeront côté serveur.
+              Aucune connexion ajoutée pour le moment. Les services que Kwes pourra utiliser
+              apparaîtront ici.
             </p>
           ) : (
             <div className="list">
@@ -237,14 +269,14 @@ export function SettingsScreen() {
             <h2 id="privacy-title">Confidentialité</h2>
           </div>
           <p className="muted" style={{ fontSize: '0.8125rem' }}>
-            Les brouillons et préférences restent dans ce navigateur (localStorage). Les conversations
-            et missions résident sur votre backend et suivent sa politique de rétention. Aucune trace de
-            raisonnement privée n’est affichée : seuls le plan, les actions et leurs résultats le sont.
+            Vos brouillons restent dans ce navigateur. Vos échanges sont conservés sur votre compte,
+            pour la durée prévue par le service. Kwes ne montre jamais son raisonnement interne :
+            seulement ce qu’il a prévu, fait et obtenu.
           </p>
           <div className="row" style={{ marginTop: 12 }}>
             <button type="button" className="btn" onClick={clearDrafts}>
               <Icon name="trash" size={15} />
-              Supprimer les brouillons locaux
+              Supprimer les brouillons de cet appareil
             </button>
           </div>
         </section>
@@ -253,17 +285,9 @@ export function SettingsScreen() {
           <div className="panel-title">
             <h2 id="security-title">Sécurité</h2>
           </div>
-          <dl className="kv">
-            <dt>API REST</dt>
-            <dd className="mono">{API_BASE_URL}</dd>
-            <dt>WebSocket</dt>
-            <dd className="mono">{wsEndpoint}</dd>
-            <dt>Authentification</dt>
-            <dd>Supabase Auth — jamais de clé fournisseur côté client</dd>
-          </dl>
-          <p className="meta" style={{ marginTop: 10 }}>
-            Votre session est gérée par Supabase Auth dans ce navigateur et présentée à chaque
-            requête privée. La déconnexion la révoque immédiatement.
+          <p className="muted" style={{ fontSize: '0.8125rem' }}>
+            Votre connexion est gérée par Supabase Auth. Votre mot de passe ne passe jamais par
+            Kwes. La déconnexion coupe l’accès immédiatement.
           </p>
           <button
             type="button"
@@ -276,11 +300,38 @@ export function SettingsScreen() {
             <Icon name="logout" size={15} />
             Se déconnecter
           </button>
+
+          <details className="disclosure" style={{ marginTop: 16 }}>
+            <summary>Avancé</summary>
+            <dl className="kv">
+              <dt>Service</dt>
+              <dd className="mono">{API_BASE_URL}</dd>
+              <dt>Flux temps réel</dt>
+              <dd className="mono">{wsEndpoint}</dd>
+              <dt>Compte</dt>
+              <dd className="mono">{session?.userId || '—'}</dd>
+              <dt>Version du service</dt>
+              <dd className="mono">{health?.version ?? '—'}</dd>
+              <dt>Authentification</dt>
+              <dd>Supabase Auth — aucune clé fournisseur côté navigateur</dd>
+              {dependencies.map(([name, value]) => (
+                <div key={name} style={{ display: 'contents' }}>
+                  <dt>Dépendance {name}</dt>
+                  <dd className="mono">{value ?? '—'}</dd>
+                </div>
+              ))}
+            </dl>
+            {integrations.error ? (
+              <p className="meta" style={{ marginTop: 8 }}>
+                Erreur des connexions : {errorMessage(integrations.error)}
+              </p>
+            ) : null}
+          </details>
         </section>
       </div>
 
       <p className="meta" style={{ marginTop: 'var(--sp-5)' }}>
-        Kwes · agent personnel autonome · Orb piloté par une machine à états déterministe.
+        Kwes · votre assistant personnel.
       </p>
     </div>
   );

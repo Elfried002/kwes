@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, update
 
-from app.agent.deepseek import DeepSeekClient
+from app.agent.llm import GeminiTextClient
 from app.agent.orchestrator import build_orchestrator
 from app.agent.voice import build_voice_provider
 from app.api import (
@@ -133,7 +133,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         queue = await build_queue(settings)
         application.state.queue = queue
-        llm = DeepSeekClient(settings)
+        llm = GeminiTextClient(settings)
         application.state.llm = llm
         orchestrator = build_orchestrator(
             settings=settings,
@@ -157,7 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         application.state.worker = worker
         if settings.llm_is_mock:
             logger.warning(
-                "MODE MOCK : DeepSeek non configuré, réponses simulées et en-tête X-Kwes-Mock: 1."
+                "MODE HORS LIGNE : aucune clé Gemini, réponses simulées et en-tête X-Kwes-Mock: 1."
             )
         try:
             yield

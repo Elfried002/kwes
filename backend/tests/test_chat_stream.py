@@ -1,7 +1,7 @@
 """POST /chat/stream — streaming SSE réel (deltas, done, error) et persistance.
 
 Le LLM est mocké : soit le client MOCK déterministe de l'application (clé
-DeepSeek absente), soit un faux client injecté qui expose `stream_chat`.
+Gemini absente), soit un faux client injecté qui expose `stream_chat`.
 Aucun appel réseau n'est effectué.
 """
 
@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator, Sequence
 import pytest
 from fastapi.testclient import TestClient
 
-from app.agent.deepseek import LLMError
+from app.agent.llm import LLMError
 from app.api.chat import sse_frame
 
 
@@ -59,7 +59,7 @@ class FakeStreamingLLM:
         self.calls = 0
 
     async def chat(self, messages, **kwargs):  # pragma: no cover - utilisé pour la classification
-        from app.agent.deepseek import LLMResult
+        from app.agent.llm import LLMResult
 
         return LLMResult(content=json.dumps({"intent": "direct", "language": "fr"}), mock=True)
 

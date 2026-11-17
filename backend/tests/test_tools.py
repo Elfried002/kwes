@@ -12,7 +12,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.agent.deepseek import LLMResult
+from app.agent.llm import LLMResult
 from app.agent.tools import CHAT_TOOL_NAMES, tool_definitions
 from app.api.chat import sse_frame
 from app.db.models import AuditLog, Document, Memory, Message

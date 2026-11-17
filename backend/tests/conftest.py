@@ -47,7 +47,7 @@ def settings(tmp_path: Path) -> Settings:
         worker_drain_seconds=5.0,
         rate_limit_enabled=False,
         log_level="CRITICAL",
-        deepseek_api_key="",
+        google_api_key="",
         skill_offline_mode=True,
         # Hermétique : le .env de production ouvre le web (P0), les tests non.
         browser_open_web=False,

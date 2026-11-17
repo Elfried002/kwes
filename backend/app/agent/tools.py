@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.audit import record_audit
-from app.agent.deepseek import LLMClient, LLMError
+from app.agent.llm import LLMClient, LLMError
 from app.agent.policy import PolicyEngine
 from app.core.config import Settings
 from app.skills.base import FetchFn, SkillContext, SkillError
@@ -263,6 +263,9 @@ class ChatToolRunner:
                                     call.get("arguments") or {}, ensure_ascii=False
                                 ),
                             },
+                            # Conservée telle quelle : Gemini refuse un appel rejoué
+                            # sans signature de pensée.
+                            "thought_signature": call.get("thought_signature"),
                         }
                         for index, call in enumerate(calls)
                     ],

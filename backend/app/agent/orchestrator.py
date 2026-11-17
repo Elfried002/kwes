@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agent.audit import record_audit
-from app.agent.deepseek import (
-    DeepSeekClient,
+from app.agent.llm import (
+    GeminiTextClient,
     IntentClassifier,
     LLMClient,
     LLMError,
@@ -318,7 +318,7 @@ class Orchestrator:
             logger.warning("LLM indisponible pour réponse directe: %s", exc.code)
             raise ProviderUnavailable(
                 "Le service de réponse est temporairement indisponible.",
-                {"provider": "deepseek"},
+                {"provider": "gemini"},
             ) from exc
 
     def _direct_messages(
@@ -1736,7 +1736,7 @@ def build_orchestrator(
     llm: LLMClient | None = None,
     fetcher: FetchFn | None = None,
 ) -> Orchestrator:
-    llm = llm or DeepSeekClient(settings)
+    llm = llm or GeminiTextClient(settings)
     policy = PolicyEngine(settings)
     planner = Planner(settings, llm, registry)
     return Orchestrator(

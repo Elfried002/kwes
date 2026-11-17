@@ -64,15 +64,52 @@ def _sources_section(context: str) -> str:
     return "\n".join(lines)
 
 
+INSTRUCTION_MARKERS = (
+    "contenu complet",
+    "texte complet",
+    "rédige",
+    "redige",
+    "à rédiger",
+    "a rediger",
+    "document doit",
+)
+
+
+def _synthesis_body(context: str) -> str:
+    """Reprend la synthèse réellement produite par l'étape de recherche amont.
+
+    Aucune phrase n'est ajoutée : on réutilise le texte sourcé déjà calculé quand
+    le modèle n'a fourni qu'une consigne au lieu d'un corps de document.
+    """
+    import json
+
+    try:
+        data = json.loads(context)
+    except (TypeError, ValueError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    synthesis = data.get("synthesis")
+    if not isinstance(synthesis, str):
+        return ""
+    text = synthesis.strip()
+    return text if len(text) >= 200 else ""
+
+
 async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
     title = " ".join(str(payload.get("title") or "").split())
     content = str(payload.get("content") or "").replace("\r\n", "\n").strip()
     context = str(payload.get("context") or "")
-    if context and len(content) < 800:
-        # Le planificateur produit un plan court (900 jetons) : le document est
-        # complété par les sources réellement lues, jamais par du texte inventé.
+    if context:
+        # Le planificateur produit parfois une consigne au lieu d'un corps : on
+        # reprend alors la synthèse sourcée de l'étape amont, jamais du texte inventé.
+        body = _synthesis_body(context)
+        looks_like_instruction = content.lower().startswith(INSTRUCTION_MARKERS) or len(content) < 250
+        if body and looks_like_instruction:
+            content = body
+        # La traçabilité des pages réellement lues est systématique.
         extra = _sources_section(context)
-        if extra:
+        if extra and "## Sources consultées" not in content:
             content = (content + "\n" + extra).strip()
     fmt = str(payload.get("format") or "markdown")
 

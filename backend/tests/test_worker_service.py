@@ -174,7 +174,7 @@ async def test_worker_logs_do_not_contain_secrets(
     settings: Settings, caplog: pytest.LogCaptureFixture
 ) -> None:
     secret = "sk-test-SECRET-0000"
-    runtime_settings = settings.model_copy(update={"deepseek_api_key": secret})
+    runtime_settings = settings.model_copy(update={"google_api_key": secret})
     db, task_id = await _make_task(runtime_settings)
     worker = TaskWorker(
         settings=runtime_settings,

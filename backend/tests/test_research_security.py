@@ -125,7 +125,7 @@ async def test_research_pipeline_flags_hostile_page(settings: Settings, monkeypa
 async def test_no_secret_in_research_logs(settings: Settings, monkeypatch, caplog) -> None:
     secret = "sk-live-SECRET-0000"
     hostile_settings = settings.model_copy(
-        update={"research_cache_enabled": False, "deepseek_api_key": secret}
+        update={"research_cache_enabled": False, "google_api_key": secret}
     )
 
     class FailingRouter:

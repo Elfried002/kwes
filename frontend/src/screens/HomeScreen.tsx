@@ -20,7 +20,7 @@ import { href } from '../lib/router';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { useKwes } from '../state/KwesProvider';
 import { Composer } from '../components/Composer';
-import { LivingDot } from '../components/orb/LivingDot';
+import { KwesDroid } from '../components/KwesDroid';
 import { useAudioLevel } from '../lib/use-audio-level';
 import { useKwesSpeech } from '../lib/use-kwes-speech';
 import { usePrefersReducedMotion } from '../lib/hooks';
@@ -233,7 +233,7 @@ export function HomeScreen() {
           aria-label={dotLabel}
           data-active={speaking || working ? 'true' : 'false'}
         >
-          <LivingDot phase={state.phase} levelRef={levelRef} className="home-dot__canvas" />
+          <KwesDroid phase={state.phase} levelRef={levelRef} className="home-dot__canvas" />
         </button>
 
         <div className="home-dot__caption">

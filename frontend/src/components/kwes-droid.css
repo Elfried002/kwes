@@ -1,0 +1,271 @@
+/* Kwes — droïde vivant : états, gestes, respiration. */
+
+.kwes-droid {
+  --level: 0;
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  margin: 0 auto;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 28px rgba(12, 18, 36, 0.18));
+}
+
+.kwes-droid__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* --- mouvements de base ------------------------------------------------ */
+
+.kwes-droid__float {
+  animation: kd-float 5.2s ease-in-out infinite;
+  transform-origin: 120px 160px;
+}
+
+@keyframes kd-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+.kwes-droid__shadow {
+  animation: kd-shadow 5.2s ease-in-out infinite;
+  transform-origin: 120px 264px;
+}
+
+@keyframes kd-shadow {
+  0%, 100% { transform: scale(1); opacity: 0.18; }
+  50% { transform: scale(0.9); opacity: 0.12; }
+}
+
+.kwes-droid__halo {
+  animation: kd-halo-turn 9s linear infinite;
+  transform-origin: 120px 46px;
+}
+
+@keyframes kd-halo-turn {
+  from { transform: rotate(0deg) scaleX(1); }
+  50% { transform: rotate(180deg) scaleX(0.94); }
+  to { transform: rotate(360deg) scaleX(1); }
+}
+
+.kwes-droid__eve,
+.kwes-droid__eye,
+.kwes-droid__head,
+.kwes-droid__hand,
+.kwes-droid__mouth,
+.kwes-droid__core,
+.kwes-droid__orbit,
+.kwes-droid__badge,
+.kwes-droid__bubble {
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 220ms ease;
+}
+
+.kwes-droid__eye {
+  transform-origin: center;
+  animation: kd-blink 4.6s infinite;
+}
+
+.kwes-droid__eye--r { animation-delay: 0.04s; }
+
+@keyframes kd-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.08); }
+}
+
+.kwes-droid__head { transform-origin: 120px 160px; }
+.kwes-droid__hand--l { transform-origin: 76px 196px; }
+.kwes-droid__hand--r { transform-origin: 164px 196px; }
+
+.kwes-droid__orbit,
+.kwes-droid__badge,
+.kwes-droid__bubble { opacity: 0; }
+
+/* --- repos : petites initiatives --------------------------------------- */
+
+.kwes-droid[data-phase='idle'] .kwes-droid__head {
+  animation: kd-idle-look 7s ease-in-out infinite;
+}
+
+@keyframes kd-idle-look {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-2.5deg); }
+  60% { transform: rotate(2deg); }
+}
+
+/* --- écoute : se penche, oreilles réactives ---------------------------- */
+
+.kwes-droid[data-phase='listening'] .kwes-droid__head {
+  transform: rotate(-4deg) translateY(2px);
+}
+
+.kwes-droid[data-phase='listening'] .kwes-droid__eye {
+  transform: scale(1.12, 1.18);
+}
+
+.kwes-droid[data-phase='listening'] .kwes-droid__hand--l {
+  transform: translate(6px, -22px) rotate(-18deg);
+}
+
+.kwes-droid[data-phase='listening'] .kwes-droid__halo {
+  animation-duration: 3.4s;
+}
+
+/* --- réflexion : regard en haut, bulle, main au menton ----------------- */
+
+.kwes-droid[data-phase='thinking'] .kwes-droid__face {
+  transform: translateY(-6px);
+}
+
+.kwes-droid[data-phase='thinking'] .kwes-droid__head {
+  transform: rotate(-3deg);
+}
+
+.kwes-droid[data-phase='thinking'] .kwes-droid__bubble {
+  opacity: 1;
+  animation: kd-bubble 2.4s ease-in-out infinite;
+}
+
+.kwes-droid[data-phase='thinking'] .kwes-droid__hand--r {
+  transform: translate(-14px, -20px) rotate(20deg) scale(0.86);
+}
+
+.kwes-droid[data-phase='thinking'] .kwes-droid__mouth {
+  d: path('M112 140h16');
+}
+
+@keyframes kd-bubble {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.85; }
+  50% { transform: translateY(-4px) scale(1.06); opacity: 1; }
+}
+
+/* --- exécution : anneau qui tourne, mains actives ----------------------- */
+
+.kwes-droid[data-phase='executing'] .kwes-droid__orbit {
+  opacity: 1;
+  animation: kd-orbit 2.6s linear infinite;
+  transform-origin: 120px 114px;
+}
+
+.kwes-droid[data-phase='executing'] .kwes-droid__eye {
+  transform: scale(0.86, 1.06);
+}
+
+.kwes-droid[data-phase='executing'] .kwes-droid__mouth {
+  d: path('M110 139h6 M124 139h6');
+}
+
+.kwes-droid[data-phase='executing'] .kwes-droid__hand--l {
+  animation: kd-type 0.42s ease-in-out infinite alternate;
+}
+.kwes-droid[data-phase='executing'] .kwes-droid__hand--r {
+  animation: kd-type 0.42s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes kd-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes kd-type {
+  from { transform: translateY(0); }
+  to { transform: translateY(-5px); }
+}
+
+/* --- parole : bouche et corps suivent le volume réel -------------------- */
+
+.kwes-droid[data-phase='speaking'] .kwes-droid__mouth,
+.kwes-droid[data-phase='response'] .kwes-droid__mouth {
+  animation: kd-talk 220ms ease-in-out infinite alternate;
+  transform-origin: 120px 138px;
+}
+
+.kwes-droid[data-phase='speaking'] .kwes-droid__float,
+.kwes-droid[data-phase='response'] .kwes-droid__float {
+  animation: kd-bob 900ms ease-in-out infinite;
+}
+
+.kwes-droid[data-phase='speaking'] .kwes-droid__hand--l {
+  transform: translate(2px, -6px) rotate(-10deg);
+}
+.kwes-droid[data-phase='speaking'] .kwes-droid__hand--r {
+  transform: translate(-2px, -6px) rotate(10deg);
+}
+
+@keyframes kd-talk {
+  from { transform: scaleY(calc(0.55 + var(--level) * 0.5)); }
+  to { transform: scaleY(calc(1 - var(--level) * 0.35)); }
+}
+
+@keyframes kd-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(calc(-3px - var(--level) * 4px)) rotate(-1deg); }
+}
+
+/* --- succès : yeux plissés de joie ------------------------------------- */
+
+.kwes-droid[data-phase='success'] .kwes-droid__eye {
+  transform: scale(1, 0.42) translateY(-6px);
+  animation: none;
+}
+
+.kwes-droid[data-phase='success'] .kwes-droid__mouth {
+  d: path('M104 134c6 9 26 9 32 0');
+}
+
+.kwes-droid[data-phase='success'] .kwes-droid__halo {
+  animation-duration: 2.6s;
+}
+
+/* --- erreur : yeux croix, teinte rouge --------------------------------- */
+
+.kwes-droid[data-phase='error'] .kwes-droid__eye {
+  animation: none;
+  opacity: 0.95;
+}
+
+.kwes-droid[data-phase='error'] .kwes-droid__mouth {
+  d: path('M110 142c6-6 14-6 20 0');
+}
+
+.kwes-droid[data-phase='error'] .kwes-droid__core {
+  fill: #ff7a7a;
+}
+
+/* --- attente d'approbation : pastille ambre, mouvement suspendu -------- */
+
+.kwes-droid[data-phase='waiting_approval'] .kwes-droid__badge {
+  opacity: 1;
+  animation: kd-badge 1.8s ease-in-out infinite;
+}
+
+.kwes-droid[data-phase='waiting_approval'] .kwes-droid__float {
+  animation-duration: 8s;
+}
+
+.kwes-droid[data-phase='waiting_approval'] .kwes-droid__eye {
+  transform: scale(0.92, 0.7);
+}
+
+@keyframes kd-badge {
+  0%, 100% { transform: translateY(0); opacity: 0.85; }
+  50% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* --- accessibilité ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .kwes-droid__float,
+  .kwes-droid__shadow,
+  .kwes-droid__halo,
+  .kwes-droid__eye,
+  .kwes-droid__head,
+  .kwes-droid__hand,
+  .kwes-droid__orbit,
+  .kwes-droid__badge,
+  .kwes-droid__bubble,
+  .kwes-droid[data-phase] .kwes-droid__mouth {
+    animation: none !important;
+  }
+}

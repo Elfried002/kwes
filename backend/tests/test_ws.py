@@ -82,7 +82,7 @@ def test_ws_envelope_and_ping(client: TestClient, settings, user_id: uuid.UUID) 
         assert set(first) == {"event", "event_id", "timestamp", "data"}
         assert first["timestamp"].endswith("Z")
         uuid.UUID(first["event_id"])
-        assert first["data"]["mock_providers"] == ["deepseek", "gemini"]
+        assert first["data"]["mock_providers"] == ["gemini"]
 
         websocket.send_text("ping")
         pong = websocket.receive_json()

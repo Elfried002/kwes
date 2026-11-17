@@ -28,7 +28,7 @@ def test_registry_accepts_french_depth(client_app_registry=None) -> None:
     from app.core.config import Settings
     from app.skills.registry import SkillRegistry
 
-    settings = Settings(app_env="test", deepseek_api_key="", skill_offline_mode=True)
+    settings = Settings(app_env="test", google_api_key="", skill_offline_mode=True)
     registry = SkillRegistry(Path("app/skills"), settings)
     registry.load()
     registry.validate_input(

@@ -2,7 +2,7 @@
 
 Le navigateur n'a jamais la clé : il parle à notre WebSocket, qui relaie le PCM
 16 kHz vers Gemini et renvoie l'audio 24 kHz. Gemini devient le moteur vocal
-(reconnaissance, tour de parole, synthèse, interruptions) ; DeepSeek reste le
+(reconnaissance, tour de parole, synthèse, interruptions) ; Gemini assure aussi le
 moteur de raisonnement des missions.
 
 Ce module ne connaît ni FastAPI ni SQLAlchemy : il expose des événements

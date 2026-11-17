@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.agent.deepseek import DeepSeekClient, MOCK_MARKER
+from app.agent.llm import GeminiTextClient, MOCK_MARKER
 from app.agent.voice import GeminiVoiceProvider
 from app.core.config import Settings
 from app.core.utils import utcnow
@@ -71,8 +71,8 @@ def test_approval_and_execution_columns() -> None:
     assert {"idempotency_key", "input_redacted", "duration_ms", "error_code"} <= executions
 
 
-async def test_deepseek_mock_is_deterministic_and_labelled(settings: Settings) -> None:
-    client = DeepSeekClient(settings)
+async def test_offline_answer_is_deterministic_and_labelled(settings: Settings) -> None:
+    client = GeminiTextClient(settings)
     messages = [{"role": "user", "content": "Bonjour"}]
     first = await client.chat(messages)
     second = await client.chat(messages)
@@ -81,8 +81,8 @@ async def test_deepseek_mock_is_deterministic_and_labelled(settings: Settings) -
     assert MOCK_MARKER in first.content
 
 
-async def test_deepseek_mock_plan_is_valid_json(settings: Settings) -> None:
-    client = DeepSeekClient(settings)
+async def test_offline_plan_is_valid_json(settings: Settings) -> None:
+    client = GeminiTextClient(settings)
     result = await client.chat(
         [{"role": "user", "content": "Prépare une étude de marché sur les fintechs"}],
         json_mode=True,
@@ -93,63 +93,73 @@ async def test_deepseek_mock_plan_is_valid_json(settings: Settings) -> None:
     assert plan["steps"][0]["id"] == "step_1"
 
 
-async def test_deepseek_real_call_parses_tool_calls(settings: Settings) -> None:
-    payload = {
-        "model": "deepseek-chat",
-        "choices": [
-            {
-                "message": {
-                    "content": "Je vais chercher.",
-                    "tool_calls": [
-                        {
-                            "id": "call_1",
-                            "type": "function",
-                            "function": {"name": "web_search", "arguments": '{"query": "kwes"}'},
-                        }
-                    ],
-                }
-            }
-        ],
-        "usage": {"total_tokens": 12},
-    }
+class _FakeFunctionCall:
+    def __init__(self, name: str, args: dict) -> None:
+        self.name = name
+        self.args = args
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/chat/completions")
-        assert request.headers["authorization"].startswith("Bearer ")
-        return httpx.Response(200, json=payload)
 
-    real = settings.model_copy(update={"deepseek_api_key": "test-key"})
-    client = DeepSeekClient(real, transport=httpx.MockTransport(handler))
-    result = await client.chat([{"role": "user", "content": "cherche"}], tools=[{"type": "function"}])
+class _FakePart:
+    def __init__(self, *, text: str | None = None, call: _FakeFunctionCall | None = None) -> None:
+        self.text = text
+        self.function_call = call
+
+
+class _FakeResponse:
+    def __init__(self, parts: list[_FakePart]) -> None:
+        self.candidates = [type("C", (), {"content": type("X", (), {"parts": parts})()})()]
+        self.usage_metadata = None
+
+
+def test_gemini_parse_normalises_text_and_tool_calls(settings: Settings) -> None:
+    real = settings.model_copy(update={"google_api_key": "test-key"})
+    client = GeminiTextClient(real)
+    response = _FakeResponse(
+        [
+            _FakePart(text="Je vais chercher."),
+            _FakePart(call=_FakeFunctionCall("web_research", {"query": "kwes"})),
+        ]
+    )
+    result = client._parse(response)
     assert result.mock is False
-    assert result.tool_calls == [{"id": "call_1", "name": "web_search", "arguments": {"query": "kwes"}}]
+    assert result.content == "Je vais chercher."
+    call = result.tool_calls[0]
+    assert call["name"] == "web_research"
+    assert call["arguments"] == {"query": "kwes"}
+    # La signature de pensée doit être conservée : Gemini refuse un appel rejoué sans elle.
+    assert "thought_signature" in call
 
 
-async def test_deepseek_real_call_retries_then_raises(settings: Settings) -> None:
-    attempts = {"count": 0}
+def test_gemini_converts_history_to_contents(settings: Settings) -> None:
+    """L'historique interne (assistant + tool_call_id) devient des parts Gemini."""
+    from app.agent.llm import _to_contents
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        attempts["count"] += 1
-        return httpx.Response(503, json={"error": "overloaded"})
+    contents = _to_contents(
+        [
+            {"role": "system", "content": "consignes"},
+            {"role": "user", "content": "cherche kwes"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_0",
+                        "function": {"name": "web_research", "arguments": '{"query": "kwes"}'},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_0", "content": '{"status": "ok"}'},
+        ]
+    )
+    assert len(contents) == 3
+    assert contents[1].role == "model"
+    assert contents[1].parts[0].function_call.name == "web_research"
+    assert contents[2].parts[0].function_response.name == "web_research"
 
-    real = settings.model_copy(update={"deepseek_api_key": "test-key", "deepseek_max_retries": 1})
-    client = DeepSeekClient(real, transport=httpx.MockTransport(handler))
-    with pytest.raises(Exception) as exc:
-        await client.chat([{"role": "user", "content": "test"}])
-    assert attempts["count"] == 2
-    assert getattr(exc.value, "retryable", False) is True
 
-
-async def test_deepseek_timeout_normalised(settings: Settings) -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ReadTimeout("timeout", request=request)
-
-    real = settings.model_copy(update={"deepseek_api_key": "test-key", "deepseek_max_retries": 0})
-    client = DeepSeekClient(real, transport=httpx.MockTransport(handler))
-    from app.agent.deepseek import LLMTimeout
-
-    with pytest.raises(LLMTimeout):
-        await client.chat([{"role": "user", "content": "test"}])
+def test_gemini_without_key_is_offline_and_labelled(settings: Settings) -> None:
+    client = GeminiTextClient(settings)
+    assert client.mock is True
 
 
 async def test_voice_mock_falls_back_to_text(settings: Settings) -> None:
@@ -208,7 +218,7 @@ def test_mock_header_absent_when_keys_configured(settings: Settings, fake_fetche
     from app.main import create_app
 
     configured = settings.model_copy(
-        update={"deepseek_api_key": "configured", "google_api_key": "configured"}
+        update={"google_api_key": "configured"}
     )
     application = create_app(configured)
     application.state.fetcher = fake_fetcher

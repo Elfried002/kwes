@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vérification de bout en bout du backend Kwes (Postgres réel + DeepSeek réel)."""
+"""Vérification de bout en bout du backend Kwes (Postgres réel + Gemini réel)."""
 import json
 import os
 import sys

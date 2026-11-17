@@ -71,7 +71,7 @@ def prod_settings(tmp_path) -> Settings:
         supabase_jwt_secret="",
         rate_limit_enabled=False,
         log_level="CRITICAL",
-        deepseek_api_key="",
+        google_api_key="",
         skill_offline_mode=True,
         browser_open_web=False,
     )
@@ -178,7 +178,7 @@ def test_missing_supabase_url_fails_closed(tmp_path, keypair, jwks) -> None:
         app_env="production",
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'x.db'}",
         supabase_url="",
-        deepseek_api_key="",
+        google_api_key="",
     )
     with pytest.raises(Unauthenticated):
         decode_token(_es256(keypair), settings)

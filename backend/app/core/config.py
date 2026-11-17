@@ -56,12 +56,14 @@ class Settings(BaseSettings):
     jwt_audience: str = ""  # vide = pas de vérification d'audience
 
     # --- Fournisseurs ---------------------------------------------------
-    deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-chat"
-    deepseek_timeout_seconds: float = 30.0
-    deepseek_max_retries: int = 2
-    deepseek_temperature: float = 0.2
+    # Un seul fournisseur de raisonnement : Gemini. Plus aucune trace de DeepSeek.
+    gemini_text_model: str = "gemini-3.8-flash"
+    # Repli documenté quand un modèle est saturé (503) ou muet : chaîne ordonnée.
+    gemini_text_fallbacks: str = "gemini-3.5-flash-lite,gemini-3.1-flash-lite"
+    gemini_timeout_seconds: float = 9.0
+    gemini_total_timeout_seconds: float = 40.0
+    gemini_max_retries: int = 2
+    gemini_temperature: float = 0.2
 
     # --- API -------------------------------------------------------------
     cors_origins: str = DEFAULT_CORS_ORIGINS
@@ -227,7 +229,8 @@ class Settings(BaseSettings):
 
     @property
     def llm_is_mock(self) -> bool:
-        return not bool(self.deepseek_api_key.strip())
+        """Vrai si aucune clé Gemini n'est disponible : mode hors ligne explicite."""
+        return not bool(self.gemini_api_key.strip())
 
     @property
     def voice_is_mock(self) -> bool:
@@ -237,8 +240,8 @@ class Settings(BaseSettings):
     def mock_providers(self) -> list[str]:
         providers: list[str] = []
         if self.llm_is_mock:
-            providers.append("deepseek")
-        if self.voice_is_mock:
+            providers.append("gemini")
+        if self.voice_is_mock and "gemini" not in providers:
             providers.append("gemini")
         return providers
 

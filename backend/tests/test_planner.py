@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agent.deepseek import LLMResult
+from app.agent.llm import LLMResult
 from app.agent.planner import (
     Plan,
     PlanStep,

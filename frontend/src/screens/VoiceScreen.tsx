@@ -17,7 +17,8 @@ import { useGeminiLive } from '../lib/use-gemini-live';
 import { useAudioLevel } from '../lib/use-audio-level';
 import { stripMarkdownForSpeech, voiceAnnouncement } from '../lib/voice-session';
 import { Icon, type IconName } from '../components/Icon';
-import { LivingDot, type DotPhase } from '../components/orb/LivingDot';
+import { type DotPhase } from '../components/orb/LivingDot';
+import { KwesDroid } from '../components/KwesDroid';
 import '../styles/voice-screen.css';
 
 interface MenuEntry {
@@ -198,7 +199,7 @@ export function VoiceScreen() {
           aria-label={dotLabel}
           aria-pressed={voice.active}
         >
-          <LivingDot phase={dotPhase} levelRef={levelRef} className="voice-screen__canvas" />
+          <KwesDroid phase={dotPhase} levelRef={levelRef} className="voice-screen__canvas" />
         </button>
       </div>
 

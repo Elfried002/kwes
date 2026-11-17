@@ -15,25 +15,25 @@
   "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "/brand/Kwes_Favicon_64.png",
+      "src": "/brand/droid-64.png",
       "sizes": "64x64",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/Kwes_Favicon_192.png",
+      "src": "/brand/droid-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/Kwes_Favicon_512.png",
+      "src": "/brand/droid-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/Kwes_Favicon_512.png",
+      "src": "/brand/droid-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

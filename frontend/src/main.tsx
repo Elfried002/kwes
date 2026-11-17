@@ -7,6 +7,8 @@ import './styles/app.css';
 import './styles/ui-polish.css';
 import './styles/home.css';
 import './styles/chat.css';
+import './styles/login-brand.css';
+import './styles/brand.css';
 
 const container = document.getElementById('root');
 if (!container) {

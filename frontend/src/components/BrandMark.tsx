@@ -1,12 +1,11 @@
 import type { OrbState } from './orb/orb-state-machine';
 
 /**
- * Marque animée de Kwes.
+ * Marque de Kwes : la tête du droïde.
  *
- * Reprend en miniature l'anneau et les particules de l'Orb : deux anneaux qui
- * tournent lentement autour d'un cœur lumineux, trois particules en orbite.
- * Uniquement `transform`/`opacity`, aucune image animée, et tout s'immobilise
- * avec `prefers-reduced-motion`.
+ * Le logo est unique dans toute l'application (en-tête, site public, connexion,
+ * favicon). L'état vient de la machine à états réelle ; seule la lueur change,
+ * jamais le dessin. `prefers-reduced-motion` coupe l'animation.
  */
 export function BrandMark({
   size = 38,
@@ -19,18 +18,12 @@ export function BrandMark({
 }) {
   return (
     <span
-      className={`brand-orb ${className ?? ''}`}
+      className={`brand-droid ${className ?? ''}`}
       data-state={state}
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      <span className="brand-orb__halo" />
-      <span className="brand-orb__ring brand-orb__ring--outer" />
-      <span className="brand-orb__ring brand-orb__ring--inner" />
-      <span className="brand-orb__core" />
-      <span className="brand-orb__particle brand-orb__particle--1" />
-      <span className="brand-orb__particle brand-orb__particle--2" />
-      <span className="brand-orb__particle brand-orb__particle--3" />
+      <img src="/brand/droid-head.svg" alt="" width={size} height={size} draggable={false} />
     </span>
   );
 }

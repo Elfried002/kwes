@@ -1,0 +1,40 @@
+/* Marque globale : la tête du droïde, partout (en-tête, site public, connexion). */
+
+.brand-droid {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 10px;
+  transition: filter 240ms ease;
+}
+
+.brand-droid img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 22%;
+}
+
+/* La lueur suit l'état réel de l'agent, sans jamais changer le dessin. */
+.brand-droid[data-state='thinking'],
+.brand-droid[data-state='executing'] {
+  filter: drop-shadow(0 0 6px rgba(65, 214, 255, 0.55));
+}
+
+.brand-droid[data-state='speaking'] {
+  filter: drop-shadow(0 0 8px rgba(65, 214, 255, 0.7));
+}
+
+.brand-droid[data-state='waiting_approval'] {
+  filter: drop-shadow(0 0 6px rgba(255, 207, 107, 0.6));
+}
+
+.brand-droid[data-state='error'] {
+  filter: drop-shadow(0 0 6px rgba(255, 122, 122, 0.6));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-droid {
+    transition: none;
+  }
+}

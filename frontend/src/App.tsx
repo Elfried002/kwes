@@ -42,7 +42,7 @@ function titleFor(route: Route): string {
 function BootScreen() {
   return (
     <div className="boot" role="status" aria-live="polite">
-      <img src="/brand/Kwes_Favicon_192.png" alt="" width={44} height={44} />
+      <img src="/brand/droid-head.svg" alt="" width={44} height={44} />
       <span className="boot__spinner" aria-hidden="true" />
       <span className="sr-only">Vérification de votre session…</span>
     </div>

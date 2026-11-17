@@ -337,20 +337,26 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
 
       <section className="login__form" aria-label="Authentification">
         <div className="login__form-inner">
+          <div className="login__brand">
+            <span className="login__mark">
+              <img src="/brand/droid-head.svg" alt="" width={78} height={78} />
+            </span>
+            <span className="login__tagline">Agent personnel autonome</span>
+          </div>
           <div>
-            <h2 style={{ fontSize: '1.35rem' }}>
+            <h2>
               {mode === 'reset'
                 ? 'Mot de passe oublié'
                 : mode === 'signup'
-                  ? 'Créer votre compte'
-                  : 'Entrer dans votre espace'}
+                  ? 'Créer un compte'
+                  : 'Bon retour'}
             </h2>
             <p className="muted" style={{ fontSize: '0.8125rem', marginTop: 6 }}>
               {mode === 'reset'
-                ? 'Indiquez l’adresse e-mail de votre compte : nous vous envoyons un lien sécurisé pour choisir un nouveau mot de passe.'
+                ? 'Indiquez l’adresse de votre compte : nous envoyons un lien sécurisé.'
                 : mode === 'signup'
-                  ? 'Quelques secondes suffisent. Vos identifiants sont gérés par notre fournisseur d’authentification, jamais par l’agent.'
-                  : 'Connectez-vous pour retrouver vos échanges et votre travail en cours.'}
+                  ? 'Quelques secondes suffisent pour commencer.'
+                  : 'Connectez-vous pour continuer.'}
             </p>
           </div>
 
@@ -647,6 +653,12 @@ export function PasswordRecoveryScreen() {
     <div className="login login--single">
       <section className="login__form" aria-label="Nouveau mot de passe">
         <div className="login__form-inner">
+          <div className="login__brand">
+            <span className="login__mark">
+              <img src="/brand/droid-head.svg" alt="" width={78} height={78} />
+            </span>
+            <span className="login__tagline">Agent personnel autonome</span>
+          </div>
           <div>
             <h1 style={{ fontSize: '1.5rem' }}>Choisir un nouveau mot de passe</h1>
             <p className="muted" style={{ fontSize: '0.8125rem', marginTop: 6 }}>

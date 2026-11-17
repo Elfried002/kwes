@@ -564,7 +564,7 @@ export function PublicHome() {
         <div className="wrap site-foot__grid">
           <div className="site-foot__brand">
             <a className="site-brand" href="#/" aria-label="Kwes — accueil">
-              <img src="/brand/Kwes_Favicon_192.png" alt="" width={30} height={30} />
+              <img src="/brand/droid-head.svg" alt="" width={30} height={30} />
               <span>Kwes</span>
             </a>
             <p>Agent personnel autonome, avec validation humaine.</p>

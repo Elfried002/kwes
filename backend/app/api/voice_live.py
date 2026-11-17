@@ -227,7 +227,14 @@ async def voice_live(
             context_note="\n".join(history[-6:]),
         )
 
-    state: dict[str, Any] = {"live": make_live("fast"), "mode": "fast"}
+    state: dict[str, Any] = {
+        "live": make_live("fast"),
+        "mode": "fast",
+        # Bascule automatique : on revient au mode rapide dès que la réponse
+        # complexe est terminée (le mode ne doit pas rester « collé »).
+        "revert_pending": False,
+        "answered": False,
+    }
     live = state["live"]
 
     try:
@@ -266,6 +273,17 @@ async def voice_live(
                         del history[:-8]
                         if role == "user" and settings.voice_auto_thinking:
                             await maybe_escalate(text)
+                        elif role == "assistant":
+                            state["answered"] = True
+                elif event.type == "audio":
+                    state["answered"] = True
+                elif event.type == "state" and event.data.get("value") == "listening":
+                    # Fin de tour : si l'on était passé en raisonnement approfondi
+                    # pour cette demande, on redescend en mode rapide.
+                    if state["revert_pending"] and state["answered"]:
+                        state["revert_pending"] = False
+                        state["answered"] = False
+                        await switch_mode("fast", reason="fin_reponse")
                 await websocket.send_json({"type": event.type, **event.data})
         except Exception as exc:  # noqa: BLE001
             detail = str(exc).replace("\n", " ")[:300]
@@ -296,6 +314,8 @@ async def voice_live(
         lowered = text.lower()
         if not any(marker in lowered for marker in THINKING_MARKERS):
             return
+        state["revert_pending"] = True
+        state["answered"] = False
         await switch_mode("thinking", reason="demande_complexe")
 
     async def switch_mode(value: str, *, reason: str = "client") -> None:
@@ -362,7 +382,10 @@ async def voice_live(
                     continue
                 await state["live"].send_audio(pcm[:64_000])
             elif kind == "text":
-                await state["live"].send_text(str(message.get("text") or ""))
+                text_in = str(message.get("text") or "")
+                if settings.voice_auto_thinking and text_in.strip():
+                    await maybe_escalate(text_in)
+                await state["live"].send_text(text_in)
             elif kind == "activity_start":
                 await state["live"].activity_start()
             elif kind == "activity_end":
@@ -370,7 +393,13 @@ async def voice_live(
             elif kind == "stop_audio":
                 await state["live"].end_audio()
             elif kind == "mode":
-                await switch_mode(str(message.get("value") or "fast"))
+                requested = str(message.get("value") or "fast")
+                if requested == "thinking":
+                    # Même en mode explicite, on redescend après la réponse :
+                    # le mode approfondi ne doit jamais rester « collé ».
+                    state["revert_pending"] = True
+                    state["answered"] = False
+                await switch_mode(requested)
             elif kind == "close":
                 break
             if sum(u["elapsed_s"] for u in usage_parts) + state["live"].usage.elapsed > settings.google_live_max_session_seconds:

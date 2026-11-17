@@ -16,6 +16,16 @@
       "maxLength": 200000,
       "description": "Contenu complet du document, rédigé pour être lu tel quel."
     },
+    "source_step": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Identifiant de l'étape amont dont les résultats nourrissent le document."
+    },
+    "context": {
+      "type": "string",
+      "maxLength": 20000,
+      "description": "Résultats de l'étape amont (rempli par l'orchestrateur, pas par le modèle)."
+    },
     "format": {
       "type": "string",
       "enum": ["markdown", "text"]

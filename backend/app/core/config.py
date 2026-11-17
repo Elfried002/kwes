@@ -119,7 +119,11 @@ class Settings(BaseSettings):
     # Niveau exigé par le modèle : sans lui, l'API refuse la connexion
     # (« Thinking level must be specified for this model »).
     google_thinking_level: str = "HIGH"
-    voice_auto_thinking: bool = True
+    # Bascule automatique désactivée par défaut : couper la session en cours
+    # pour changer de modèle supprimait la réponse en préparation (constaté au
+    # test navigateur du 17/11). Le mode approfondi s'active explicitement
+    # ({"type":"mode","value":"thinking"}) et revient seul au mode rapide.
+    voice_auto_thinking: bool = False
     google_voice: str = "Charon"
     google_live_max_session_seconds: int = 900      # fermeture dure d'une session vocale
     google_live_idle_seconds: int = 45              # inactivité avant fermeture

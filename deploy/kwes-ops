@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# kwes-ops — point d'entrée privilégié unique pour l'exploitation de Kwes.
+#
+# Remplace `NOPASSWD: ALL` par une liste fermée de verbes. Aucun argument
+# libre n'est transmis à un shell : chaque verbe est une commande fixe.
+#
+# Verbes : status | health | restart-api | restart-worker | restart-all |
+#          logs-api [n] | logs-worker [n] | logs-sandbox [n] | containers |
+#          db-stats | backup | deploy-units
+set -euo pipefail
+
+APP_DIR=/home/babayaga/business/kwes
+BACKUP_DIR=/home/babayaga/backups
+VERB="${1:-}"
+ARG="${2:-50}"
+
+case "$VERB" in
+  status)
+    systemctl is-active kwes-api kwes-worker kwes-sandbox nginx
+    systemctl show kwes-worker -p NoNewPrivileges -p ProtectSystem
+    ;;
+  health)
+    curl -s -o /dev/null -w 'local=%{http_code}\n' http://127.0.0.1:8000/api/v1/health
+    curl -s -o /dev/null -w 'public=%{http_code}\n' https://n8n.streetflexs.store/kwes-api/api/v1/health
+    ;;
+  restart-api)
+    systemctl restart kwes-api
+    systemctl is-active kwes-api
+    ;;
+  restart-worker)
+    systemctl restart kwes-worker
+    systemctl is-active kwes-worker
+    ;;
+  restart-all)
+    systemctl restart kwes-api kwes-worker
+    systemctl is-active kwes-api kwes-worker
+    ;;
+  logs-api)
+    journalctl -u kwes-api -n "${ARG}" --no-pager -o cat
+    ;;
+  logs-worker)
+    journalctl -u kwes-worker -n "${ARG}" --no-pager -o cat
+    ;;
+  logs-sandbox)
+    journalctl -u kwes-sandbox -n "${ARG}" --no-pager -o cat
+    ;;
+  db-stats)
+    # Requête fixe : aucun SQL libre n'entre par ce verbe.
+    docker exec -i kwes-postgres psql -U kwes -d kwes -tAc "
+      select 'tasks', count(*) from tasks union all
+      select 'evidence', count(*) from evidence union all
+      select 'documents', count(*) from documents union all
+      select 'memories', count(*) from memories union all
+      select 'users', count(*) from profiles union all
+      select 'rls_policies', count(*) from pg_policies where schemaname='public'"
+    ;;
+  containers)
+    docker ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'
+    ;;
+  backup)
+    mkdir -p "$BACKUP_DIR"
+    stamp=$(date +%Y%m%d-%H%M)
+    tar czf "$BACKUP_DIR/kwes-ops-$stamp.tgz" \
+      -C "$APP_DIR" --exclude='.venv' --exclude='node_modules' --exclude='.git' \
+      --exclude='.probe' --exclude='.sandbox' backend/app supabase deploy
+    ls -lh "$BACKUP_DIR/kwes-ops-$stamp.tgz"
+    ;;
+  deploy-units)
+    install -m 0644 -o root -g root "$APP_DIR"/deploy/systemd/kwes-api.service /etc/systemd/system/
+    install -m 0644 -o root -g root "$APP_DIR"/deploy/systemd/kwes-worker.service /etc/systemd/system/
+    install -m 0644 -o root -g root "$APP_DIR"/deploy/systemd/kwes-sandbox.service /etc/systemd/system/
+    systemctl daemon-reload
+    echo "unités installées"
+    ;;
+  *)
+    echo "verbe inconnu : ${VERB}" >&2
+    echo "verbes: status health restart-api restart-worker restart-all logs-api logs-worker logs-sandbox containers db-stats backup deploy-units" >&2
+    exit 2
+    ;;
+esac

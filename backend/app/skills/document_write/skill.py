@@ -29,9 +29,51 @@ async def _session_for(ctx: SkillContext):
         yield session
 
 
+def _sources_section(context: str) -> str:
+    """Construit une section « sources lues » à partir du résultat de recherche.
+
+    Aucune phrase n'est inventée : on reprend les titres, domaines et extraits
+    réellement collectés par l'étape amont.
+    """
+    import json
+
+    try:
+        data = json.loads(context)
+    except (TypeError, ValueError):
+        return ""
+    sources = data.get("sources") if isinstance(data, dict) else None
+    if not sources:
+        return ""
+    lines = ["", "## Sources consultées", ""]
+    for index, source in enumerate(sources[:8], start=1):
+        if not isinstance(source, dict):
+            continue
+        title = str(source.get("title") or source.get("domain") or "Source").strip()
+        url = str(source.get("url") or "").strip()
+        status = str(source.get("status") or "")
+        snippet = " ".join(str(source.get("snippet") or "").split())[:220]
+        marker = "lue" if status == "lue" else status or "trouvée"
+        lines.append(f"{index}. **{title}** — {url} ({marker})")
+        if snippet:
+            lines.append(f"   > {snippet}")
+    lines.append("")
+    lines.append(
+        "Ces éléments proviennent des pages effectivement récupérées ; ils restent "
+        "à vérifier à la source avant toute décision."
+    )
+    return "\n".join(lines)
+
+
 async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
     title = " ".join(str(payload.get("title") or "").split())
     content = str(payload.get("content") or "").replace("\r\n", "\n").strip()
+    context = str(payload.get("context") or "")
+    if context and len(content) < 800:
+        # Le planificateur produit un plan court (900 jetons) : le document est
+        # complété par les sources réellement lues, jamais par du texte inventé.
+        extra = _sources_section(context)
+        if extra:
+            content = (content + "\n" + extra).strip()
     fmt = str(payload.get("format") or "markdown")
 
     if len(title) < 3:

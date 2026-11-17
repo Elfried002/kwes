@@ -9,6 +9,7 @@ exécution persistée) -> Reflect (étape suivante) -> Report (résumé vérifia
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
 from dataclasses import dataclass
@@ -915,6 +916,17 @@ class Orchestrator:
                 return "completed"
 
             payload, meta = split_step_meta(step.input_json)
+
+            # Injection contrôlée : une étape peut consommer le résultat d'une
+            # étape précédente. Le contenu vient de la base, jamais du modèle.
+            source_step = str(payload.pop("source_step", "") or "")
+            if source_step:
+                prior = next(
+                    (s for s in task.steps if s.step_key == source_step and s.output_json),
+                    None,
+                )
+                if prior is not None:
+                    payload["context"] = json.dumps(prior.output_json, ensure_ascii=False)[:20000]
             skill_name = self._skill_name(step) or str(meta.get("skill") or "")
             declared_risk = meta.get("declared_risk")
             domains = _domains_from_payload(payload)

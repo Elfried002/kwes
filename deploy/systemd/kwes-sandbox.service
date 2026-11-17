@@ -1,0 +1,26 @@
+[Unit]
+Description=Kwes — runner de bac à sable (socket Unix, commande Docker fixe)
+Documentation=file:///home/babayaga/business/kwes/docs/KWES_PRE_DEMO_VALIDATION_REPORT.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/sbin/kwes-sandbox-runner
+Restart=always
+RestartSec=3
+# Le service doit pouvoir parler au démon Docker : il est le seul à le faire.
+NoNewPrivileges=false
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/kwes-sandbox /run/kwes
+PrivateTmp=true
+MemoryMax=512M
+RuntimeDirectory=kwes
+RuntimeDirectoryMode=0755
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

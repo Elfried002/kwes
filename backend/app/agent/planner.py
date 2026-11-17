@@ -92,6 +92,10 @@ Règles :
   une entrée conforme au schéma d'entrée du skill, un niveau de risque R0-R4 et
   la liste de ses dépendances (identifiants d'étapes précédentes).
 - Ne jamais inventer un skill. Ne jamais demander d'action payante.
+- Si la demande attend un livrable (rapport, note, synthèse), l'étape document_write
+  doit contenir le texte COMPLET et rédigé dans `content` (plusieurs paragraphes,
+  au moins 600 mots pour un rapport) : jamais un résumé d'une phrase.
+- Une étape qui dépend d'une autre peut réutiliser son résultat, sans le recopier.
 - Si la demande ne nécessite aucune action outil, retourne une seule étape business_planning.
 - Réponds UNIQUEMENT avec un objet JSON :
   {{"goal": "...", "steps": [{{"id": "step_1", "skill": "...", "title": "...",

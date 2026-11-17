@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { clearSession, useSession } from '../lib/auth';
 import { firstName, initials } from '../lib/format';
 import { href, type Route } from '../lib/router';
@@ -24,6 +24,7 @@ interface NavEntry {
 // l'accueil, les échanges et les accords sont rattachés à leur espace.
 const NAV: NavEntry[] = [
   { label: 'Accueil', shortLabel: 'Accueil', route: { name: 'home' }, icon: 'home' },
+  { label: 'Discussions', shortLabel: 'Discussions', route: { name: 'conversations' }, icon: 'history' },
   { label: 'Activité', shortLabel: 'Activité', route: { name: 'tasks' }, icon: 'activity' },
   { label: 'Profil', shortLabel: 'Profil', route: { name: 'settings' }, icon: 'settings' },
 ];
@@ -93,6 +94,21 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
   const waiting = (approvals.data ?? []).filter((approval) => approval.status === 'pending').length;
   const profileName =
     firstName(session?.email, session?.displayName) || session?.email || session?.userId || 'Votre profil';
+  const [drawer, setDrawer] = useState(false);
+
+  // Le tiroir mobile se referme dès qu'on change d'écran ou avec Échap.
+  useEffect(() => {
+    setDrawer(false);
+  }, [route]);
+
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setDrawer(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer]);
 
   return (
     <>
@@ -173,19 +189,93 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
 
         <div className="app-shell__body">
           <header className="mobile-bar">
+            <button
+              type="button"
+              className="mobile-bar__icon"
+              aria-label={drawer ? 'Fermer le menu' : 'Ouvrir le menu'}
+              aria-expanded={drawer}
+              onClick={() => setDrawer((current) => !current)}
+            >
+              <Icon name="menu" size={20} />
+            </button>
             <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
-              <BrandMark size={30} state={orbState} />
+              <BrandMark size={26} state={orbState} />
               <span className="brand__name">Kwes</span>
             </a>
-            <div className="mobile-bar__status">
-              <ConnectionBadge compact />
-            </div>
+            <a
+              className="mobile-bar__icon"
+              href={href({ name: 'settings' })}
+              aria-label="Votre profil"
+            >
+              <span className="mobile-bar__avatar" aria-hidden="true">
+                {initials(session?.email || session?.userId || 'kwes')}
+              </span>
+            </a>
           </header>
           <main id="main" className="main" tabIndex={-1}>
             {children}
           </main>
         </div>
       </div>
+
+      {drawer ? (
+        <div className="drawer" role="dialog" aria-modal="true" aria-label="Menu">
+          <button
+            type="button"
+            className="drawer__scrim"
+            aria-label="Fermer le menu"
+            onClick={() => setDrawer(false)}
+          />
+          <div className="drawer__panel">
+            <div className="drawer__head">
+              <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
+                <BrandMark size={30} state={orbState} />
+                <span className="brand__name">Kwes</span>
+              </a>
+              <button
+                type="button"
+                className="drawer__close"
+                aria-label="Fermer"
+                onClick={() => setDrawer(false)}
+              >
+                <Icon name="cancel" size={18} />
+              </button>
+            </div>
+
+            <a className="drawer__new" href={href({ name: 'home' })}>
+              <Icon name="edit" size={18} />
+              Nouvelle demande
+            </a>
+
+            <nav className="drawer__nav" aria-label="Sections">
+              {NAV.map((entry) => (
+                <a
+                  key={entry.label}
+                  className="drawer__item"
+                  href={href(entry.route)}
+                  aria-current={isActive(route, entry.route) ? 'page' : undefined}
+                >
+                  <Icon name={entry.icon} size={19} />
+                  <span>{entry.label}</span>
+                  {entry.route.name === 'approvals' && waiting > 0 ? (
+                    <span className="drawer__count">{waiting}</span>
+                  ) : null}
+                </a>
+              ))}
+            </nav>
+
+            <div className="drawer__foot">
+              <ConnectionBadge />
+              {session ? (
+                <button type="button" className="drawer__logout" onClick={() => clearSession()}>
+                  <Icon name="logout" size={17} />
+                  Se déconnecter
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <nav className="bottom-nav" aria-label="Navigation mobile">
         {NAV.map((entry) => (

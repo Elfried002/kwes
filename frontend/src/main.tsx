@@ -9,6 +9,7 @@ import './styles/home.css';
 import './styles/chat.css';
 import './styles/login-brand.css';
 import './styles/brand.css';
+import './styles/mobile-first.css';
 
 const container = document.getElementById('root');
 if (!container) {

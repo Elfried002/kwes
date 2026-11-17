@@ -16,10 +16,13 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { errorMessage, streamChat } from '../lib/api';
+import { useSession } from '../lib/auth';
+import { firstName } from '../lib/format';
 import { href } from '../lib/router';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { useKwes } from '../state/KwesProvider';
 import { Composer } from '../components/Composer';
+import { Icon } from '../components/Icon';
 import { KwesDroid } from '../components/KwesDroid';
 import { useAudioLevel } from '../lib/use-audio-level';
 import { useKwesSpeech } from '../lib/use-kwes-speech';
@@ -208,6 +211,8 @@ export function HomeScreen() {
     }
   };
 
+  const session = useSession();
+  const hello = firstName(session?.email, session?.displayName) || '';
   const caption = homeCaption(state);
   const speaking = state.phase === 'speaking';
   const working = state.phase === 'thinking';
@@ -225,6 +230,11 @@ export function HomeScreen() {
 
   return (
     <div className="page home-dot" data-phase={state.phase}>
+      <header className="home-hero">
+        <p className="home-hero__hi">{hello ? `Bonjour ${hello}` : 'Bonjour'}</p>
+        <h1 className="home-hero__title">Comment puis-je vous aider aujourd’hui&nbsp;?</h1>
+      </header>
+
       <div className="home-dot__stage">
         <button
           type="button"
@@ -289,6 +299,32 @@ export function HomeScreen() {
           analysis={{ active: analysis, onToggle: () => setAnalysis((current) => !current) }}
           focusSignal={focusSignal}
         />
+
+        {state.phase === 'idle' && !state.sentence && !state.error ? (
+          <div className="home-actions" aria-label="Actions rapides">
+            <a className="home-action" href={href({ name: 'voice' })}>
+              <span className="home-action__icon" aria-hidden="true">
+                <Icon name="mic" size={18} />
+              </span>
+              <span className="home-action__label">Parler à Kwes</span>
+              <span className="home-action__arrow" aria-hidden="true">↗</span>
+            </a>
+            <button
+              type="button"
+              className="home-action"
+              onClick={() => {
+                setDraft('Cherche sur le web ');
+                setFocusSignal((current) => current + 1);
+              }}
+            >
+              <span className="home-action__icon" aria-hidden="true">
+                <Icon name="spark" size={18} />
+              </span>
+              <span className="home-action__label">Chercher des sources</span>
+              <span className="home-action__arrow" aria-hidden="true">↗</span>
+            </button>
+          </div>
+        ) : null}
 
         {state.phase === 'idle' && !state.sentence && !state.error ? (
           <div className="home-dot__suggestions" aria-label="Suggestions">

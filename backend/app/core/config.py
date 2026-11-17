@@ -113,6 +113,13 @@ class Settings(BaseSettings):
     # à la demande par app.core.secrets (fichier local 600).
     google_api_key: str = ""
     google_live_model: str = "gemini-3.8-live"
+    # Mode raisonnement approfondi : même API Live, modèle différent (vérifié
+    # disponible sur la clé le 17/11 : gemini-3.8-live-extended-thinking).
+    google_live_thinking_model: str = "gemini-3.8-live-extended-thinking"
+    # Niveau exigé par le modèle : sans lui, l'API refuse la connexion
+    # (« Thinking level must be specified for this model »).
+    google_thinking_level: str = "HIGH"
+    voice_auto_thinking: bool = True
     google_voice: str = "Charon"
     google_live_max_session_seconds: int = 900      # fermeture dure d'une session vocale
     google_live_idle_seconds: int = 45              # inactivité avant fermeture
@@ -142,6 +149,12 @@ class Settings(BaseSettings):
     research_pdf_max_bytes: int = 8_000_000
     research_pdf_max_pages: int = 40
     research_synthesis_enabled: bool = True
+
+    # --- Exécution isolée (bac à sable) ---------------------------------
+    # Le worker n'a pas le droit d'utiliser sudo (NoNewPrivileges) : il parle à
+    # un proxy Docker restreint, en lecture seule sur le socket, qui n'expose
+    # que conteneurs et images.
+    code_exec_docker_host: str = "tcp://127.0.0.1:2375"
 
     # --- Divers ----------------------------------------------------------
     log_level: str = "INFO"

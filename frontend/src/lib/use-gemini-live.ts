@@ -70,6 +70,7 @@ function pcm16ToFloat(bytes: Uint8Array): Float32Array<ArrayBuffer> {
 export function useGeminiLive(): GeminiLive {
   const [state, setState] = useState({
     phase: 'idle' as VoiceSessionState['phase'],
+    mode: 'fast' as VoiceSessionState['mode'],
     active: false,
     standby: false,
     armed: false,
@@ -196,6 +197,10 @@ export function useGeminiLive(): GeminiLive {
             setState((prev) => (prev.queued > 0 ? prev : { ...prev, phase: 'listening' }));
           }
           break;
+        case 'mode':
+          // Bascule Live rapide <-> raisonnement approfondi décidée par le serveur.
+          setState((prev) => ({ ...prev, mode: message.value === 'thinking' ? 'thinking' : 'fast' }));
+          break;
         case 'audio':
           if (typeof message.data === 'string') enqueueAudio(message.data);
           break;
@@ -300,7 +305,9 @@ export function useGeminiLive(): GeminiLive {
           socket_.send(JSON.stringify({ type: 'audio', data: payload }));
           if (rms < 0.008) {
             vad.silenceMs += frameMs;
-            if (vad.silenceMs > 550) {
+            // 380 ms : compromis mesuré entre réactivité et pauses naturelles
+            // (550 ms ajoutaient un demi-seconde perçue avant chaque réponse).
+            if (vad.silenceMs > 380) {
               vad.speaking = false;
               vad.silenceMs = 0;
               socket_.send(JSON.stringify({ type: 'activity_end' }));

@@ -20,18 +20,12 @@ interface NavEntry {
  * attend, les échanges passés — mais en icônes seules. Les libellés
  * n'apparaissent qu'au survol ou au clavier.
  */
+// Trois espaces seulement : Accueil, Activité, Profil. Le vocal s'ouvre depuis
+// l'accueil, les échanges et les accords sont rattachés à leur espace.
 const NAV: NavEntry[] = [
   { label: 'Accueil', shortLabel: 'Accueil', route: { name: 'home' }, icon: 'home' },
-  { label: 'Parler', shortLabel: 'Parler', route: { name: 'voice' }, icon: 'mic' },
-  { label: 'Vos échanges', shortLabel: 'Échanges', route: { name: 'conversations' }, icon: 'history' },
-  { label: 'Ce qu’il fait', shortLabel: 'Travail', route: { name: 'tasks' }, icon: 'activity' },
-  {
-    label: 'Accord en attente',
-    shortLabel: 'Accord',
-    route: { name: 'approvals' },
-    icon: 'shield',
-  },
-  { label: 'Réglages', shortLabel: 'Réglages', route: { name: 'settings' }, icon: 'settings' },
+  { label: 'Activité', shortLabel: 'Activité', route: { name: 'tasks' }, icon: 'activity' },
+  { label: 'Profil', shortLabel: 'Profil', route: { name: 'settings' }, icon: 'settings' },
 ];
 
 function isActive(route: Route, target: Route): boolean {
@@ -49,6 +43,7 @@ function isActive(route: Route, target: Route): boolean {
     case 'approvals':
       return route.name === 'approvals';
     case 'settings':
+      // Le profil regroupe les réglages ; les accords restent liés à l'activité.
       return route.name === 'settings';
     default:
       return false;

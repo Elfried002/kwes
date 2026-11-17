@@ -38,6 +38,7 @@ from app.db.base import Database
 from app.db.models import (
     Approval,
     Conversation,
+    Document,
     Execution,
     Memory,
     Message,
@@ -1235,11 +1236,31 @@ class Orchestrator:
                     )
                     return
 
+            # Vérification des résultats avant de déclarer la mission terminée :
+            # un document doit exister, une exécution de code doit avoir réussi,
+            # un fait mémorisé doit être présent. Sinon, échec explicite.
+            verified, notes = await self._verify_outputs(session, task, steps)
+            if not verified:
+                task.status = "failed"
+                task.error_code = "VERIFICATION_FAILED"
+                task.completed_at = utcnow()
+                task.result_summary = "Vérification des résultats échouée : " + " ; ".join(notes)
+                await session.commit()
+                await self.events.publish(
+                    task.user_id,
+                    "task.failed",
+                    {"task_id": str(task_id), "error_code": "VERIFICATION_FAILED", "message": notes[0] if notes else ""},
+                )
+                return
+
             task.status = "completed"
             task.progress = 100
             task.completed_at = utcnow()
             task.error_code = None
-            task.result_summary = _build_report(task, steps)
+            report = _build_report(task, steps)
+            if notes:
+                report = f"{report}\n\nVÉRIFICATION\n" + "\n".join(f"- {note}" for note in notes)
+            task.result_summary = report
             await session.commit()
             user_id = task.user_id
             summary = task.result_summary
@@ -1260,6 +1281,46 @@ class Orchestrator:
                 resource_id=str(task_id),
             )
             await session.commit()
+
+    async def _verify_outputs(
+        self, session: AsyncSession, task: Task, steps: list[TaskStep]
+    ) -> tuple[bool, list[str]]:
+        """Contrôle que chaque étape a réellement produit ce qu'elle annonce."""
+        notes: list[str] = []
+        for step in steps:
+            output = step.output_json or {}
+            skill = self._skill_name(step) or str((output.get("_meta") or {}).get("skill") or "")
+            if skill == "document_write":
+                document_id = str(output.get("document_id") or "")
+                if not document_id:
+                    return False, [f"Étape {step.step_key} : aucun document produit."]
+                document = await session.get(Document, uuid.UUID(document_id))
+                if document is None or document.user_id != task.user_id:
+                    return False, [f"Étape {step.step_key} : document absent ou non accessible."]
+                if not (document.content or "").strip():
+                    return False, [f"Étape {step.step_key} : document vide."]
+                notes.append(f"document « {document.title} » présent ({len(document.content)} caractères)")
+            elif skill == "code_exec":
+                code = int(output.get("exit_code", 1))
+                if code != 0:
+                    return False, [f"Étape {step.step_key} : exécution en échec (code {code})."]
+                notes.append(f"exécution réussie en {output.get('duration_ms', '?')} ms")
+            elif skill == "remember":
+                memory_id = str(output.get("memory_id") or "")
+                if not memory_id:
+                    return False, [f"Étape {step.step_key} : aucune mémoire enregistrée."]
+                memory = await session.get(Memory, uuid.UUID(memory_id))
+                if memory is None or memory.user_id != task.user_id:
+                    return False, [f"Étape {step.step_key} : mémoire absente ou non accessible."]
+                notes.append(f"fait mémorisé ({memory.category})")
+            elif skill == "web_research":
+                sources = output.get("sources") or []
+                read = [s for s in sources if s.get("status") == "lue"]
+                if not sources:
+                    notes.append("recherche sans source : aucun résultat annoncé")
+                else:
+                    notes.append(f"{len(read)}/{len(sources)} source(s) lue(s) sur {len(sources)} trouvée(s)")
+        return True, notes
 
     # ==================================================================
     # Approbations

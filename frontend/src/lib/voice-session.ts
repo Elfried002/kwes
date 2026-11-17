@@ -17,6 +17,8 @@ export type VoicePhase = (typeof VOICE_PHASES)[number];
 
 export interface VoiceSessionState {
   phase: VoicePhase;
+  /** Mode de raisonnement courant : rapide (Live) ou approfondi (Live Extended Thinking). */
+  mode: 'fast' | 'thinking';
   /** Mode vocal activé par un clic explicite (aucune capture au chargement). */
   active: boolean;
   /** Veille : seules les phrases contenant le mot d'activation sont retenues. */
@@ -55,6 +57,7 @@ export type VoiceEvent =
 
 export const initialVoiceState: VoiceSessionState = {
   phase: 'idle',
+  mode: 'fast',
   active: false,
   standby: false,
   armed: false,

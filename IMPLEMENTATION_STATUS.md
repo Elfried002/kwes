@@ -151,3 +151,17 @@ tarif payant publié.
 - Correctif : montée de version d'un skill rétrograde l'ancienne version (incident de démarrage).
 - Tests : 235 backend (+72), 134 frontend, build OK.
 - Rapport : `docs/KWES_P0_1_P1_IMPLEMENTATION_REPORT.md`.
+
+## P2 + P3 — 17/11 13:30 — voix, cœur agentique, interface, sécurité
+
+- Voix : prononciation `/kwes/` (« Kwéss »), VAD 380 ms, second modèle Live
+  `gemini-3.8-live-extended-thinking` (thinking_level HIGH) avec bascule à chaud et contexte conservé.
+- Mesures réelles : TTFB P50 915 ms / P95 989 ms (rapide), 819/878 ms (approfondi) ;
+  compréhension française 95,2 % normalisée sur 6 formulations.
+- Vérification des résultats avant clôture (document, mémoire, code, sources) : une mission
+  non prouvée échoue avec `VERIFICATION_FAILED`.
+- Skill `code_exec` : conteneur jetable sans réseau via proxy Docker restreint, 8 tests dédiés.
+- Interface : trois espaces (Accueil, Activité, Profil) + section Documents.
+- Sécurité : scan de secrets (0 occurrence), Dependabot, job CI `securite`.
+- Conformité : `docs/CONFORMITE_DONNEES.md` (inventaire, registre, risques, limites).
+- Tests : 243 backend (+8), 134 frontend, build OK.

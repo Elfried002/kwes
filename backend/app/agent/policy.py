@@ -61,6 +61,9 @@ SKILL_POLICIES: dict[str, SkillPolicy] = {
     # externe. Le policy engine les autorise sans approbation, comme toute R1.
     "remember": SkillPolicy("R1", frozenset({"local.write"}), network=False),
     "document_write": SkillPolicy("R1", frozenset({"local.write"}), network=False),
+    # Exécution isolée : conteneur jetable, sans réseau, sans secret. R1 car
+    # l'effet est local et le conteneur détruit après usage.
+    "code_exec": SkillPolicy("R1", frozenset({"local.write"}), network=False),
 }
 
 ACTION_POLICIES: dict[str, ActionPolicy] = {

@@ -5,6 +5,7 @@ import type {
   ChatRequest,
   ChatResponse,
   Conversation,
+  DocumentItem,
   Health,
   Integration,
   MemoryItem,
@@ -633,6 +634,12 @@ export function rejectRequest(id: string, signal?: AbortSignal): Promise<unknown
 }
 
 /* ---------- Lecture seule ---------- */
+
+export function listDocuments(signal?: AbortSignal): Promise<DocumentItem[]> {
+  return request<unknown>('/documents', { signal }).then((payload) =>
+    asArray<DocumentItem>(payload, 'documents'),
+  );
+}
 
 export function listSkills(signal?: AbortSignal): Promise<Skill[]> {
   return request<unknown>('/skills', { signal }).then((payload) => asArray<Skill>(payload, 'skills'));

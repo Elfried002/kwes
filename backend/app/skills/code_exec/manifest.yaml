@@ -1,0 +1,16 @@
+name: code_exec
+version: 1.0.0
+description: Exécute un court programme Python ou shell dans un conteneur Docker jetable, sans réseau ni secret
+entrypoint: skill.py
+permissions:
+  - local.write
+risk_level: R1
+network:
+  mode: none
+  domains: []
+resources:
+  timeout_seconds: 30
+  memory_mb: 256
+  cpu_limit: 0.5
+approval:
+  required_for: []

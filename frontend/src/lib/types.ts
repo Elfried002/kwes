@@ -70,6 +70,16 @@ export interface ChatResponse {
   status: TaskStatus | string;
 }
 
+export interface DocumentItem {
+  id: string;
+  title: string;
+  format: string;
+  chars: number;
+  source?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Task {
   id: string;
   conversation_id?: string | null;

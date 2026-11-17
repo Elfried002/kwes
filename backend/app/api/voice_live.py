@@ -213,13 +213,22 @@ async def voice_live(
             return {"status": "refused", "summary": "Outil non disponible à la voix.", "output": None}
         return await orchestrator.tool_runner.execute_named(app.state.db, user_id, name, arguments)
 
-    live = GeminiLiveSession(
-        settings,
-        definitions=definitions,
-        memories=memories,
-        executor=executor,
-        language=language,
-    )
+    history: list[str] = []
+    usage_parts: list[dict[str, Any]] = []
+
+    def make_live(mode: str) -> GeminiLiveSession:
+        return GeminiLiveSession(
+            settings,
+            definitions=definitions,
+            memories=memories,
+            executor=executor,
+            language=language,
+            mode=mode,
+            context_note="\n".join(history[-6:]),
+        )
+
+    state: dict[str, Any] = {"live": make_live("fast"), "mode": "fast"}
+    live = state["live"]
 
     try:
         await live.start()
@@ -231,7 +240,8 @@ async def voice_live(
     await websocket.send_json(
         {
             "type": "ready",
-            "model": settings.google_live_model,
+            "model": live.model_name,
+            "mode": state["mode"],
             "voice": settings.google_voice,
             "input_rate": 16000,
             "output_rate": 24000,
@@ -245,8 +255,17 @@ async def voice_live(
     stop = asyncio.Event()
 
     async def pump_gemini() -> None:
+        current = state["live"]
         try:
-            async for event in live.events():
+            async for event in current.events():
+                if event.type == "transcript":
+                    role = str(event.data.get("role") or "user")
+                    text = str(event.data.get("text") or "").strip()
+                    if text:
+                        history.append(f"{role} : {text[:300]}")
+                        del history[:-8]
+                        if role == "user" and settings.voice_auto_thinking:
+                            await maybe_escalate(text)
                 await websocket.send_json({"type": event.type, **event.data})
         except Exception as exc:  # noqa: BLE001
             detail = str(exc).replace("\n", " ")[:300]
@@ -258,16 +277,68 @@ async def voice_live(
             except Exception:  # noqa: BLE001
                 pass
         finally:
-            stop.set()
+            # Une bascule de mode annule volontairement la pompe : dans ce cas on
+            # ne doit pas fermer la session vocale de l'utilisateur.
+            if not switching["value"]:
+                stop.set()
+
+    switching = {"value": False}
+    THINKING_MARKERS = (
+        "analyse", "analyser", "compare", "comparer", "recherche approfondie", "plan",
+        "stratégie", "explique en détail", "explique-moi pourquoi", "pourquoi",
+        "étude", "synthèse", "rapport", "budget", "calcul", "décision",
+    )
+
+    async def maybe_escalate(text: str) -> None:
+        """Bascule vers le modèle de raisonnement approfondi sur demande complexe."""
+        if state["mode"] == "thinking":
+            return
+        lowered = text.lower()
+        if not any(marker in lowered for marker in THINKING_MARKERS):
+            return
+        await switch_mode("thinking", reason="demande_complexe")
+
+    async def switch_mode(value: str, *, reason: str = "client") -> None:
+        """Reconnecte la session Live sur l'autre modèle, en gardant le contexte."""
+        nonlocal pump
+        target = "thinking" if value == "thinking" else "fast"
+        if target == state["mode"]:
+            return
+        logger.info("Voix : bascule %s -> %s (%s)", state["mode"], target, reason)
+        switching["value"] = True
+        pump.cancel()
+        try:
+            await pump
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+        usage_parts.append(state["live"].usage.as_dict())
+        await state["live"].close()
+        state["live"] = make_live(target)
+        state["mode"] = target
+        try:
+            await state["live"].start()
+        except LiveUnavailable:
+            # Repli : on revient au mode rapide plutôt que de couper la voix.
+            state["live"] = make_live("fast")
+            state["mode"] = "fast"
+            await state["live"].start()
+            await websocket.send_json(
+                {"type": "error", "code": "THINKING_UNAVAILABLE", "message": "Mode approfondi indisponible : conversation normale."}
+            )
+        switching["value"] = False
+        await websocket.send_json(
+            {"type": "mode", "value": state["mode"], "model": state["live"].model_name, "reason": reason}
+        )
+        pump = asyncio.create_task(pump_gemini())
 
     async def watchdog() -> None:
         while not stop.is_set():
             await asyncio.sleep(5)
-            if live.usage.elapsed > settings.google_live_max_session_seconds:
+            if sum(u["elapsed_s"] for u in usage_parts) + state["live"].usage.elapsed > settings.google_live_max_session_seconds:
                 await websocket.send_json({"type": "closed", "reason": "max_duration"})
                 stop.set()
                 return
-            if time.monotonic() - live._last_activity > settings.google_live_idle_seconds:  # noqa: SLF001
+            if time.monotonic() - state["live"]._last_activity > settings.google_live_idle_seconds:  # noqa: SLF001
                 await websocket.send_json({"type": "closed", "reason": "idle"})
                 stop.set()
                 return
@@ -289,18 +360,20 @@ async def voice_live(
                     pcm = base64.b64decode(message.get("data") or "", validate=True)
                 except Exception:  # noqa: BLE001
                     continue
-                await live.send_audio(pcm[:64_000])
+                await state["live"].send_audio(pcm[:64_000])
             elif kind == "text":
-                await live.send_text(str(message.get("text") or ""))
+                await state["live"].send_text(str(message.get("text") or ""))
             elif kind == "activity_start":
-                await live.activity_start()
+                await state["live"].activity_start()
             elif kind == "activity_end":
-                await live.activity_end()
+                await state["live"].activity_end()
             elif kind == "stop_audio":
-                await live.end_audio()
+                await state["live"].end_audio()
+            elif kind == "mode":
+                await switch_mode(str(message.get("value") or "fast"))
             elif kind == "close":
                 break
-            if live.usage.elapsed > settings.google_live_max_session_seconds:
+            if sum(u["elapsed_s"] for u in usage_parts) + state["live"].usage.elapsed > settings.google_live_max_session_seconds:
                 await websocket.send_json({"type": "closed", "reason": "max_duration"})
                 break
     except WebSocketDisconnect:
@@ -308,13 +381,19 @@ async def voice_live(
     finally:
         stop.set()
         guard.cancel()
-        await live.close()
+        await state["live"].close()
         pump.cancel()
         try:
             await websocket.close()
         except Exception:  # noqa: BLE001
             pass
-        usage = live.usage.as_dict()
+        usage_parts.append(state["live"].usage.as_dict())
+        usage = {
+            "elapsed_s": round(sum(u["elapsed_s"] for u in usage_parts), 1),
+            "audio_in_s": round(sum(u["audio_in_s"] for u in usage_parts), 1),
+            "audio_out_s": round(sum(u["audio_out_s"] for u in usage_parts), 1),
+            "turns": sum(u["turns"] for u in usage_parts),
+        }
         cost = estimate(usage["audio_in_s"], usage["audio_out_s"])
         logger.info(
             "Session vocale terminée user=%s %s coût estimé %.4f $",

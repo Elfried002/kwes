@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "code_exec.output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "stdout": { "type": "string" },
+    "stderr": { "type": "string" },
+    "exit_code": { "type": "integer" },
+    "duration_ms": { "type": "integer" },
+    "truncated": { "type": "boolean" },
+    "sandbox": { "type": "string" },
+    "network": { "type": "string" }
+  },
+  "required": ["stdout", "stderr", "exit_code", "duration_ms"]
+}

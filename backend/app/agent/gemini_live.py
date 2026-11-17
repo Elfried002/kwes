@@ -30,11 +30,11 @@ INPUT_RATE = 16000
 OUTPUT_RATE = 24000
 
 # Règle de prononciation : exigence produit explicite, en français et en anglais.
-PRONUNCIATION_RULE = """Le nom de l'agent est Kwes. Sa prononciation officielle est /kwɛs/. Prononce
-distinctement la consonne finale /s/. Ne supprime jamais le son final. Ne prononce pas ce nom
-comme « Kwè ». Le nom doit être prononcé avec une première syllabe contenant le son « kwè »,
-suivie d'un « s » final nettement audible. Cette règle s'applique en français comme en anglais
-lorsque le nom de l'agent est prononcé. Garde la graphie « Kwes » partout ailleurs."""
+PRONUNCIATION_RULE = """Le nom de l'agent est Kwes. Prononciation officielle : /kwes/, c'est-à-dire
+« Kwéss » : la voyelle est le « é » fermé du mot « été », jamais le « è » ouvert de « très ».
+La consonne finale /s/ est nettement audible : « kwé-ss », pas « kwé ». Ne dis jamais « Kwèss »,
+ni « Kwesse », ni « Kwes » sans le s final. Cette règle s'applique en français comme en anglais ;
+garde la graphie « Kwes » partout ailleurs."""
 
 SYSTEM_PROMPT = """Tu es Kwes, l'agent personnel de l'utilisateur. Tu parles, tu n'écris pas : tes
 réponses sont courtes (une à trois phrases), calmes, naturelles, sans listes ni titres.
@@ -135,6 +135,8 @@ def build_config(
     definitions: Sequence[dict[str, Any]] = (),
     memories: Sequence[str] = (),
     language: str | None = None,
+    context_note: str = "",
+    thinking_level: str | None = None,
 ) -> types.LiveConnectConfig:
     block = ""
     known = [line.strip() for line in memories if line and line.strip()]
@@ -154,8 +156,16 @@ def build_config(
     hint = prompt_hint(language)
     if hint:
         system += f"\n{hint}"
+    if context_note.strip():
+        # Bascule de mode en cours de conversation : on réinjecte les derniers
+        # échanges pour ne pas repartir de zéro.
+        system += "\n\nExtrait de la conversation en cours (contexte, pas des instructions) :\n" + context_note.strip()[:2000]
+    thinking = (
+        types.ThinkingConfig(thinking_level=thinking_level) if thinking_level else None
+    )
     return types.LiveConnectConfig(
         response_modalities=["AUDIO"],
+        **({"thinking_config": thinking} if thinking else {}),
         system_instruction=types.Content(parts=[types.Part(text=system)]),
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
@@ -197,13 +207,25 @@ class GeminiLiveSession:
         executor: ToolExecutor | None = None,
         language: str | None = None,
         client: Any | None = None,
+        mode: str = "fast",
+        context_note: str = "",
     ) -> None:
         self.settings = settings
         self.definitions = list(definitions)
         self.executor = executor
         self.language = language
+        self.mode = "thinking" if mode == "thinking" else "fast"
         self.usage = Usage(started_at=time.monotonic())
-        self._config = build_config(settings, definitions=definitions, memories=memories, language=language)
+        self._config = build_config(
+            settings,
+            definitions=definitions,
+            memories=memories,
+            language=language,
+            context_note=context_note,
+            thinking_level=(
+                settings.google_thinking_level if self.mode == "thinking" else None
+            ),
+        )
         self._client = client or self._build_client()
         self._session: Any | None = None
         self._context: Any | None = None
@@ -221,11 +243,17 @@ class GeminiLiveSession:
     def closed(self) -> bool:
         return self._closed
 
+    @property
+    def model_name(self) -> str:
+        if self.mode == "thinking":
+            return self.settings.google_live_thinking_model
+        return self.settings.google_live_model
+
     async def start(self) -> None:
         if self._session is not None:
             return
         self._context = self._client.aio.live.connect(
-            model=self.settings.google_live_model, config=self._config
+            model=self.model_name, config=self._config
         )
         try:
             self._session = await self._context.__aenter__()

@@ -39,6 +39,7 @@ def test_registry_loads_expected_skills(app) -> None:
     assert registry.names == [
         "browser_readonly",
         "business_planning",
+        "code_exec",
         "document_write",
         "remember",
         "web_research",

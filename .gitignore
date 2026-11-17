@@ -50,3 +50,6 @@ pnpm-debug.log*
 .env.bak.*
 backend/.env.bak.*
 .probe/
+
+# bac à sable d'exécution (fichiers temporaires)
+backend/.sandbox/

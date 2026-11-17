@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { errorMessage, listTasks } from '../lib/api';
+import { downloadDocument, errorMessage, listDocuments, listTasks } from '../lib/api';
 import { clampProgress, formatRelative } from '../lib/format';
 import { useApi } from '../lib/hooks';
 import { href } from '../lib/router';
@@ -7,6 +7,7 @@ import { useKwes } from '../state/KwesProvider';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { StatusPill } from '../components/StatusPill';
+import type { DocumentItem } from '../lib/types';
 import type { Task, TaskStatus } from '../lib/types';
 
 type FilterKey = 'all' | 'active' | 'awaiting' | 'completed' | 'failed';
@@ -51,8 +52,8 @@ export function TasksScreen() {
     <div className="page">
       <div className="page-head">
         <div>
-          <span className="page-head__eyebrow">Son travail</span>
-          <h1>Ce que Kwes fait</h1>
+          <span className="page-head__eyebrow">Activité</span>
+          <h1>Ce que Kwes a fait</h1>
           <p>
             Voici ce sur quoi il travaille, ce qu’il a terminé et ce qui attend votre accord. Chaque
             ligne s’ouvre sur le détail de son avancement.
@@ -149,6 +150,61 @@ export function TasksScreen() {
           })}
         </div>
       )}
+
+      <DocumentsSection />
     </div>
+  );
+}
+
+/** Documents produits par Kwes : consultables et téléchargeables ici. */
+function DocumentsSection() {
+  const { data, error } = useApi((signal) => listDocuments(signal), []);
+  const documents: DocumentItem[] = data ?? [];
+
+  async function open(document: DocumentItem) {
+    // Le document est privé : on récupère le blob avec le jeton puis on l'ouvre.
+    const file = await downloadDocument(document.id);
+    const url = URL.createObjectURL(file.blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  return (
+    <section className="stack" aria-labelledby="documents-title" style={{ marginTop: 24 }}>
+      <div className="section-head">
+        <h2 id="documents-title">Documents</h2>
+        <span className="meta">{documents.length}</span>
+      </div>
+      {error ? (
+        <p className="notice notice--warning" role="alert">
+          <Icon name="alert" size={16} />
+          <span>Impossible de charger les documents : {errorMessage(error)}</span>
+        </p>
+      ) : documents.length === 0 ? (
+        <EmptyState title="Aucun document pour l’instant" icon={<Icon name="file" size={24} />}>
+          Demandez un rapport ou une note : Kwes l’écrira ici, prêt à télécharger.
+        </EmptyState>
+      ) : (
+        <div className="list" role="list">
+          {documents.slice(0, 6).map((document) => (
+            <div className="list__row" role="listitem" key={document.id}>
+              <div className="list__main">
+                <span className="list__title">{document.title}</span>
+                <div className="list__meta">
+                  <span>{document.format.toUpperCase()}</span>
+                  <span>{Math.max(1, Math.round(document.chars / 5))} mots</span>
+                  <span>Créé {formatRelative(document.created_at)}</span>
+                </div>
+              </div>
+              <div className="list__side">
+                <button type="button" className="btn btn--sm" onClick={() => void open(document)}>
+                  <Icon name="file" size={14} /> Ouvrir
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

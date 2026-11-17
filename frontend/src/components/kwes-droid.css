@@ -45,10 +45,11 @@
   transform-origin: 120px 46px;
 }
 
+/* Un halo est un anneau plat : le faire tourner en 2D le transformait en arceau
+   incliné. On fait varier sa lumière et très légèrement son ouverture. */
 @keyframes kd-halo-turn {
-  from { transform: rotate(0deg) scaleX(1); }
-  50% { transform: rotate(180deg) scaleX(0.94); }
-  to { transform: rotate(360deg) scaleX(1); }
+  0%, 100% { opacity: 0.75; transform: scaleX(1) translateY(0); }
+  50% { opacity: 1; transform: scaleX(1.06) translateY(-1px); }
 }
 
 .kwes-droid__eve,

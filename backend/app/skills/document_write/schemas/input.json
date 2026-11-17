@@ -31,5 +31,5 @@
       "enum": ["markdown", "text"]
     }
   },
-  "required": ["title", "content"]
+  "required": ["title"]
 }

@@ -9,6 +9,8 @@ Wants=network-online.target docker.service
 Type=simple
 User=babayaga
 Group=babayaga
+# Accès au socket du bac à sable (0660 root:kwes) sans élargir les droits du service.
+SupplementaryGroups=kwes
 WorkingDirectory=/home/babayaga/business/kwes/backend
 EnvironmentFile=/home/babayaga/business/kwes/backend/.env
 Environment=KWES_ENV_FILE=/home/babayaga/business/kwes/backend/.env

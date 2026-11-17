@@ -141,6 +141,39 @@ class Planner:
         self.llm = llm
         self.registry = registry
 
+    def _repair_documents(self, plan: Plan) -> None:
+        """Un document sans corps est rattaché à l'étape amont, sinon retiré.
+
+        Un plan qui demande « rédige un document » sans fournir de texte produit une
+        étape invalide et fait échouer toute la mission. On préfère un document
+        composé à partir du résultat réel de l'étape précédente, ou pas de document
+        du tout — jamais un document vide ou inventé.
+        """
+        previous: str | None = None
+        previous_skill: str | None = None
+        kept: list[Any] = []
+        for step in plan.steps:
+            if step.skill == "document_write":
+                payload = step.input if isinstance(step.input, dict) else {}
+                if not str(payload.get("content") or "").strip():
+                    # Seule une recherche produit de la matière réutilisable
+                    # (synthèse + sources). Sinon le document serait vide.
+                    if previous and previous_skill in {"web_research", "browser_readonly"}:
+                        payload["source_step"] = payload.get("source_step") or previous
+                        payload.pop("content", None)
+                        step.input = payload
+                    else:
+                        logger.info(
+                            "Plan : étape document_write retirée (aucun contenu, amont %s)",
+                            previous_skill or "absent",
+                        )
+                        continue
+            kept.append(step)
+            if step.skill != "document_write":
+                previous = step.id
+                previous_skill = step.skill
+        plan.steps = kept
+
     def _drop_unknown_fields(self, plan: Plan) -> None:
         """Retire les champs qu'un skill n'accepte pas.
 
@@ -217,6 +250,51 @@ class Planner:
         "required": ["goal", "steps"],
     }
 
+    # Types JSON acceptés par la sortie structurée de Gemini.
+    _ALLOWED_TYPES = {"string", "number", "integer", "boolean", "array", "object"}
+
+    def _field_spec(self, raw: Any) -> dict[str, Any] | None:
+        """Réduit un schéma de skill aux mots-clés compris par Gemini."""
+        if not isinstance(raw, dict):
+            return None
+        kind = raw.get("type")
+        if isinstance(kind, list):
+            kinds = [item for item in kind if item != "null"]
+            kind = kinds[0] if kinds else None
+        if kind not in self._ALLOWED_TYPES:
+            return None
+        spec: dict[str, Any] = {"type": kind}
+        if isinstance(raw.get("enum"), list):
+            spec["enum"] = [item if isinstance(item, str) else str(item) for item in raw["enum"]]
+        if isinstance(raw.get("description"), str):
+            spec["description"] = raw["description"][:160]
+        if kind == "array":
+            items = raw.get("items")
+            item_spec = self._field_spec(items) if isinstance(items, dict) else None
+            spec["items"] = item_spec or {"type": "string"}
+        if kind == "object":
+            spec["properties"] = {}
+        return spec
+
+    def plan_schema(self) -> dict[str, Any]:
+        """Schéma du plan, construit à partir des skills réellement installés.
+
+        Sans cela, un skill dont les champs ne figurent pas dans une liste figée
+        reçoit une entrée vide : Gemini n'émet que les propriétés déclarées.
+        """
+        properties: dict[str, Any] = {}
+        for manifest in self.registry.manifests():
+            raw_props = (manifest.get("input_schema") or {}).get("properties") or {}
+            for name, raw in raw_props.items():
+                if name in properties:
+                    continue
+                spec = self._field_spec(raw)
+                if spec:
+                    properties[name] = spec
+        schema = json.loads(json.dumps(self.PLAN_SCHEMA))
+        schema["properties"]["steps"]["items"]["properties"]["input"]["properties"] = properties
+        return schema
+
     async def build_plan(self, goal: str, history: Sequence[dict[str, Any]] | None = None) -> Plan:
         messages: list[dict[str, Any]] = [
             {
@@ -239,11 +317,12 @@ class Planner:
                     purpose="plan",
                     max_tokens=2048,
                     timeout=min(30.0, self.settings.gemini_timeout_seconds),
-                    schema=self.PLAN_SCHEMA,
+                    schema=self.plan_schema(),
                 )
                 plan = Plan.model_validate(result.json())
                 _normalize_inputs(plan)
                 self._drop_unknown_fields(plan)
+                self._repair_documents(plan)
                 validated = validate_plan(plan, self.registry, max_steps=self.settings.max_task_steps)
                 if validated.warnings:
                     logger.info("Plan accepté avec avertissements: %s", validated.warnings)

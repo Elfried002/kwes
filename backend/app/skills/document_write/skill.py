@@ -116,7 +116,9 @@ async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
     if len(title) < 3:
         raise SkillError("Titre de document trop court.")
     if not content:
-        raise SkillError("Le document est vide : rien à enregistrer.")
+        raise SkillError(
+            "Le document est vide : aucun contenu fourni et aucune matière dans l'étape amont."
+        )
     if fmt not in FORMATS:
         fmt = "markdown"
     if len(content) > MAX_CONTENT_CHARS:

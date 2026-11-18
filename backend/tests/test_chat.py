@@ -137,6 +137,34 @@ def test_mission_without_url_does_not_call_network(
     assert fake_fetcher.calls == []
 
 
+def test_llm_timeout_returns_retryable_503_not_500(
+    client: TestClient, headers: dict[str, str], app
+) -> None:
+    """Un dépassement du fournisseur LLM est un 503 réessayable, pas un 500."""
+    from app.agent.llm import LLMTimeout
+
+    async def _timeout(*args, **kwargs):
+        raise LLMTimeout()
+
+    orchestrator = app.state.orchestrator
+    original = orchestrator.handle_chat
+    orchestrator.handle_chat = _timeout
+    try:
+        response = client.post(
+            "/api/v1/chat",
+            json={"message": "Cherche les actualités du solaire au Sénégal", "mode": "outil"},
+            headers=headers,
+        )
+    finally:
+        orchestrator.handle_chat = original
+
+    assert response.status_code == 503, response.text
+    error = response.json()["error"]
+    assert error["code"] == "PROVIDER_UNAVAILABLE"
+    assert error["retryable"] is True
+    assert "interne" not in error["message"].lower()
+
+
 def test_chat_returns_mock_header(client: TestClient, headers: dict[str, str]) -> None:
     response = client.post(
         "/api/v1/chat", json={"message": "Bonjour", "mode": "direct"}, headers=headers

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -235,13 +236,24 @@ class ChatToolRunner:
 
         for round_index in range(max_rounds):
             rounds = round_index + 1
+            started = time.monotonic()
             try:
                 result = await self.llm.chat(
                     messages, tools=definitions, max_tokens=900, purpose="chat"
                 )
             except LLMError as exc:
-                logger.warning("Boucle d'outils : LLM indisponible (%s).", exc.code)
+                logger.warning(
+                    "Boucle d'outils : LLM indisponible (%s) après %.0f ms.",
+                    exc.code,
+                    (time.monotonic() - started) * 1000,
+                )
                 raise
+            logger.info(
+                "Boucle d'outils tour %s : LLM %.0f ms, %s appel(s) d'outil.",
+                rounds,
+                (time.monotonic() - started) * 1000,
+                len(result.tool_calls or []),
+            )
 
             calls = list(result.tool_calls or [])
             if not calls:
@@ -274,7 +286,14 @@ class ChatToolRunner:
             )
 
             for call in calls[: max(1, self.settings.max_tool_calls_per_round)]:
+                tool_started = time.monotonic()
                 invocation = await self._execute(session, user_id, call)
+                logger.info(
+                    "Boucle d'outils : %s %s en %.0f ms.",
+                    invocation.name,
+                    invocation.status,
+                    (time.monotonic() - tool_started) * 1000,
+                )
                 invocations.append(invocation)
                 messages.append(
                     {
@@ -293,11 +312,19 @@ class ChatToolRunner:
                 )
 
         # Dernier appel sans outils : le modèle met en forme les résultats obtenus.
+        started = time.monotonic()
         try:
             final = await self.llm.chat(messages, max_tokens=900, purpose="chat")
         except LLMError as exc:
-            logger.warning("Boucle d'outils : réponse finale indisponible (%s).", exc.code)
+            logger.warning(
+                "Boucle d'outils : réponse finale indisponible (%s) après %.0f ms.",
+                exc.code,
+                (time.monotonic() - started) * 1000,
+            )
             raise
+        logger.info(
+            "Boucle d'outils : réponse finale en %.0f ms.", (time.monotonic() - started) * 1000
+        )
         answer = (final.content or "").strip()
         if not answer and invocations:
             answer = TOOL_USAGE_ANSWER_FALLBACK

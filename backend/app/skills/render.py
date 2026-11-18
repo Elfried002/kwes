@@ -38,10 +38,19 @@ async def render_fetch(
     *,
     allowlist: list[str],
     timeout: float = 20.0,
-    wait_until: str = "networkidle",
+    wait_until: str = "domcontentloaded",
+    settle_ms: int = 600,
+    idle_timeout_ms: int = 1500,
     enforce_allowlist: bool = True,
 ) -> FetchedPage:
-    """Charge la page avec exécution JavaScript et renvoie le HTML rendu."""
+    """Charge la page avec exécution JavaScript et renvoie le HTML rendu.
+
+    On n'attend pas `networkidle` : une page publicitaire ou un compteur
+    analytics ne « se calme » jamais, et Playwright consommait alors tout le
+    délai (20 s mesurées sur une page réelle), ce qui faisait expirer le tour
+    d'outil. `domcontentloaded` rend la main vite, puis on laisse le JavaScript
+    s'exécuter (`settle_ms`) et on tente un `networkidle` borné, sans échec.
+    """
     validated = validate_url_shape(url, allowlist, enforce_allowlist=enforce_allowlist)
 
     from playwright.async_api import async_playwright
@@ -86,9 +95,18 @@ async def render_fetch(
                 )
                 status = response.status if response is not None else 0
                 try:
-                    await page.wait_for_timeout(600)
+                    await page.wait_for_timeout(settle_ms)
                 except Exception:  # noqa: BLE001
                     pass
+                if wait_until != "networkidle":
+                    # Tentative bornée : on garde le HTML déjà rendu si le réseau
+                    # ne se calme pas (publicités, websockets, polling).
+                    try:
+                        await page.wait_for_load_state(
+                            "networkidle", timeout=int(idle_timeout_ms)
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                 html = await page.content()
                 final_url = page.url or validated
                 title = await page.title()
@@ -131,7 +149,10 @@ def make_browser_fetcher(allowlist: list[str], settings: Any) -> Any:
     """
     from app.skills.fetch import safe_fetch
 
-    timeout = min(20.0, float(getattr(settings, "skill_default_timeout_seconds", 20.0)))
+    # Budget d'une page : un site qui ne répond pas vite ne doit pas consommer
+    # les 20 s du tour d'outil. Le rendu a déjà son propre délai borné
+    # (`domcontentloaded` + settle + networkidle plafonné).
+    timeout = min(10.0, float(getattr(settings, "skill_default_timeout_seconds", 20.0)))
     mode = str(getattr(settings, "browser_render", "auto"))
 
     if getattr(settings, "skill_offline_mode", False):

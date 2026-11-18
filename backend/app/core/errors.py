@@ -177,3 +177,33 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=error_payload("INTERNAL", "Erreur interne.", {}, rid),
             headers={"X-Request-ID": rid},
         )
+
+    # Une panne ou un dépassement de délai du fournisseur LLM n'est pas une
+    # erreur interne : c'est un 503 réessayable, comme le fait déjà le flux SSE.
+    # Sans ce handler, un LLMTimeout remontait en 500 INTERNAL (traceback
+    # `LLMTimeout` observé en production).
+    from app.agent.llm import LLMError
+
+    @app.exception_handler(LLMError)
+    async def _llm_error_handler(request: Request, exc: LLMError) -> JSONResponse:
+        rid = _request_id(request)
+        logger.warning(
+            "Fournisseur LLM indisponible code=%s retryable=%s request_id=%s path=%s",
+            exc.code,
+            exc.retryable,
+            rid,
+            request.url.path,
+        )
+        return JSONResponse(
+            status_code=503,
+            content=error_payload(
+                "PROVIDER_UNAVAILABLE",
+                exc.message
+                if exc.code in {"PROVIDER_UNAVAILABLE", "INVALID_OUTPUT"}
+                else "Le fournisseur LLM n'a pas répondu à temps.",
+                {},
+                rid,
+                retryable=True,
+            ),
+            headers={"X-Request-ID": rid},
+        )

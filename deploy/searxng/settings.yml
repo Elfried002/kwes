@@ -1,0 +1,77 @@
+use_default_settings: true
+
+# Configuration SearXNG de production (Kwes). Copiée dans /etc/searxng/settings.yml,
+# puis `systemctl restart searxng`. La clé d'instance se pose par l'environnement
+# (SEARXNG_SECRET) ou en remplaçant la valeur ci-dessous : elle reste hors dépôt.
+general:
+  instance_name: "Kwes Search"
+  donation_url: false
+  # Exigé par wikipedia/wikidata/openstreetmap : sans URL de contact ces moteurs
+  # refusent de s'enregistrer (« engine requires general.contact_url »).
+  contact_url: "https://api.agent-kwes.com"
+  enable_metrics: false
+
+server:
+  secret_key: "change-me"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  bind_address: "127.0.0.1"
+  port: 8888
+  base_url: "http://127.0.0.1:8888/"
+
+search:
+  safe_search: 1
+  autocomplete: ""
+  default_lang: "fr"
+  formats:
+    - html
+    - json
+
+ui:
+  default_locale: "fr"
+  query_in_title: false
+
+outgoing:
+  # Un moteur muet ne doit pas coûter plus de 4 s : le budget produit est 5 s.
+  request_timeout: 4.0
+  max_request_timeout: 6.0
+  pool_connections: 100
+  pool_maxsize: 20
+
+# Moteurs généraux conservés : google cse, bing, duckduckgo, mojeek, startpage,
+# wikipedia (mesurés 0,4 à 1,0 s, 20 à 40 résultats cumulés). brave est suspendu
+# en boucle (« trop de requêtes ») et renvoie parfois un JSON tronqué ; qwant
+# répond « accès refusé » ; ahmia/torch exigent Tor (absent du serveur).
+# Les trackers de torrents ne servent aucune capacité du produit.
+engines:
+  - name: brave
+    disabled: true
+  - name: brave.images
+    disabled: true
+  - name: brave.videos
+    disabled: true
+  - name: brave.news
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: qwant news
+    disabled: true
+  - name: ahmia
+    disabled: true
+  - name: torch
+    disabled: true
+  - name: kickass
+    disabled: true
+  - name: piratebay
+    disabled: true
+  - name: solidtorrents
+    disabled: true
+  - name: bt4g
+    disabled: true
+  - name: wikidata
+    disabled: true
+  - name: openstreetmap
+    disabled: true
+  - name: bing
+    disabled: false

@@ -76,7 +76,12 @@ class Settings(BaseSettings):
 
     # --- Fournisseurs ---------------------------------------------------
     # Un seul fournisseur, deux modèles, aucun repli (brief §4.3 et §16).
-    gemini_timeout_seconds: float = 20.0
+    # Le modèle Live rend la main quand la transcription du tour est complète :
+    # mesuré de ~1 s (décision d'outil) à ~18 s (synthèse après lecture de 4
+    # pages), avec des pointes au-delà de 20 s côté fournisseur. Un plafond à
+    # 20 s produisait des 500 `LLMTimeout` sur un tour pourtant valide ; 35 s
+    # laisse la marge nécessaire sans bloquer indéfiniment une requête.
+    gemini_timeout_seconds: float = 35.0
     gemini_total_timeout_seconds: float = 60.0
     gemini_temperature: float = 0.2
 

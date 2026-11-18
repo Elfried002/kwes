@@ -15,7 +15,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_DEV_JWT_SECRET = "dev-secret-change-me"
-DEFAULT_CORS_ORIGINS = "http://127.0.0.1:5173,http://localhost:5173"
+# Origine de production incluse par défaut : sans elle, le navigateur bloque
+# l'API et l'interface affiche « Backend injoignable ».
+DEFAULT_CORS_ORIGINS = (
+    "http://127.0.0.1:5173,http://localhost:5173,"
+    "https://kwes.vercel.app,https://frontend-elfried002s-projects.vercel.app"
+)
 DEFAULT_BROWSER_ALLOWLIST = (
     "wikipedia.org,fr.wikipedia.org,en.wikipedia.org,example.com,www.example.com,duckduckgo.com"
 )

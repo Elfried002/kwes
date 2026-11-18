@@ -252,14 +252,6 @@ export function HomeScreen() {
                 Arrêter
               </button>
             ) : null}
-            {state.conversationId ? (
-              <a
-                className="home-dot__read"
-                href={href({ name: 'chat', conversationId: state.conversationId })}
-              >
-                Ouvrir dans les échanges
-              </a>
-            ) : null}
           </div>
 
           {notice ? <p className="home-dot__notice">{notice}</p> : null}

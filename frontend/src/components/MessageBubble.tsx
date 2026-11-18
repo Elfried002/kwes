@@ -92,10 +92,16 @@ export function MessageBubble({ message, onCopy, onRetry, streaming = false }: M
       className={`turn turn--${message.role}`}
       aria-label={isAssistant ? 'Réponse de Kwes' : 'Votre message'}
     >
+      {isAssistant ? (
+        <div className="turn__author">
+          <img className="turn__avatar" src="/brand/droid-32.png" alt="" width="18" height="18" />
+          <span>Kwes</span>
+        </div>
+      ) : null}
+
       <div className="turn__bubble">
         {message.content}
         {streaming ? <span className="turn__caret" aria-hidden="true" /> : null}
-      </div>
 
       {sources.length > 0 ? (
         <p className="turn__sources">
@@ -134,7 +140,7 @@ export function MessageBubble({ message, onCopy, onRetry, streaming = false }: M
         </p>
       ) : null}
 
-      <div className="turn__meta">
+        <div className="turn__meta">
         <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
         <span className="turn__actions">
           <button
@@ -158,6 +164,7 @@ export function MessageBubble({ message, onCopy, onRetry, streaming = false }: M
             </button>
           ) : null}
         </span>
+        </div>
       </div>
     </article>
   );

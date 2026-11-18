@@ -510,7 +510,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               window.location.hash = href({ name: 'voice' });
             }}
             onStop={() => abortRef.current?.abort()}
-            micAllowed={prefs.voiceEnabled}
+            micAllowed={false}
             autoFocus
             placeholder={conversationId ? 'Poursuivre la conversation…' : 'Écrivez à Kwes…'}
             hint="Entrée pour envoyer, Maj+Entrée pour revenir à la ligne."

@@ -100,7 +100,9 @@ Règles :
 - `input` n'est JAMAIS vide : il contient les champs requis annoncés pour le skill
   (par exemple `query` pour web_research, `title` et `content` pour document_write,
   `objective` pour business_planning).
-- Réponds UNIQUEMENT avec un objet JSON, sans texte autour :
+- Tu disposes d'un outil `propose_plan` : tu DOIS l'appeler avec le plan complet.
+  Ne réponds pas en texte libre, n'invente pas de skill absent de la liste.
+  Exemple de contenu attendu pour l'outil :
   {{"goal": "Objectif reformulé", "steps": [
     {{"id": "step_1", "skill": "web_research", "title": "Rechercher les sources",
       "input": {{"query": "requête précise", "depth": "standard"}},
@@ -276,6 +278,17 @@ class Planner:
             spec["properties"] = {}
         return spec
 
+    def plan_tool(self) -> dict[str, Any]:
+        """Déclaration d'outil qui porte le plan (seule sortie structurée possible)."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "propose_plan",
+                "description": "Propose le plan d'exécution complet de la mission.",
+                "parameters": self.plan_schema(),
+            },
+        }
+
     def plan_schema(self) -> dict[str, Any]:
         """Schéma du plan, construit à partir des skills réellement installés.
 
@@ -306,20 +319,34 @@ class Planner:
         ]
         for item in list(history or [])[-6:]:
             messages.append({"role": item.get("role", "user"), "content": str(item.get("content", ""))[:2000]})
-        messages.append({"role": "user", "content": goal[:4000]})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    goal[:3800]
+                    + "\n\nAppelle immédiatement l'outil propose_plan avec le plan complet. "
+                    "Ne réponds pas en texte, ne pose aucune question."
+                ),
+            }
+        )
 
         last_error = ""
         for attempt in range(max(0, self.settings.max_plan_repair_attempts) + 1):
             try:
                 result = await self.llm.chat(
                     messages,
-                    json_mode=True,
                     purpose="plan",
+                    tools=[self.plan_tool()],
                     max_tokens=2048,
                     timeout=min(30.0, self.settings.gemini_timeout_seconds),
-                    schema=self.plan_schema(),
                 )
-                plan = Plan.model_validate(result.json())
+                # Le modèle autorisé est audio-natif : la structure arrive par
+                # l'appel d'outil, pas par un texte JSON.
+                if result.tool_calls:
+                    payload = dict(result.tool_calls[0].get("arguments") or {})
+                else:
+                    payload = result.json()
+                plan = Plan.model_validate(payload)
                 _normalize_inputs(plan)
                 self._drop_unknown_fields(plan)
                 self._repair_documents(plan)

@@ -93,41 +93,27 @@ async def test_offline_plan_is_valid_json(settings: Settings) -> None:
     assert plan["steps"][0]["id"] == "step_1"
 
 
-class _FakeFunctionCall:
-    def __init__(self, name: str, args: dict) -> None:
-        self.name = name
-        self.args = args
+def test_live_reasoner_converts_history_for_sessions(settings: Settings) -> None:
+    """L'historique interne devient des tours Live (outils inclus)."""
+    from app.agent.live_reasoner import _turns
 
-
-class _FakePart:
-    def __init__(self, *, text: str | None = None, call: _FakeFunctionCall | None = None) -> None:
-        self.text = text
-        self.function_call = call
-
-
-class _FakeResponse:
-    def __init__(self, parts: list[_FakePart]) -> None:
-        self.candidates = [type("C", (), {"content": type("X", (), {"parts": parts})()})()]
-        self.usage_metadata = None
-
-
-def test_gemini_parse_normalises_text_and_tool_calls(settings: Settings) -> None:
-    real = settings.model_copy(update={"google_api_key": "test-key"})
-    client = GeminiTextClient(real)
-    response = _FakeResponse(
+    system, turns = _turns(
         [
-            _FakePart(text="Je vais chercher."),
-            _FakePart(call=_FakeFunctionCall("web_research", {"query": "kwes"})),
+            {"role": "system", "content": "consignes"},
+            {"role": "user", "content": "cherche kwes"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "call_0", "name": "web_research", "arguments": {"query": "kwes"}}],
+            },
+            {"role": "tool", "name": "web_research", "content": '{"status": "ok"}'},
         ]
     )
-    result = client._parse(response)
-    assert result.mock is False
-    assert result.content == "Je vais chercher."
-    call = result.tool_calls[0]
-    assert call["name"] == "web_research"
-    assert call["arguments"] == {"query": "kwes"}
-    # La signature de pensée doit être conservée : Gemini refuse un appel rejoué sans elle.
-    assert "thought_signature" in call
+    assert system == "consignes"
+    assert len(turns) == 3
+    assert turns[1].role == "model"
+    assert "web_research" in turns[1].parts[0].text
+    assert "[Résultat de l'outil web_research]" in turns[2].parts[0].text
 
 
 def test_gemini_converts_history_to_contents(settings: Settings) -> None:

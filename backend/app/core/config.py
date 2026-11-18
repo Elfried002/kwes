@@ -56,13 +56,9 @@ class Settings(BaseSettings):
     jwt_audience: str = ""  # vide = pas de vérification d'audience
 
     # --- Fournisseurs ---------------------------------------------------
-    # Un seul fournisseur de raisonnement : Gemini. Plus aucune trace de DeepSeek.
-    gemini_text_model: str = "gemini-3.8-flash"
-    # Repli documenté quand un modèle est saturé (503) ou muet : chaîne ordonnée.
-    gemini_text_fallbacks: str = "gemini-3.5-flash-lite,gemini-3.1-flash-lite"
-    gemini_timeout_seconds: float = 9.0
-    gemini_total_timeout_seconds: float = 40.0
-    gemini_max_retries: int = 2
+    # Un seul fournisseur, deux modèles, aucun repli (brief §4.3 et §16).
+    gemini_timeout_seconds: float = 20.0
+    gemini_total_timeout_seconds: float = 60.0
     gemini_temperature: float = 0.2
 
     # --- API -------------------------------------------------------------

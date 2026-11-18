@@ -3,7 +3,7 @@
 Deux usages dans Kwes :
 - la conversation vocale passe par l'API Live (`app/agent/gemini_live.py`) ;
 - l'accueil et la prévisualisation des réglages demandent la synthèse ponctuelle
-  d'un texte : c'est ce module (`gemini-3.8-flash-tts`).
+  d'un texte : c'est ce module, via le modèle Live (aucun modèle TTS séparé).
 
 Aucune clé en dur : la clé Google est résolue par `app/core/secrets.py`, qui la
 déchiffre depuis `.env` (`GOOGLE_API_KEY_ENC`) au démarrage du processus.
@@ -25,7 +25,6 @@ from app.core.config import Settings
 
 logger = logging.getLogger("kwes.voice")
 
-TTS_MODEL = "gemini-3.8-flash-tts"
 SAMPLE_RATE = 24000
 MAX_TTS_CHARS = 1800
 
@@ -145,20 +144,12 @@ class GeminiVoiceProvider:
                 reason="Service vocal non configuré : réponse en texte uniquement.",
             )
 
+        # Pas de modèle TTS séparé : le brief n'autorise que les deux modèles
+        # Live. On demande au modèle rapide de lire le texte, et on garde l'audio.
         try:
             client = self._client_or_raise()
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=TTS_MODEL,
-                contents=cleaned[:MAX_TTS_CHARS],
-                config=types.GenerateContentConfig(
-                    response_modalities=["AUDIO"],
-                    speech_config=types.SpeechConfig(
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
-                        )
-                    ),
-                ),
+            audio = await asyncio.wait_for(
+                self._speak_live(client, cleaned[:MAX_TTS_CHARS], voice), timeout=60
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Synthèse Gemini indisponible (%s).", type(exc).__name__)
@@ -169,13 +160,6 @@ class GeminiVoiceProvider:
                 voice_id=voice,
             )
 
-        audio = b""
-        for candidate in getattr(response, "candidates", None) or []:
-            content = getattr(candidate, "content", None)
-            for part in getattr(content, "parts", None) or []:
-                inline = getattr(part, "inline_data", None)
-                if inline is not None and getattr(inline, "data", None):
-                    audio += inline.data
         if not audio:
             return VoiceResult(
                 text=cleaned,
@@ -191,6 +175,40 @@ class GeminiVoiceProvider:
             fallback=False,
             voice_id=voice,
         )
+
+    async def _speak_live(self, client: Any, text: str, voice: str) -> bytes:
+        """Lit un texte via le modèle Live et renvoie le PCM 24 kHz brut.
+
+        Aucun modèle TTS séparé : le brief n'autorise que les deux modèles Live.
+        """
+        config = types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            system_instruction=types.Content(
+                parts=[types.Part(text="Lis le texte fourni exactement, sans rien ajouter.")]
+            ),
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+                )
+            ),
+        )
+        audio = b""
+        async with client.aio.live.connect(model=self.settings.google_live_model, config=config) as session:
+            await session.send_client_content(
+                turns=types.Content(role="user", parts=[types.Part(text=f"Lis ceci :\n{text}")]),
+                turn_complete=True,
+            )
+            async for message in session.receive():
+                content = getattr(message, "server_content", None)
+                if content is None:
+                    continue
+                for part in getattr(getattr(content, "model_turn", None), "parts", None) or []:
+                    inline = getattr(part, "inline_data", None)
+                    if inline is not None and getattr(inline, "data", None):
+                        audio += inline.data
+                if getattr(content, "turn_complete", False):
+                    break
+        return audio
 
     async def list_voices(self, *, force: bool = False) -> VoicesResult:
         return VoicesResult(

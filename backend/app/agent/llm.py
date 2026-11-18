@@ -27,6 +27,7 @@ from google import genai
 from google.genai import types
 
 from app.core.config import Settings
+from app.agent.live_reasoner import LiveReasoner
 
 logger = logging.getLogger("kwes.llm")
 
@@ -202,50 +203,31 @@ def _to_contents(messages: Sequence[dict[str, Any]]) -> list[types.Content]:
 
 
 class GeminiTextClient:
-    """Raisonnement, planification et appels d'outils via Gemini."""
+    """Raisonnement via l'API Live de Gemini (deux modèles autorisés).
+
+    Aucun appel `generateContent`, aucun repli : le brief n'autorise que
+    `gemini-3.8-live` et `gemini-3.8-live-extended-thinking`. Le texte visible
+    provient de la transcription de sortie de la session Live, les structures
+    (plan, document) des appels de fonction.
+    """
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._client: Any | None = None
-        # Modèles en échec récent : on les laisse se reposer 2 minutes au lieu de
-        # repayer 9 s de délai à chaque message.
-        self._cooldown: dict[str, float] = {}
+        self._reasoner: LiveReasoner | None = None
         if settings.llm_is_mock:
             logger.warning(
                 "Aucune clé Gemini : mode hors ligne déterministe (aucun appel réseau, "
                 "réponses marquées X-Kwes-Mock: 1)."
             )
 
-    # ------------------------------------------------------------------
     @property
     def mock(self) -> bool:
         return self.settings.llm_is_mock
 
-    @property
-    def models(self) -> list[str]:
-        """Chaîne de modèles : le principal, puis les replis documentés."""
-        chain = [self.settings.gemini_text_model]
-        for item in self.settings.gemini_text_fallbacks.split(","):
-            name = item.strip()
-            if name and name not in chain:
-                chain.append(name)
-        return chain
-
-    def _available(self) -> list[str]:
-        now = time.monotonic()
-        ready = [m for m in self.models if self._cooldown.get(m, 0.0) <= now]
-        return ready or [self.models[-1]]
-
-    def _cool(self, model: str) -> None:
-        self._cooldown[model] = time.monotonic() + 120.0
-
-    def _sdk(self) -> Any:
-        if self._client is None:
-            key = self.settings.gemini_api_key
-            if not key:
-                raise LLMError("Fournisseur LLM non configuré correctement.")
-            self._client = genai.Client(api_key=key, http_options={"api_version": "v1beta"})
-        return self._client
+    def _live(self) -> LiveReasoner:
+        if self._reasoner is None:
+            self._reasoner = LiveReasoner(self.settings)
+        return self._reasoner
 
     async def chat(
         self,
@@ -261,62 +243,16 @@ class GeminiTextClient:
     ) -> LLMResult:
         if self.mock:
             return self._mock(messages, json_mode=json_mode, purpose=purpose, tools=tools)
-
-        declarations = _tool_declarations(tools)
-        # Un seul appel par message. La profondeur de réflexion dépend de l'usage :
-        # échange simple = LOW (latence), mission complexe = HIGH (raisonnement).
-        thinking = (
-            types.ThinkingLevel.HIGH if purpose in {"plan", "mission"} else types.ThinkingLevel.LOW
-        )
-
-        def _config(model: str) -> types.GenerateContentConfig:
-            # Les variantes « lite » ne gèrent pas la réflexion : la config est omise.
-            supports_thinking = model.startswith("gemini-3.") and "lite" not in model
-            return types.GenerateContentConfig(
-                system_instruction=_system_text(messages) or None,
-                temperature=self.settings.gemini_temperature if temperature is None else temperature,
-                max_output_tokens=max_tokens,
-                response_mime_type="application/json" if json_mode else None,
-                response_json_schema=schema if json_mode else None,
-                tools=[types.Tool(function_declarations=declarations)] if declarations else None,
-                thinking_config=types.ThinkingConfig(thinking_level=thinking)
-                if supports_thinking
-                else None,
+        try:
+            text, calls, model = await self._live().generate(
+                messages, purpose=purpose, tools=tools, timeout=timeout
             )
-        deadline = asyncio.get_running_loop().time() + self.settings.gemini_total_timeout_seconds
-        contents = _to_contents(messages)
-        last_error: LLMError | None = None
-        for model in self._available():
-            remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 1:
-                break
-            try:
-                response = await asyncio.wait_for(
-                    self._sdk().aio.models.generate_content(
-                        model=model, contents=contents, config=_config(model)
-                    ),
-                    timeout=min(timeout or self.settings.gemini_timeout_seconds, remaining),
-                )
-            except asyncio.TimeoutError:
-                last_error = LLMTimeout()
-                self._cool(model)
-                logger.warning("Gemini %s : délai dépassé, repli suivant", model)
-                continue
-            except Exception as exc:  # noqa: BLE001 — erreurs SDK variées
-                message = str(exc)
-                retryable = any(code in message for code in ("429", "500", "503", "UNAVAILABLE"))
-                last_error = LLMError("Fournisseur LLM indisponible.", retryable=retryable)
-                logger.warning("Gemini %s : %s", model, type(exc).__name__)
-                if not retryable:
-                    raise last_error from exc
-                self._cool(model)
-                continue
-            result = self._parse(response)
-            if model != self.settings.gemini_text_model:
-                logger.info("Réponse produite par le modèle de repli %s", model)
-            return result
-
-        raise last_error or LLMError("Fournisseur LLM indisponible.", retryable=True)
+        except TimeoutError as exc:
+            raise LLMTimeout() from exc
+        except Exception as exc:  # noqa: BLE001 — erreurs SDK variées
+            logger.warning("Gemini Live en échec (%s)", type(exc).__name__)
+            raise LLMError("Fournisseur LLM indisponible.", retryable=True) from exc
+        return LLMResult(content=text, tool_calls=calls, model=model, mock=False)
 
     async def stream_chat(
         self,
@@ -332,82 +268,12 @@ class GeminiTextClient:
                 yield chunk
                 await asyncio.sleep(0)
             return
-
-        config = types.GenerateContentConfig(
-            system_instruction=_system_text(messages) or None,
-            temperature=self.settings.gemini_temperature if temperature is None else temperature,
-            max_output_tokens=max_tokens,
-        )
-        contents = _to_contents(messages)
-        last_error: LLMError | None = None
-        for model in self._available():
-            emitted = False
-            try:
-                stream = await asyncio.wait_for(
-                    self._sdk().aio.models.generate_content_stream(
-                        model=model, contents=contents, config=config
-                    ),
-                    timeout=timeout or self.settings.gemini_timeout_seconds,
-                )
-                async for chunk in stream:
-                    text = getattr(chunk, "text", None)
-                    if text:
-                        emitted = True
-                        yield text
-                return
-            except asyncio.TimeoutError as exc:
-                last_error = LLMTimeout()
-                if emitted:
-                    raise last_error from exc
-                self._cool(model)
-                logger.warning("Gemini %s (flux) : délai dépassé, repli suivant", model)
-                continue
-            except Exception as exc:  # noqa: BLE001
-                message = str(exc)
-                retryable = any(code in message for code in ("429", "500", "503", "UNAVAILABLE"))
-                last_error = LLMError("Flux LLM interrompu.", retryable=retryable)
-                logger.warning("Gemini %s (flux) : %s", model, type(exc).__name__)
-                if emitted or not retryable:
-                    raise last_error from exc
-                self._cool(model)
-                continue
-        raise last_error or LLMError("Flux LLM interrompu.", retryable=True)
-
-    # ------------------------------------------------------------------
-    def _parse(self, response: Any) -> LLMResult:
-        text_parts: list[str] = []
-        tool_calls: list[dict[str, Any]] = []
-        candidates = getattr(response, "candidates", None) or []
-        for candidate in candidates:
-            content = getattr(candidate, "content", None)
-            for part in getattr(content, "parts", None) or []:
-                if getattr(part, "text", None):
-                    text_parts.append(str(part.text))
-                call = getattr(part, "function_call", None)
-                if call is not None and getattr(call, "name", None):
-                    tool_calls.append(
-                        {
-                            "id": f"call_{len(tool_calls)}",
-                            "name": str(call.name),
-                            "arguments": dict(getattr(call, "args", None) or {}),
-                            # Gemini 3.x exige de rejouer la signature de pensée avec
-                            # l'appel, sinon la requête suivante est refusée en 400.
-                            "thought_signature": getattr(part, "thought_signature", None),
-                        }
-                    )
-        usage_meta = getattr(response, "usage_metadata", None)
-        usage = {
-            "prompt_tokens": int(getattr(usage_meta, "prompt_token_count", 0) or 0),
-            "completion_tokens": int(getattr(usage_meta, "candidates_token_count", 0) or 0),
-            "total_tokens": int(getattr(usage_meta, "total_token_count", 0) or 0),
-        }
-        return LLMResult(
-            content="".join(text_parts).strip(),
-            tool_calls=tool_calls,
-            usage=usage,
-            model=str(getattr(response, "model_version", None) or self.settings.gemini_text_model),
-            mock=False,
-        )
+        try:
+            async for chunk in self._live().stream(messages, timeout=timeout):
+                yield chunk
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Gemini Live (flux) en échec (%s)", type(exc).__name__)
+            raise LLMError("Flux LLM interrompu.", retryable=True) from exc
 
     # -- MODE HORS LIGNE -------------------------------------------------
     def _mock(
@@ -429,7 +295,7 @@ class GeminiTextClient:
             content=content,
             tool_calls=[],
             usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "mock": True},
-            model=f"{self.settings.gemini_text_model}-hors-ligne",
+            model="hors-ligne",
             mock=True,
         )
 

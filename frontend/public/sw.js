@@ -1,14 +1,20 @@
-/* Kwes — service worker minimal (app shell).
+/* Kwes — service worker (app shell).
  * Stratégie : navigation = réseau puis cache index (SPA), assets = cache d'abord,
  * API = jamais mise en cache (les données de l'agent ne doivent pas être périmées).
+ * Mise à jour : la nouvelle version reste en attente jusqu'à l'accord de l'utilisateur
+ * (message SKIP_WAITING envoyé par l'interface), jamais d'activation silencieuse.
  */
-const CACHE = 'kwes-shell-v3';
+const CACHE = 'kwes-shell-v4';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()),
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {

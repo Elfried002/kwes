@@ -880,3 +880,22 @@
     color: var(--text);
   }
 }
+
+/* Les suggestions ne doivent jamais déborder latéralement sur téléphone. */
+@media (max-width: 520px) {
+  .home-dot,
+  .home-dot__bottom {
+    overflow-x: clip;
+  }
+
+  .home-dot__bottom .home-dot__suggestions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .home-dot__suggestion {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+}

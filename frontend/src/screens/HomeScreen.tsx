@@ -28,9 +28,7 @@ import { useAudioLevel } from '../lib/use-audio-level';
 import { useKwesSpeech } from '../lib/use-kwes-speech';
 import { usePrefersReducedMotion } from '../lib/hooks';
 import { speechEnvelope } from '../lib/kwes-speech';
-import { splitSentences } from '../lib/voice-session';
 import {
-  canReadAnswer,
   homeAnnouncement,
   homeCaption,
   homeSpokenLine,
@@ -146,15 +144,7 @@ export function HomeScreen() {
     notifyChatStarted();
 
     const live = (): boolean => !controller.signal.aborted && epoch === speech.epoch();
-    let buffer = '';
     let conversationId: string | null = null;
-
-    const speak = (sentence: string): void => {
-      const text = sentence.trim();
-      if (!text) return;
-      dispatch({ type: 'SENTENCE', text });
-      speech.enqueue(text, epoch, controller.signal);
-    };
 
     try {
       await streamChat(
@@ -173,16 +163,11 @@ export function HomeScreen() {
           },
           onDelta: (chunk) => {
             if (!live()) return;
+            // Écrit = écrit : la réponse s'affiche, elle n'est jamais prononcée.
             dispatch({ type: 'DELTA', text: chunk });
-            buffer += chunk;
-            const { sentences, rest } = splitSentences(buffer);
-            buffer = rest;
-            for (const sentence of sentences) speak(sentence);
           },
           onDone: (payload) => {
             if (!live()) return;
-            if (buffer.trim()) speak(buffer);
-            buffer = '';
             conversationId = payload.conversation_id ?? conversationId;
             dispatch({ type: 'DONE', conversationId });
             setAnalysis(false);
@@ -257,18 +242,22 @@ export function HomeScreen() {
             <span className="sr-only">{homeSpokenLine(state)}</span>
           </p>
 
+          {state.answer ? (
+            <p className="home-answer">{state.answer}</p>
+          ) : null}
+
           <div className="home-dot__actions">
             {speaking || working ? (
               <button type="button" className="home-dot__stop" onClick={stopAll}>
                 Arrêter
               </button>
             ) : null}
-            {canReadAnswer(state) && state.conversationId ? (
+            {state.conversationId ? (
               <a
                 className="home-dot__read"
                 href={href({ name: 'chat', conversationId: state.conversationId })}
               >
-                Lire la réponse
+                Ouvrir dans les échanges
               </a>
             ) : null}
           </div>
@@ -300,7 +289,7 @@ export function HomeScreen() {
           focusSignal={focusSignal}
         />
 
-        {state.phase === 'idle' && !state.sentence && !state.error ? (
+        {state.phase === 'idle' && !state.sentence && !state.error && !state.answer ? (
           <div className="home-actions" aria-label="Actions rapides">
             <a className="home-action" href={href({ name: 'voice' })}>
               <span className="home-action__icon" aria-hidden="true">
@@ -326,7 +315,7 @@ export function HomeScreen() {
           </div>
         ) : null}
 
-        {state.phase === 'idle' && !state.sentence && !state.error ? (
+        {state.phase === 'idle' && !state.sentence && !state.error && !state.answer ? (
           <div className="home-dot__suggestions" aria-label="Suggestions">
             {SUGGESTIONS.map((suggestion) => (
               <button

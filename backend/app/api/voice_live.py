@@ -297,6 +297,12 @@ async def voice_live(
         finally:
             # Une bascule de mode annule volontairement la pompe : dans ce cas on
             # ne doit pas fermer la session vocale de l'utilisateur.
+            logger.info(
+                "Pompe Gemini terminée (switching=%s, raison=%s, %.1fs)",
+                switching["value"],
+                "bascule" if switching["value"] else "fin de flux",
+                time.monotonic() - started,
+            )
             if not switching["value"]:
                 stop.set()
 

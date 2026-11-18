@@ -136,6 +136,19 @@
   color: rgba(247, 251, 255, 0.55);
 }
 
+/* Réponse écrite : elle s'affiche sous le droïde, jamais prononcée. */
+.home-answer {
+  max-width: 52ch;
+  margin: 10px auto 4px;
+  padding: 0 4px;
+  font-size: clamp(0.95rem, 2.4vw, 1.05rem);
+  line-height: 1.6;
+  color: var(--text);
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Ordre visuel : suggestions, actions, puis la zone de saisie. */
 .home-dot__bottom .home-actions {
   order: -2;

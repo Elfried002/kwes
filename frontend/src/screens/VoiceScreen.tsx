@@ -60,6 +60,16 @@ export function VoiceScreen() {
 
   const voice = useGeminiLive();
 
+  // Entrer dans l'espace vocal démarre la conversation : plus de bouton micro.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void voice.activate();
+    // Volontairement au montage seulement : `activate` change d'identité.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // `pulse` anime le dot sur la parole reconnue ; le niveau réel vient de
   // l'analyseur branché sur la sortie audio de Gemini (aucun élément <audio>).
   const { pulse, prime } = useAudioLevel(voice.phase === 'speaking');
@@ -169,7 +179,6 @@ export function VoiceScreen() {
         ? 'Annuler la réponse et couper le micro'
         : 'Couper le micro';
 
-  const micLabel = voice.active ? 'Couper le micro' : 'Activer le micro';
 
   return (
     <div className="voice-screen" data-phase={dotPhase} data-active={voice.active ? 'true' : 'false'}>
@@ -228,19 +237,6 @@ export function VoiceScreen() {
               spellCheck={false}
             />
           </form>
-
-          <button
-            type="button"
-            className="vs-fab"
-            onClick={() => {
-              prime();
-              voice.toggle();
-            }}
-            aria-pressed={voice.active}
-            aria-label={micLabel}
-          >
-            <Icon name={voice.active ? 'mic-off' : 'mic'} size={21} />
-          </button>
 
           <button
             type="button"

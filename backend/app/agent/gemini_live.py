@@ -232,6 +232,9 @@ class GeminiLiveSession:
         self._resume_handle: str | None = None
         self._closed = False
         self._last_activity = time.monotonic()
+        # Une activité audio est-elle ouverte côté Gemini ? Sert à ne jamais
+        # envoyer un `activity_end` orphelin, qui fait fermer la session.
+        self._activity_open = False
 
     def _build_client(self) -> Any:
         key = self.settings.gemini_api_key
@@ -271,6 +274,7 @@ class GeminiLiveSession:
                 pass
             self._context = None
             self._session = None
+            self._activity_open = False
 
     # -- Entrées -----------------------------------------------------------
     async def send_audio(self, pcm: bytes) -> None:
@@ -278,6 +282,10 @@ class GeminiLiveSession:
             return
         self.usage.audio_in_bytes += len(pcm)
         self._last_activity = time.monotonic()
+        # Gemini refuse un flux audio sans `activity_start` : on l'ouvre nous-mêmes
+        # si le client a envoyé de l'audio avant (ou après une reconnexion).
+        if not self._activity_open:
+            await self.activity_start()
         await self._session.send_realtime_input(
             audio=types.Blob(data=pcm, mime_type=f"audio/pcm;rate={INPUT_RATE}")
         )
@@ -293,21 +301,31 @@ class GeminiLiveSession:
         )
 
     async def activity_start(self) -> None:
-        """L'utilisateur commence à parler : interrompt la réponse en cours."""
-        if self._session is None:
+        """L'utilisateur commence à parler : interrompt la réponse en cours.
+
+        Idempotent : un second `activity_start` sans `activity_end` ferait refuser
+        la session par Gemini (« Unpaired realtime_input.activity_start »).
+        """
+        if self._session is None or self._activity_open:
             return
         self._last_activity = time.monotonic()
+        self._activity_open = True
         try:
             await self._session.send_realtime_input(activity_start=types.ActivityStart())
         except Exception:  # noqa: BLE001
-            pass
+            self._activity_open = False
 
     async def activity_end(self) -> None:
-        """Fin de la prise de parole : le modèle peut répondre."""
-        if self._session is None:
+        """Fin de la prise de parole : le modèle peut répondre.
+
+        Ignoré si aucune activité n'est ouverte — c'est exactement le cas qui
+        tuait la session (« Unpaired realtime_input.activity_end »).
+        """
+        if self._session is None or not self._activity_open:
             return
         self._last_activity = time.monotonic()
         self.usage.turns += 1
+        self._activity_open = False
         try:
             await self._session.send_realtime_input(activity_end=types.ActivityEnd())
         except Exception:  # noqa: BLE001
@@ -325,11 +343,25 @@ class GeminiLiveSession:
     async def events(self) -> AsyncIterator[LiveEvent]:
         if self._session is None:
             raise LiveUnavailable("Session vocale non démarrée.")
-        async for message in self._session.receive():
-            async for event in self._handle(message):
-                yield event
+        # `receive()` s'arrête à chaque fin de tour, mais la session Gemini reste
+        # ouverte : il faut réarmer la lecture, sinon la conversation se coupe
+        # après la première réponse (« Session vocale interrompue »).
+        empty_rounds = 0
+        while not self._closed:
+            seen = 0
+            async for message in self._session.receive():
+                seen += 1
+                async for event in self._handle(message):
+                    yield event
+                if self._closed:
+                    return
             if self._closed:
-                break
+                return
+            empty_rounds = empty_rounds + 1 if seen == 0 else 0
+            if empty_rounds >= 2:
+                # Deux tours vides d'affilée : la session est réellement terminée.
+                return
+            await asyncio.sleep(0)
 
     async def _handle(self, message: Any) -> AsyncIterator[LiveEvent]:
         content = getattr(message, "server_content", None)

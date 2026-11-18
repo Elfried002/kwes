@@ -48,6 +48,9 @@ pnpm-debug.log*
 .sb_bearer
 # sauvegardes locales de .env (contiennent des clés en clair)
 .env.bak.*
+.env.before_*
+.env.*.local
+*.env.bak
 backend/.env.bak.*
 .probe/
 

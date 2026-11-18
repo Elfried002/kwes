@@ -23,7 +23,9 @@ from app.core.config import Settings
 
 def rls_applicable(settings: Settings, session: AsyncSession) -> bool:
     """RLS n'a de sens que sur PostgreSQL : SQLite (tests) n'a pas de rôles."""
-    if not settings.db_rls_enabled:
+    # Le worker (DB_RLS_BYPASS) se connecte avec le rôle propriétaire : il n'a pas
+    # le droit d'endosser `authenticated`, et n'en a pas besoin.
+    if not settings.db_rls_enabled or settings.db_rls_bypass:
         return False
     return session.bind is not None and session.bind.dialect.name == "postgresql"
 

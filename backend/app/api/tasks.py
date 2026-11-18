@@ -71,7 +71,9 @@ async def create_task(
         priority=payload.priority,
         raw_steps=[step.model_dump() for step in payload.steps] if payload.steps else None,
     )
-    await session.refresh(task, attribute_names=["steps"])
+    # `refresh` échoue après les commits internes de l'orchestrateur (instance
+    # détachée) : on relit la mission avec ses étapes par son identifiant.
+    task = await session.get(Task, task.id, options=[selectinload(Task.steps)]) or task
     return task_dict(task, include_steps=True)
 
 

@@ -1,0 +1,7 @@
+backend/
+.git/
+docs/
+supabase/
+deploy/
+tools/
+*.md

@@ -62,12 +62,19 @@ async def test_unknown_language_is_refused() -> None:
         await run_sandbox("print(1)", language="ruby")
 
 
-async def test_missing_runner_fails_explicitly(monkeypatch, tmp_path: Path) -> None:
+async def test_native_execution_sans_runner(monkeypatch, tmp_path: Path) -> None:
+    """Sans conteneur ni socket, le code s'exécute nativement sur le serveur.
+
+    Comportement voulu depuis la migration : plus de Docker, plus de runner
+    séparé, exécution directe sous l'utilisateur dédié (voir `native.py`).
+    """
     import app.skills.code_exec.skill as skill_module
 
     monkeypatch.setattr(skill_module, "SOCKET_PATH", tmp_path / "absent.sock")
-    with pytest.raises(SkillError):
-        await run_sandbox("print(1)")
+    result = await run_sandbox("print(6 * 7)")
+    assert result["exit_code"] == 0
+    assert result["ok"] is True
+    assert result["stdout"].strip() == "42"
 
 
 @pytest.mark.skipif(not SANDBOX_ENABLED, reason="KWES_SANDBOX_TEST=1 requis (runner + Docker)")

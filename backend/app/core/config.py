@@ -57,6 +57,9 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("DB_RLS_ENABLED", "KWES_RLS_ENABLED"),
     )
+    # Réservé au worker (composant système) : il traite les missions de tous
+    # les espaces et ne peut donc pas porter l'identité d'un utilisateur.
+    db_rls_bypass: bool = Field(default=False, alias="DB_RLS_BYPASS")
     kwes_db_app_password: str = ""
     redis_url: str = "redis://127.0.0.1:6379/0"
     queue_backend: Literal["auto", "redis", "memory"] = "auto"
@@ -216,6 +219,12 @@ class Settings(BaseSettings):
     @property
     def effective_database_url(self) -> str:
         """URL réellement utilisée : rôle applicatif restreint si RLS est active."""
+        # Le worker est un composant système : il traite les missions de tous les
+        # espaces et ne peut pas porter l'identité d'un utilisateur. Il garde donc
+        # le rôle propriétaire (BYPASSRLS) ; l'API, elle, passe toujours par
+        # `kwes_app`.
+        if self.db_rls_bypass:
+            return self.database_url
         if not self.db_rls_enabled or not self.kwes_db_app_password:
             return self.database_url
         # SQLite (tests) n'a ni rôles ni RLS : ne jamais réécrire ces URL.

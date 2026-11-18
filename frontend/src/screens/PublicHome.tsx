@@ -90,8 +90,8 @@ function Shot({
         <img
           src={src}
           alt={alt}
-          width={1440}
-          height={900}
+          width={780}
+          height={1688}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
         />

@@ -288,6 +288,20 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     }
   };
 
+  // Message écrit depuis l'accueil : il est repris ici, dans le fil, pour que
+  // la réponse s'affiche comme dans une messagerie — jamais sur le droïde.
+  const pendingConsumed = useRef(false);
+  useEffect(() => {
+    if (!conversationId || pendingConsumed.current) return;
+    const key = `kwes.pending.${conversationId}`;
+    const pending = sessionStorage.getItem(key);
+    if (!pending) return;
+    pendingConsumed.current = true;
+    sessionStorage.removeItem(key);
+    void sendMessage(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
   const handleCopy = async (message: Message): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.content);

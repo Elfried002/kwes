@@ -15,10 +15,10 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { errorMessage, streamChat } from '../lib/api';
+import { createConversation, errorMessage } from '../lib/api';
 import { useSession } from '../lib/auth';
 import { firstName } from '../lib/format';
-import { href } from '../lib/router';
+import { href, navigate } from '../lib/router';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { useKwes } from '../state/KwesProvider';
 import { Composer } from '../components/Composer';
@@ -36,8 +36,7 @@ import {
 } from '../lib/home-voice';
 
 export function HomeScreen() {
-  const { notifyChatStarted, notifyChatAnswered, notifyApiError, resetOrb, bumpRefresh, micActive } =
-    useKwes();
+  const { notifyChatStarted, notifyApiError, resetOrb, micActive } = useKwes();
   const prefs = usePreferences();
   const reduced = usePrefersReducedMotion();
   const [draft, setDraft] = useState(() => readDraft('home'));
@@ -121,7 +120,7 @@ export function HomeScreen() {
     const message = draftRef.current.trim();
     if (!message) return;
     // Un nouvel envoi coupe net la réponse en cours : jamais deux voix.
-    const epoch = speech.stop();
+    speech.stop();
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -132,51 +131,18 @@ export function HomeScreen() {
     dispatch({ type: 'SEND' });
     notifyChatStarted();
 
-    const live = (): boolean => !controller.signal.aborted && epoch === speech.epoch();
-    let conversationId: string | null = null;
-
+    // Écrit = conversation : on ouvre directement le fil, comme une messagerie.
+    // Le droïde reste sur l'accueil, jamais dans l'échange.
     try {
-      await streamChat(
-        {
-          conversation_id: null,
-          message,
-          language: prefs.language,
-          mode: analysis ? 'mission' : 'auto',
-        },
-        {
-          onMeta: (meta) => {
-            if (!live() || !meta.conversation_id) return;
-            if (meta.conversation_id === conversationId) return;
-            conversationId = meta.conversation_id;
-            dispatch({ type: 'CONVERSATION', id: meta.conversation_id });
-          },
-          onDelta: (chunk) => {
-            if (!live()) return;
-            // Écrit = écrit : la réponse s'affiche, elle n'est jamais prononcée.
-            dispatch({ type: 'DELTA', text: chunk });
-          },
-          onDone: (payload) => {
-            if (!live()) return;
-            conversationId = payload.conversation_id ?? conversationId;
-            dispatch({ type: 'DONE', conversationId });
-            setAnalysis(false);
-            notifyChatAnswered();
-            bumpRefresh();
-          },
-          onError: (error) => {
-            if (!live()) return;
-            dispatch({ type: 'ERROR', message: error.message });
-            notifyApiError(error);
-            setDraft((current) => (current.trim() ? current : message));
-          },
-        },
+      const conversation = await createConversation(
+        { title: message.slice(0, 80), language: prefs.language },
         controller.signal,
       );
+      sessionStorage.setItem(`kwes.pending.${conversation.id}`, message);
+      setAnalysis(false);
+      navigate({ name: 'chat', conversationId: conversation.id });
     } catch (cause) {
-      if (controller.signal.aborted || !live()) {
-        resetOrb();
-        return;
-      }
+      if (controller.signal.aborted) return;
       dispatch({ type: 'ERROR', message: errorMessage(cause) });
       notifyApiError(cause);
       setDraft((current) => (current.trim() ? current : message));

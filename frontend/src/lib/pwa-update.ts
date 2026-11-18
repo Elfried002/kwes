@@ -13,6 +13,8 @@ type Listener = () => void;
 
 interface WaitingLike {
   waiting: { postMessage: (message: unknown) => void } | null;
+  installing?: { postMessage: (message: unknown) => void; state?: string } | null;
+  update?: () => Promise<unknown>;
 }
 
 let waitingRegistration: WaitingLike | null = null;
@@ -50,10 +52,31 @@ export function postponeUpdate(now: number = Date.now()): void {
 
 /** Accord explicite de l'utilisateur : la nouvelle version s'active, puis la page se recharge. */
 export function applyUpdate(): void {
-  const worker = waitingRegistration?.waiting;
-  if (!worker || applying) return;
+  if (applying) return;
   applying = true;
-  worker.postMessage({ type: 'SKIP_WAITING' });
+  emit();
+
+  const registration = waitingRegistration;
+  const worker = registration?.waiting ?? registration?.installing ?? null;
+  if (worker) {
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  } else {
+    // Plus rien en attente (le service worker s'est peut-être déjà activé) :
+    // on force une vérification, puis un rechargement.
+    void registration?.update?.().catch(() => undefined);
+  }
+
+  // Filet de sécurité : `controllerchange` ne se déclenche pas toujours (service
+  // worker déjà actif, navigateur qui ignore le message). Sans ce délai, le
+  // bouton « Mettre à jour maintenant » ne faisait rien du tout.
+  if (typeof window === 'undefined') return;
+  window.setTimeout(() => {
+    try {
+      window.location.reload();
+    } catch {
+      // Environnement de test ou navigateur qui bloque le rechargement.
+    }
+  }, 900);
 }
 
 function track(registration: ServiceWorkerRegistration): void {
@@ -69,7 +92,13 @@ export function registerServiceWorker(): void {
   if (!('serviceWorker' in navigator)) return;
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (applying) window.location.reload();
+    if (!applying) return;
+    applying = false;
+    try {
+      window.location.reload();
+    } catch {
+      /* idem */
+    }
   });
 
   navigator.serviceWorker

@@ -1017,3 +1017,63 @@
     animation: none;
   }
 }
+
+/* ---------- Écran d'ouverture : le droïde s'allume ---------- */
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: radial-gradient(circle at 50% 42%, #16204a 0%, #070b18 62%);
+  transition: opacity 380ms ease, visibility 380ms ease;
+}
+
+.boot[data-leaving='true'] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.boot__glow {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.55), transparent 62%);
+  filter: blur(18px);
+  animation: boot-pulse 1400ms ease-in-out infinite;
+}
+
+.boot__head {
+  position: relative;
+  animation: boot-in 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.boot__name {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-display, 'Sora', sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: #eaf1ff;
+  animation: boot-in 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+@keyframes boot-in {
+  from { opacity: 0; transform: scale(0.82) translateY(8px); filter: blur(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+@keyframes boot-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot__glow, .boot__head, .boot__name { animation: none; }
+}

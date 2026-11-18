@@ -1,0 +1,42 @@
+# Kwes
+
+> Kwes est un agent personnel autonome. Il transforme un objectif en mission : il planifie les étapes, exécute des actions avec des outils à permissions limitées et demande une validation humaine avant toute action sensible.
+
+Kwes est en phase alpha. Cette page décrit uniquement les capacités disponibles aujourd'hui.
+
+## Capacités disponibles
+
+- Conversation texte et vocale avec un agent personnel.
+- Missions découpées en étapes dépendantes, avec une progression issue du serveur.
+- Recherche web et lecture de pages, limitées à des domaines autorisés.
+- Rédaction de documents à partir des sources consultées.
+- Calcul et exécution de code dans un environnement isolé, sans accès réseau.
+- Mémoire des préférences et des faits utiles, propre à chaque compte.
+- Validation humaine avant toute action sensible, avec journal horodaté.
+
+## Limites actuelles
+
+- Pas d'envoi ni de lecture d'e-mails.
+- Pas de connexion à WhatsApp, Telegram ou aux SMS.
+- Pas d'accès à l'agenda.
+- Pas de paiement ni de virement.
+- Pas d'application Android native pour le moment : l'accès se fait par le navigateur ou par installation de la PWA.
+
+## Principes
+
+- Chaque compte utilise ses propres données. Les conversations, missions, documents et mémoires ne sont pas partagés entre comptes.
+- Kwes ne doit pas être présenté comme un service de paiement, un conseiller financier ou un professionnel de santé.
+
+## Pages publiques
+
+- [Accueil](https://frontend-phi-pied-lzumzbngjw.vercel.app/): présentation de Kwes.
+
+Les espaces de travail (conversations, missions, réglages) sont privés et ne sont pas destinés à l'indexation.
+
+## Auteur et contexte professionnel
+
+- Elfried Gaël YOBOUET, Lead Developer & Technical Architect, projet Kwes.
+- Domaines : développement logiciel, architecture technique, intelligence artificielle, systèmes multi-agents et cybersécurité.
+- Localisation professionnelle : Abidjan, Côte d'Ivoire.
+
+Full version : [llms-full.txt](https://frontend-phi-pied-lzumzbngjw.vercel.app/llms-full.txt)

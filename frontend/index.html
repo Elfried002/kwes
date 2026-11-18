@@ -37,7 +37,7 @@
     <meta property="og:title" content="Kwes — un agent qui travaille, vous qui décidez" />
     <meta
       property="og:description"
-      content="Planification, missions exécutées avec des outils limités, progression en temps réel et validation humaine avant chaque action sensible."
+      content="Kwes est un agent personnel autonome : parlez-lui ou écrivez-lui, il planifie, exécute avec des outils maîtrisés et demande votre accord avant toute action sensible. En français et en anglais."
     />
     <meta
       property="og:image"
@@ -55,7 +55,7 @@
     <meta name="twitter:title" content="Kwes — un agent qui travaille, vous qui décidez" />
     <meta
       name="twitter:description"
-      content="Missions planifiées et exécutées, progression réelle, validation humaine avant toute action sensible."
+      content="Kwes est un agent personnel autonome : parlez-lui ou écrivez-lui, il planifie, exécute avec des outils maîtrisés et demande votre accord avant toute action sensible."
     />
     <meta
       name="twitter:image"
@@ -67,57 +67,98 @@
     />
 
     <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "SoftwareApplication",
-            "@id": "https://www.agent-kwes.com/#application",
-            "name": "Kwes",
-            "alternateName": "Kwes — agent personnel autonome",
-            "applicationCategory": "BusinessApplication",
-            "operatingSystem": "Web",
-            "url": "https://www.agent-kwes.com/",
-            "inLanguage": "fr-FR",
-            "description": "Agent personnel autonome qui transforme un objectif en mission : planification, exécution d'étapes par des compétences à permissions limitées, progression issue du serveur et validation humaine avant toute action sensible.",
-            "featureList": [
-              "Conversation persistée côté serveur",
-              "Missions découpées en étapes dépendantes",
-              "Progression et statuts issus du serveur",
-              "Approbation humaine liée à l'empreinte de la charge utile",
-              "Recherche et lecture web limitées à des domaines autorisés",
-              "Documents produits à partir des sources consultées",
-              "Exécution de code dans un environnement isolé, sans réseau",
-              "Journal d'actions horodaté côté serveur"
-            ],
-            "brand": { "@id": "https://www.agent-kwes.com/#brand" },
-            "author": { "@id": "https://www.agent-kwes.com/#elfried-yobouet" }
-          },
-          {
-            "@type": "Brand",
-            "@id": "https://www.agent-kwes.com/#brand",
-            "name": "Kwes",
-            "logo": {
-              "@type": "ImageObject",
-              "url": "https://www.agent-kwes.com/brand/droid-512.png",
-              "width": 512,
-              "height": 512
-            }
-          },
-          {
-            "@type": "Person",
-            "@id": "https://www.agent-kwes.com/#elfried-yobouet",
-            "name": "Elfried YOBOUET",
-            "givenName": "Elfried",
-            "familyName": "YOBOUET",
-            "additionalName": "Gaël",
-            "jobTitle": "Lead Developer & Technical Architect — Kwes",
-            "knowsAbout": ["Développement logiciel", "Architecture technique", "Intelligence artificielle", "Systèmes multi-agents", "Cybersécurité"],
-            "workLocation": {"@type": "Place", "name": "Abidjan, Côte d'Ivoire"},
-            "address": {"@type": "PostalAddress", "addressLocality": "Abidjan", "addressCountry": "CI"}
-          }
-        ]
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://www.agent-kwes.com/#application",
+      "name": "Kwes",
+      "alternateName": "Kwes — agent personnel autonome",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "https://www.agent-kwes.com/",
+      "inLanguage": [
+        "fr-FR",
+        "en"
+      ],
+      "description": "Agent personnel autonome qui transforme un objectif en mission : planification, exécution d'étapes par des compétences à permissions limitées, progression issue du serveur et validation humaine avant toute action sensible.",
+      "featureList": [
+        "Conversation persistée côté serveur",
+        "Missions découpées en étapes dépendantes",
+        "Progression et statuts issus du serveur",
+        "Approbation humaine liée à l'empreinte de la charge utile",
+        "Recherche et lecture web limitées à des domaines autorisés",
+        "Documents produits à partir des sources consultées",
+        "Exécution de code dans un environnement isolé, sans réseau",
+        "Journal d'actions horodaté côté serveur"
+      ],
+      "brand": {
+        "@id": "https://www.agent-kwes.com/#brand"
+      },
+      "isAccessibleForFree": true,
+      "applicationSubCategory": "Personal AI assistant",
+      "contributor": {
+        "@id": "https://www.agent-kwes.com/#elfried-yobouet"
+      },
+      "creator": {
+        "@id": "https://www.agent-kwes.com/#elfried-yobouet"
       }
+    },
+    {
+      "@type": "Brand",
+      "@id": "https://www.agent-kwes.com/#brand",
+      "name": "Kwes",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.agent-kwes.com/brand/droid-512.png",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://www.agent-kwes.com/#elfried-yobouet",
+      "name": "Elfried YOBOUET",
+      "givenName": "Elfried",
+      "familyName": "YOBOUET",
+      "additionalName": "Gaël",
+      "jobTitle": "Lead Developer & Technical Architect — Kwes",
+      "knowsAbout": [
+        "Full-stack development",
+        "Software engineering",
+        "Artificial intelligence",
+        "Agentic AI",
+        "Multi-agent systems",
+        "Voice AI",
+        "Cybersecurity",
+        "Backend engineering",
+        "SaaS development",
+        "Cloud infrastructure",
+        "API integration",
+        "Technical architecture",
+        "Workflow automation"
+      ],
+      "workLocation": {
+        "@type": "Place",
+        "name": "Abidjan, Côte d'Ivoire"
+      },
+      "alternateName": [
+        "Elfried Gaël YOBOUET",
+        "Elfried Gael YOBOUET"
+      ],
+      "description": "Responsable technique du développement de Kwes et contributeur à la conception de son architecture technique.",
+      "knowsLanguage": [
+        "fr",
+        "en"
+      ],
+      "homeLocation": {
+        "@type": "Place",
+        "name": "Abidjan, Côte d'Ivoire"
+      }
+    }
+  ]
+}
     </script>
   </head>
   <body>

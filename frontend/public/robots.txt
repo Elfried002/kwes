@@ -3,7 +3,8 @@ Allow: /
 Disallow: /api/
 Disallow: /kwes-api/
 
-# L'espace de travail est rendu côté client après authentification :
-# seules les pages publiques sont destinées à l'indexation.
+# L'application est une SPA : les espaces de travail (conversations, missions,
+# réglages) sont rendus après authentification et ne sont pas indexables.
+# Seule la page publique est destinée à l'indexation.
 
 Sitemap: https://www.agent-kwes.com/sitemap.xml

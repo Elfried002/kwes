@@ -565,7 +565,7 @@ export function PublicHome() {
           <div className="site-foot__brand">
             <a className="site-brand" href="#/" aria-label="Kwes — accueil">
               <img src="/brand/droid-head.svg" alt="" width={30} height={30} />
-              <span>Kwes</span>
+              <span className="site-brand__name">KWES</span>
             </a>
             <p>Agent personnel autonome, avec validation humaine.</p>
           </div>

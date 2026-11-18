@@ -5,6 +5,7 @@ import { useRoute, guestScreen, isInstalledApp, type Route } from './lib/router'
 import { KwesProvider } from './state/KwesProvider';
 import { AppShell } from './components/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { UpdateBanner } from './components/UpdateBanner';
 import { LoginScreen, PasswordRecoveryScreen } from './screens/LoginScreen';
 import { PublicHome } from './screens/PublicHome';
 import { HomeScreen } from './screens/HomeScreen';
@@ -124,6 +125,7 @@ export default function App() {
       <KwesProvider>
         <RoutedApp />
       </KwesProvider>
+      <UpdateBanner />
     </ErrorBoundary>
   );
 }

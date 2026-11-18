@@ -4,11 +4,15 @@
  * Mise à jour : la nouvelle version reste en attente jusqu'à l'accord de l'utilisateur
  * (message SKIP_WAITING envoyé par l'interface), jamais d'activation silencieuse.
  */
-const CACHE = 'kwes-shell-v4';
+const CACHE = 'kwes-shell-v5';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+  // Activation immédiate : sans cela, un onglet resté ouvert continue de servir
+  // l'ancienne version pendant des jours (boutons obsolètes, micro injoignable).
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('message', (event) => {

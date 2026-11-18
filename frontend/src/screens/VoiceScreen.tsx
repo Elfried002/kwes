@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { href, navigate, type Route } from '../lib/router';
 import { useGeminiLive } from '../lib/use-gemini-live';
 import { useAudioLevel } from '../lib/use-audio-level';
+import { useSession } from '../lib/auth';
 import { stripMarkdownForSpeech, voiceAnnouncement } from '../lib/voice-session';
 import { Icon, type IconName } from '../components/Icon';
 import { type DotPhase } from '../components/orb/LivingDot';
@@ -60,15 +61,31 @@ export function VoiceScreen() {
 
   const voice = useGeminiLive();
 
-  // Entrer dans l'espace vocal démarre la conversation : plus de bouton micro.
+  // Entrer dans l'espace vocal tente de démarrer la conversation tout de suite.
+  // Sur iOS/Safari, le micro et l'audio exigent un geste utilisateur : si le
+  // navigateur refuse le démarrage automatique, on affiche une seule action
+  // « Touchez pour parler » — jamais un bouton micro à activer/désactiver.
+  const session = useSession();
   const startedRef = useRef(false);
+  const [needsStart, setNeedsStart] = useState(false);
+
+  // Le démarrage automatique attend que la session soit disponible : sinon le
+  // ticket vocal part sans jeton, reçoit 401 et l'écran reste muet.
   useEffect(() => {
+    if (!session?.token) return;
     if (startedRef.current) return;
     startedRef.current = true;
     void voice.activate();
-    // Volontairement au montage seulement : `activate` change d'identité.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session?.token]);
+
+  useEffect(() => {
+    if (voice.active) {
+      setNeedsStart(false);
+      return;
+    }
+    if (voice.error) setNeedsStart(true);
+  }, [voice.active, voice.error]);
 
   // `pulse` anime le dot sur la parole reconnue ; le niveau réel vient de
   // l'analyseur branché sur la sortie audio de Gemini (aucun élément <audio>).
@@ -181,7 +198,27 @@ export function VoiceScreen() {
 
 
   return (
-    <div className="voice-screen" data-phase={dotPhase} data-active={voice.active ? 'true' : 'false'}>
+    <div
+      className="voice-screen"
+      data-phase={dotPhase}
+      data-active={voice.active ? 'true' : 'false'}
+      onPointerDown={prime}
+    >
+      {needsStart && !voice.active ? (
+        <button
+          type="button"
+          className="vs-start"
+          onClick={() => {
+            prime();
+            void voice.activate();
+          }}
+        >
+          <span className="vs-start__title">Touchez pour parler</span>
+          <span className="vs-start__hint">
+            Le navigateur demande une action pour ouvrir le micro.
+          </span>
+        </button>
+      ) : null}
       <header className="voice-screen__top">
         <button
           ref={menuButtonRef}

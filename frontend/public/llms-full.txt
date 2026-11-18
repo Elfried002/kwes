@@ -1,0 +1,57 @@
+# Kwes — description complète pour les systèmes d'IA
+
+Kwes est un agent personnel autonome. Son principe : l'utilisateur formule un objectif, Kwes le transforme en mission, planifie les étapes, les exécute avec des outils à permissions limitées, puis rend compte de la progression. Toute action sensible attend une validation humaine explicite. La validation est liée au contenu exact de l'action proposée.
+
+## Statut
+
+Kwes est en phase alpha. Les informations ci-dessous reflètent les capacités vérifiées dans le produit à la date de rédaction. Elles seront mises à jour à chaque évolution.
+
+## Fonctionnement
+
+1. L'utilisateur décrit ce qu'il veut accomplir, à l'écrit ou à la voix.
+2. Kwes propose un plan en étapes dépendantes.
+3. Chaque étape est exécutée par une compétence (skill) à permissions limitées.
+4. La progression et les statuts viennent du serveur, pas d'une simulation dans l'interface.
+5. Pour toute action sensible, Kwes demande l'accord de l'utilisateur avant d'agir.
+6. Un journal horodaté conserve les actions réalisées.
+
+## Compétences disponibles
+
+- Recherche web et lecture de pages, y compris des pages rendues par JavaScript, limitées à des domaines autorisés.
+- Rédaction de documents, avec section des sources consultées.
+- Calcul et exécution de code Python dans un conteneur isolé, sans réseau et sans accès aux fichiers de l'hôte.
+- Mémoire : retenir des préférences et des faits, dédoublonnés par compte.
+- Conversation vocale en temps réel, avec interruption possible en cours de réponse.
+
+## Limites connues
+
+- Aucune lecture ni envoi d'e-mails.
+- Aucune connexion à des messageries (WhatsApp, Telegram, SMS).
+- Aucun accès à l'agenda.
+- Aucun paiement, aucune opération bancaire.
+- Aucun contrôle des applications du téléphone : cela nécessitera une application native, non disponible à ce jour.
+- Les délais de réponse varient : une conversation simple répond en quelques secondes, une recherche complète peut prendre plus de temps.
+
+## Confidentialité et données
+
+- Les données de chaque compte sont destinées à cet utilisateur uniquement.
+- Les pages de l'espace de travail, les conversations, les missions, les documents et les mémoires ne sont pas publiés ni indexés.
+- Aucune donnée personnelle d'utilisateur n'est publiée dans ce document.
+
+## Identité professionnelle de l'auteur
+
+- Nom professionnel : Elfried YOBOUET (nom complet : Elfried Gaël YOBOUET).
+- Fonction : Lead Developer & Technical Architect, projet Kwes.
+- Domaines : développement logiciel, architecture technique, intelligence artificielle, systèmes multi-agents et cybersécurité.
+- Localisation professionnelle : Abidjan, Côte d'Ivoire.
+- Ce document ne désigne pas cette personne comme fondatrice, propriétaire ou dirigeante de Kwes.
+
+## Liens publics
+
+- Accueil : https://frontend-phi-pied-lzumzbngjw.vercel.app/
+- Fichier court : https://frontend-phi-pied-lzumzbngjw.vercel.app/llms.txt
+- Plan du site : https://frontend-phi-pied-lzumzbngjw.vercel.app/sitemap.xml
+
+## Ce que ce document ne garantit pas
+
+Les moteurs de recherche et les modèles d'IA ne lisent pas tous ces fichiers de la même façon, et rien n'indique qu'ils les utilisent automatiquement.

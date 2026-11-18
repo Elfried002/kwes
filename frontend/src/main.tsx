@@ -3,6 +3,7 @@ import '@fontsource-variable/instrument-sans';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { registerServiceWorker } from './lib/pwa-update';
 import './styles/app.css';
 import './styles/ui-polish.css';
 import './styles/home.css';
@@ -10,6 +11,7 @@ import './styles/chat.css';
 import './styles/login-brand.css';
 import './styles/brand.css';
 import './styles/mobile-first.css';
+import './styles/pwa-update.css';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -23,10 +25,6 @@ createRoot(container).render(
 );
 
 // Service worker : cache de l'app shell en production uniquement (jamais en dev).
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((cause: unknown) => {
-      console.warn('[Kwes] Enregistrement du service worker impossible', cause);
-    });
-  });
+if (import.meta.env.PROD) {
+  window.addEventListener('load', registerServiceWorker);
 }

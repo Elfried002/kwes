@@ -76,3 +76,35 @@ Aucun changement de base, d'authentification, de route ou de dépendance.
 3. **Parcours et états** : chargement, vide, erreur, session expirée, absence d'autorisation sur chaque écran.
 4. **Isolation base** (après accès Supabase et sauvegarde) : rôle applicatif, `FORCE RLS`, tests négatifs entre deux comptes.
 5. **Modèle tenant** : seulement après la décision sur les espaces multiples.
+
+## 6. Décisions et état après cette itération
+
+### 6.1 Format d'accueil retenu
+Le format retenu est celui du code (`HomeScreen.tsx`) : le personnage au centre, la saisie écrite, et une réponse prononcée avec un seul sous-titre. « Lire la réponse » ouvre la conversation complète.
+
+Raisons :
+- c'est l'état le plus récent du code, et il suit la mission (droïde central, animations liées à la voix) ;
+- le chat écrit reste silencieux, comme le demande le ticket.
+
+Conflit à corriger dans le ticket : `docs/ISSUE_LOVABLE_FRONTEND.md` décrit l'accueil comme « réponse écrite, jamais parlée ». Le code ne le fait pas. Le code n'a pas été modifié sur ce point.
+
+### 6.2 Mise à jour PWA (implémentée)
+- `sw.js` n'active plus la nouvelle version tout seul : elle attend un message `SKIP_WAITING`.
+- Le cache passe à `kwes-shell-v4` ; les anciens caches sont supprimés à l'activation.
+- `lib/pwa-update.ts` détecte une version en attente et la signale à l'interface, à l'ouverture et au retour sur l'onglet (au plus toutes les 10 minutes).
+- `components/UpdateBanner.tsx` propose « Mettre à jour maintenant » ou « Plus tard ». Le report dure 30 minutes. Le rechargement n'a lieu qu'au clic.
+- Tests : accord explicite requis, report de 30 minutes.
+
+Limites connues : la hauteur de la barre mobile est estimée (84 px de décalage) et doit être vérifiée sur un téléphone. Le rechargement interrompt une saisie en cours, ce que la bannière indique.
+
+### 6.3 États chargement, vide et erreur
+Une revue des écrans existants montre que les trois états sont déjà traités sur les écrans de données (tâches, documents, conversations, validations, détail de tâche, réglages). Aucun changement n'a été fait sur ce point dans cette itération.
+
+### 6.4 Vérifications
+- Build de production : réussi.
+- Tests frontend : 138 / 138 (4 nouveaux).
+
+### 6.5 Reste à faire
+- Isolation base et modèle tenant : bloqués sans accès Supabase, sauvegarde et accord.
+- Domaine canonique à confirmer.
+- Vérification visuelle sur téléphone et tablette.

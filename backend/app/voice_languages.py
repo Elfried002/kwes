@@ -192,7 +192,12 @@ def prompt_hint(code: str | None) -> str | None:
         return None
     if language.status == STATUS_UNAVAILABLE:
         return None
+    # Le choix n'est pas figé : la langue suit celle de l'utilisateur, mais
+    # uniquement parmi les langues réellement maîtrisées. Mélanger deux langues
+    # dans une même phrase est le défaut constaté en démonstration.
     return (
-        f"Langue de la conversation : {language.label} ({language.code}). "
-        "Réponds dans cette langue, sans mélanger, sauf si la personne change de langue."
+        "Langue : réponds uniquement dans la langue de la dernière réplique de "
+        "l'utilisateur — français s'il parle français, anglais s'il parle anglais. "
+        "Toute autre langue : réponds en français. Ne mélange jamais deux langues "
+        "dans une même réponse."
     )

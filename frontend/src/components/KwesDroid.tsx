@@ -4,7 +4,7 @@ import './kwes-droid.css';
 
 type KwesDroidProps = {
   phase: OrbState;
-  levelRef: React.RefObject<number>;
+  levelRef?: React.RefObject<number>;
   className?: string;
 };
 

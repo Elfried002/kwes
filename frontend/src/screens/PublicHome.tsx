@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
-import { HybridOrb } from '../components/orb/HybridOrb';
+import { KwesDroid } from '../components/KwesDroid';
 import { BrandMark } from '../components/BrandMark';
 import { InstallApp } from '../components/InstallApp';
 import { Icon, type IconName } from '../components/Icon';
@@ -291,10 +291,10 @@ export function PublicHome() {
             </div>
 
             <div className="site-hero__visual" data-reveal style={{ '--reveal-delay': '90ms' } as CSSProperties}>
-              <HybridOrb state="idle" className="orb--site" />
+              <KwesDroid phase="idle" className="droid--site" />
               <p className="site-hero__status">
                 <span className="site-hero__dot" aria-hidden="true" />
-                Orb au repos — son état suit les événements du serveur
+                Disponible en français et en anglais
               </p>
             </div>
           </div>
@@ -590,20 +590,12 @@ export function PublicHome() {
             <a href="#/mot-de-passe-oublie">Mot de passe oublié</a>
           </nav>
 
-          <div className="site-foot__col">
-            <h2>Contact</h2>
-            <a href="mailto:contact@zawena.com">contact@zawena.com</a>
-            <p>Retours produit et incidents techniques.</p>
-          </div>
+
         </div>
 
         <div className="wrap site-foot__bottom">
           <p>© 2026 Kwes</p>
-          <p>
-            Mentions : Kwes est un produit en développement actif ; aucune entité commerciale ni
-            numéro d’immatriculation n’est publié sur cette page. Les captures proviennent de
-            l’application elle-même.
-          </p>
+          <p>Captures de l’application Kwes.</p>
         </div>
       </footer>
     </div>

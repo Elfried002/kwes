@@ -1073,3 +1073,22 @@
     scroll-behavior: auto;
   }
 }
+
+/* ---------- Héros public : le droïde remplace la sphère ---------- */
+.droid--site {
+  width: min(300px, 62vw);
+  height: auto;
+  margin: 0 auto;
+  display: block;
+  filter: drop-shadow(0 26px 60px rgba(76, 124, 255, 0.32));
+  animation: site-droid-float 6s ease-in-out infinite;
+}
+
+@keyframes site-droid-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .droid--site { animation: none; }
+}

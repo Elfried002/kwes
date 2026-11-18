@@ -22,7 +22,6 @@ import { href } from '../lib/router';
 import { readDraft, usePreferences, writeDraft } from '../lib/prefs';
 import { useKwes } from '../state/KwesProvider';
 import { Composer } from '../components/Composer';
-import { Icon } from '../components/Icon';
 import { KwesDroid } from '../components/KwesDroid';
 import { useAudioLevel } from '../lib/use-audio-level';
 import { useKwesSpeech } from '../lib/use-kwes-speech';
@@ -35,16 +34,6 @@ import {
   initialHomeVoice,
   reduceHomeVoice,
 } from '../lib/home-voice';
-
-/**
- * Trois amorces concrètes, pas des arguments de vente : elles remplissent
- * simplement le champ pour que l'utilisateur puisse les ajuster avant d'envoyer.
- */
-const SUGGESTIONS = [
-  'Aide-moi à préparer ma journée.',
-  'Résume où en sont mes projets.',
-  'Rédige un message pour mon équipe.',
-];
 
 export function HomeScreen() {
   const { notifyChatStarted, notifyChatAnswered, notifyApiError, resetOrb, bumpRefresh, micActive } =
@@ -282,49 +271,6 @@ export function HomeScreen() {
           focusSignal={focusSignal}
         />
 
-        {state.phase === 'idle' && !state.sentence && !state.error && !state.answer ? (
-          <div className="home-actions" aria-label="Actions rapides">
-            <a className="home-action" href={href({ name: 'voice' })}>
-              <span className="home-action__icon" aria-hidden="true">
-                <Icon name="mic" size={18} />
-              </span>
-              <span className="home-action__label">Parler à Kwes</span>
-              <span className="home-action__arrow" aria-hidden="true">↗</span>
-            </a>
-            <button
-              type="button"
-              className="home-action"
-              onClick={() => {
-                setDraft('Cherche sur le web ');
-                setFocusSignal((current) => current + 1);
-              }}
-            >
-              <span className="home-action__icon" aria-hidden="true">
-                <Icon name="spark" size={18} />
-              </span>
-              <span className="home-action__label">Chercher des sources</span>
-              <span className="home-action__arrow" aria-hidden="true">↗</span>
-            </button>
-          </div>
-        ) : null}
-
-        {state.phase === 'idle' && !state.sentence && !state.error && !state.answer ? (
-          <div className="home-dot__suggestions" aria-label="Suggestions">
-            {SUGGESTIONS.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                className="home-dot__suggestion"
-                onClick={() => {
-                  setDraft(suggestion);
-                  setFocusSignal((current) => current + 1);
-                }}
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
     </div>
   );

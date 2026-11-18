@@ -121,7 +121,7 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
         <aside className="rail" aria-label="Navigation principale">
           <a className="rail__brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
             <BrandMark size={34} state={orbState} />
-            <span className="rail__label rail__wordmark">Kwes</span>
+            <span className="rail__label rail__wordmark">KWES</span>
           </a>
 
           <a
@@ -205,7 +205,7 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
             </button>
             <a className="brand" href={href({ name: 'home' })} aria-label="Kwes — accueil">
               <BrandMark size={26} state={orbState} />
-              <span className="brand__name">Kwes</span>
+              <span className="brand__name brand__name--lg">KWES</span>
             </a>
             <a
               className="mobile-bar__icon"
@@ -285,23 +285,6 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
           </div>
         </div>
       ) : null}
-
-      <nav className="bottom-nav" aria-label="Navigation mobile">
-        {NAV.map((entry) => (
-          <a
-            key={entry.label}
-            className="bottom-nav__item"
-            href={href(entry.route)}
-            aria-current={isActive(route, entry.route) ? 'page' : undefined}
-          >
-            <Icon name={entry.icon} size={20} />
-            {entry.shortLabel}
-            {entry.route.name === 'approvals' && waiting > 0 ? (
-              <span className="bottom-nav__dot" aria-hidden="true" />
-            ) : null}
-          </a>
-        ))}
-      </nav>
 
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {`Kwes : ${orbMeta.announcement}`}

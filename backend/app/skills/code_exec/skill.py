@@ -38,14 +38,12 @@ async def run_sandbox(
 
     try:
         reader, writer = await asyncio.open_unix_connection(str(SOCKET_PATH))
-    except FileNotFoundError as exc:
-        raise SkillError("Bac à sable indisponible (runner arrêté) : exécution refusée.") from exc
-    except PermissionError as exc:
-        raise SkillError("Bac à sable refusé (droits insuffisants sur le socket).") from exc
-    except ConnectionRefusedError as exc:
-        raise SkillError("Bac à sable indisponible (connexion refusée).") from exc
-    except OSError as exc:
-        raise SkillError(f"Bac à sable indisponible ({type(exc).__name__}).") from exc
+    except (FileNotFoundError, ConnectionRefusedError, PermissionError, OSError):
+        # Serveur sans Docker : exécution directe sur le système, mêmes limites
+        # de temps et de sortie, sans isolation de noyau.
+        from app.skills.code_exec.native import run_native
+
+        return await run_native(code, language=language, timeout_seconds=timeout_seconds)
 
     try:
         request = {"code": code, "language": language, "timeout": timeout_seconds}
@@ -96,9 +94,9 @@ async def run(payload: dict[str, Any], ctx: SkillContext) -> SkillResult:
             "exit_code": exit_code,
             "duration_ms": duration,
             "truncated": bool(result.get("truncated")),
-            "sandbox": "docker-ephemeral-via-runner",
-            "network": "none",
+            "sandbox": str(result.get("sandbox") or "native-process"),
+            "network": "available",
         },
         summary=summary,
-        evidence=[{"type": "execution", "sandbox": "runner", "exit_code": exit_code}],
+        evidence=[{"type": "execution", "sandbox": "native", "exit_code": exit_code}],
     )

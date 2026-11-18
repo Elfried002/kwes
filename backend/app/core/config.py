@@ -11,7 +11,7 @@ import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_DEV_JWT_SECRET = "dev-secret-change-me"
@@ -50,7 +50,13 @@ class Settings(BaseSettings):
     # RLS réelle : l'application se connecte avec un rôle sans privilège et
     # déclare l'identité de l'utilisateur à chaque transaction. Désactiver ce
     # drapeau est le rollback immédiat (retour au rôle administrateur).
-    db_rls_enabled: bool = False
+    # Deux noms acceptés : `DB_RLS_ENABLED` (nom du champ) et `KWES_RLS_ENABLED`
+    # (nom utilisé dans les fichiers d'environnement). Sans cet alias, la
+    # variable KWES_RLS_ENABLED était silencieusement ignorée.
+    db_rls_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("DB_RLS_ENABLED", "KWES_RLS_ENABLED"),
+    )
     kwes_db_app_password: str = ""
     redis_url: str = "redis://127.0.0.1:6379/0"
     queue_backend: Literal["auto", "redis", "memory"] = "auto"
@@ -211,6 +217,9 @@ class Settings(BaseSettings):
     def effective_database_url(self) -> str:
         """URL réellement utilisée : rôle applicatif restreint si RLS est active."""
         if not self.db_rls_enabled or not self.kwes_db_app_password:
+            return self.database_url
+        # SQLite (tests) n'a ni rôles ni RLS : ne jamais réécrire ces URL.
+        if not self.database_url.startswith("postgresql"):
             return self.database_url
         from urllib.parse import quote, urlsplit, urlunsplit
 

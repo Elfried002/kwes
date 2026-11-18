@@ -96,6 +96,19 @@ class Database:
             except Exception:
                 await session.rollback()
                 raise
+            finally:
+                # La RLS est posée au niveau *session* (rôle + claims) : la
+                # connexion retourne au pool, il faut la rendre neutre, sinon la
+                # requête suivante hérite de l'identité précédente.
+                if not self.is_sqlite:
+                    try:
+                        await session.execute(text("reset role"))
+                        await session.execute(
+                            text("select set_config('request.jwt.claims', '', false)")
+                        )
+                        await session.commit()
+                    except Exception:  # noqa: BLE001
+                        await session.rollback()
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:

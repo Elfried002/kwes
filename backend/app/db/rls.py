@@ -31,10 +31,13 @@ def rls_applicable(settings: Settings, session: AsyncSession) -> bool:
 async def apply_rls_context(session: AsyncSession, user_id: uuid.UUID) -> None:
     """Déclare l'utilisateur courant pour les politiques RLS de la transaction."""
     claims = json.dumps({"sub": str(user_id), "role": "authenticated"})
+    # Portée *session* et non transaction : un commit au milieu de la requête
+    # (bootstrap du profil, création d'espace) effacerait un réglage local, et
+    # les requêtes suivantes retomberaient sur un rôle sans politique.
     await session.execute(
-        text("select set_config('request.jwt.claims', :claims, true)"), {"claims": claims}
+        text("select set_config('request.jwt.claims', :claims, false)"), {"claims": claims}
     )
-    await session.execute(text("set local role authenticated"))
+    await session.execute(text("set role authenticated"))
 
 
 __all__ = ["apply_rls_context", "rls_applicable"]

@@ -120,8 +120,11 @@ class RedisTaskQueue:
             url,
             encoding="utf-8",
             decode_responses=True,
-            socket_connect_timeout=0.5,
-            socket_timeout=2.0,
+            # RESP2 explicite : avec RESP3 sur un Redis 7 sans `hello` complet,
+            # la poignée de main expire et la file bascule en mode local.
+            protocol=2,
+            socket_connect_timeout=2.0,
+            socket_timeout=3.0,
         )
         await client.ping()
         return cls(client, name=name)

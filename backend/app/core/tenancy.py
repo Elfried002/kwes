@@ -47,6 +47,12 @@ def set_current_tenant(tenant_id: uuid.UUID | None) -> None:
     _CURRENT_TENANT.set(tenant_id)
 
 
+def _is_postgres(session: AsyncSession) -> bool:
+    """Les fonctions SECURITY DEFINER n'existent pas sous SQLite (tests)."""
+    bind = session.get_bind()
+    return bind is not None and bind.dialect.name == "postgresql"
+
+
 def current_tenant() -> uuid.UUID | None:
     return _CURRENT_TENANT.get()
 
@@ -111,16 +117,17 @@ async def ensure_personal_tenant(session: AsyncSession, user: CurrentUser) -> No
     try:
         if await session.get(Profile, user.id) is None:
             session.add(Profile(id=user.id, display_name=user.display_name or None, locale="fr"))
-        session.add(
-            Tenant(
-                id=user.id,
-                name=_personal_name(user),
-                slug=f"{PERSONAL_SLUG_PREFIX}{str(user.id)[:8]}",
-                plan="free",
-            )
-        )
-        session.add(TenantMembership(tenant_id=user.id, user_id=user.id, role="owner"))
-        session.add(TenantSettings(tenant_id=user.id))
+            await session.flush()
+        if _is_postgres(session):
+            # Sous RLS, l'insertion directe d'un tenant est refusée (on ne peut
+            # pas être membre avant d'exister). La fonction SECURITY DEFINER fait
+            # les trois insertions atomiquement, en vérifiant auth.uid().
+            await session.execute(text("select kwes_ensure_personal_tenant()"))
+        else:
+            session.add(Tenant(id=user.id, name=_personal_name(user),
+                               slug=f"{PERSONAL_SLUG_PREFIX}{str(user.id)[:8]}", plan="free"))
+            session.add(TenantMembership(tenant_id=user.id, user_id=user.id, role="owner"))
+            session.add(TenantSettings(tenant_id=user.id))
         await session.commit()
     except IntegrityError as exc:
         # Deux requêtes concurrentes ont créé l'espace en même temps : l'état

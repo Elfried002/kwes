@@ -1,0 +1,30 @@
+[Unit]
+Description=Kwes worker (missions, outils, files Redis)
+Documentation=https://www.agent-kwes.com
+After=network-online.target postgresql.service redis-server.service kwes-api.service
+Wants=network-online.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=kwes
+Group=kwes
+WorkingDirectory=/opt/kwes/backend
+EnvironmentFile=/opt/kwes/backend/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/kwes/venv/bin/python -m app.worker
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/kwes /tmp
+
+StandardOutput=append:/opt/kwes/logs/worker.log
+StandardError=append:/opt/kwes/logs/worker.err.log
+
+[Install]
+WantedBy=multi-user.target

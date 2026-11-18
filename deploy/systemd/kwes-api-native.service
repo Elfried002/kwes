@@ -1,0 +1,32 @@
+[Unit]
+Description=Kwes API (FastAPI/Uvicorn)
+Documentation=https://www.agent-kwes.com
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=kwes
+Group=kwes
+WorkingDirectory=/opt/kwes/backend
+EnvironmentFile=/opt/kwes/backend/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/kwes/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Le processus applicatif n'a pas besoin de privilèges, mais doit pouvoir lancer
+# les outils de l'agent (recherche, code, documents) sans passer par Docker.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/kwes /tmp
+
+StandardOutput=append:/opt/kwes/logs/api.log
+StandardError=append:/opt/kwes/logs/api.err.log
+
+[Install]
+WantedBy=multi-user.target

@@ -119,13 +119,32 @@ async def current_tenant(tenant: TenantDep, session: SessionDep) -> dict[str, An
 @router.post("/tenants", status_code=201)
 async def create_tenant(payload: TenantCreate, user: UserDep, session: SessionDep) -> dict[str, Any]:
     await ensure_personal_tenant(session, user)
-    tenant = Tenant(name=payload.name.strip(), slug=_slug(payload.name), plan="free")
-    session.add(tenant)
-    await session.flush()
-    membership = TenantMembership(tenant_id=tenant.id, user_id=user.id, role="owner")
-    session.add(membership)
-    session.add(TenantSettings(tenant_id=tenant.id))
-    await session.commit()
+    # Même raison que pour l'espace personnel : la création passe par une
+    # fonction SECURITY DEFINER, seule voie autorisée sous RLS.
+    if session.get_bind().dialect.name == "postgresql":
+        new_id = (
+            await session.execute(
+                text("select kwes_create_tenant(:name)"), {"name": payload.name.strip()}
+            )
+        ).scalar_one()
+    else:
+        row = Tenant(name=payload.name.strip(), slug=_slug(payload.name), plan="free")
+        session.add(row)
+        await session.flush()
+        session.add(TenantMembership(tenant_id=row.id, user_id=user.id, role="owner"))
+        session.add(TenantSettings(tenant_id=row.id))
+        await session.commit()
+        new_id = row.id
+    tenant = await session.get(Tenant, new_id)
+    membership = (
+        await session.execute(
+            select(TenantMembership).where(
+                TenantMembership.tenant_id == new_id, TenantMembership.user_id == user.id
+            )
+        )
+    ).scalar_one()
+    if tenant is None:
+        raise NotFound("Espace de travail introuvable.")
     return tenant_dict(tenant, membership, members=1)
 
 

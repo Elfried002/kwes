@@ -23,6 +23,7 @@ from sqlalchemy.orm import selectinload
 from app.agent.audit import record_audit
 from app.agent.llm import (
     GeminiTextClient,
+    _classify,
     IntentClassifier,
     LLMClient,
     LLMError,
@@ -186,7 +187,8 @@ class Orchestrator:
         elif mode == "outil":
             intent = "outil"
         else:
-            intent = await self.classifier.classify(text)
+            # Classification instantanée : une session Live de plus coûtait 2 à 4 s.
+            intent = _classify(text)
 
         if intent == "mission":
             task = await self._create_mission(session, user, conversation, text, history)
@@ -333,8 +335,9 @@ class Orchestrator:
         # réel et hallucine sinon une date (constaté en production le 16/11).
         now = datetime.now(timezone.utc)
         system = (
-            "Tu es Kwes, un agent personnel autonome. Réponds de façon concise, "
-            "utile et honnête. Tu ne prétends jamais avoir exécuté une action que "
+            "Tu es Kwes, un agent personnel autonome. Tu parles : une phrase, douze mots "
+            "maximum, sans préambule ni liste. Si la personne veut plus, elle le demandera. "
+            "Tu ne prétends jamais avoir exécuté une action que "
             "tu n'as pas exécutée. Si une mission est nécessaire, propose-la. "
             # Découverte : Kwes apprend à connaître son utilisateur au fil de la
             # conversation, sans jamais transformer l'échange en formulaire.
@@ -423,7 +426,8 @@ class Orchestrator:
         elif mode == "outil":
             intent = "outil"
         else:
-            intent = await self.classifier.classify(text)
+            # Classification instantanée : une session Live de plus coûtait 2 à 4 s.
+            intent = _classify(text)
 
         base_meta: dict[str, Any] = {"conversation_id": str(conversation.id)}
 

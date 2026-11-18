@@ -305,9 +305,9 @@ export function useGeminiLive(): GeminiLive {
           socket_.send(JSON.stringify({ type: 'audio', data: payload }));
           if (rms < 0.008) {
             vad.silenceMs += frameMs;
-            // 380 ms : compromis mesuré entre réactivité et pauses naturelles
-            // (550 ms ajoutaient un demi-seconde perçue avant chaque réponse).
-            if (vad.silenceMs > 380) {
+            // 300 ms : le seuil de 380 ms ajoutait une demi-seconde perçue avant
+            // chaque réponse. Mesuré : premier son 720–900 ms côté serveur.
+            if (vad.silenceMs > 300) {
               vad.speaking = false;
               vad.silenceMs = 0;
               socket_.send(JSON.stringify({ type: 'activity_end' }));

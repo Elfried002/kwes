@@ -94,7 +94,13 @@ Script : `tools/preuve_isolation.sql`.
    détachée après les commits de l'orchestrateur. → relecture par identifiant.
 5. **Poignée de main Gemini Live transitoirement expirée** (10 s) : l'usager
    recevait « service vocal indisponible ». → nouvelle tentative et délai explicite.
-6. **La RLS n'était pas active du tout avant le 18/11.** `KWES_RLS_ENABLED` était
+6. **Un tour de chat avec recherche renvoyait 500 `LLMTimeout`.** La cause
+   n'était pas le modèle : la résolution DNS de l'hôte prenait **10 s** (résolveur
+   du fournisseur muet), la poignée de main WebSocket expirait dans
+   `getaddrinfo`. Corrigé par `systemd-resolved` (1.1.1.1 / 8.8.8.8) : 0,00 à
+   0,03 s sur six noms. Les erreurs fournisseur renvoient désormais un 503
+   `PROVIDER_UNAVAILABLE` réessayable, plus un 500 opaque.
+7. **La RLS n'était pas active du tout avant le 18/11.** `KWES_RLS_ENABLED` était
    ignorée (le champ attendait `DB_RLS_ENABLED`) : l'API tournait avec le rôle
    administrateur. Corrigé et vérifié.
 
@@ -114,16 +120,25 @@ Script : `tools/preuve_isolation.sql`.
 - traces : missions, étapes, audit, preuves ;
 - isolation multi-tenant par RLS ;
 - conversation vocale temps réel (Gemini Live), barge-in ;
-- recherche web (SearXNG auto-hébergé + repli Wikipédia/DuckDuckGo) ;
+- recherche web (SearXNG auto-hébergé + repli Wikipédia/DuckDuckGo), sans
+  timeout : 2 tours réels à 16,0 s et 22,5 s, réponses sourcées (HTTP 200) ;
+- lecture de pages JavaScript via Chromium : `quotes.toscrape.com/js/` rend
+  **10 blocs produits par JavaScript** en 2,69 s ; `example.com` en 2,17 s ;
 - PWA installable, mises à jour gérées.
 
-### 5.2 Partiel ou en cours de fiabilisation
+### 5.2 Partiel
 
 - **Choix du skill par le planificateur** : sur une demande « écris un fichier »,
   il a choisi `business_planning` au lieu de `code_exec`. Le moteur exécute
   correctement ce qu'on lui donne, mais le routage doit être amélioré.
-- **Lecture de pages JavaScript** : installation Playwright en cours de validation.
-- **Recherche** : fiabilisation des moteurs SearXNG en cours (sous-agent dédié).
+- **Latence d'un tour avec recherche : 16 à 22 s.** Ce n'est plus une erreur, ce
+  n'est pas encore rapide. Décomposition mesurée : LLM 0,9 s → recherche
+  11,2 s (4 pages rendues en parallèle) → synthèse Live 14,1 s.
+- **Variance du modèle Live** : à payload identique, 11 à 18 s selon le tour ;
+  le plafond de 35 s absorbe l'échec, pas la lenteur.
+- **Redondance des moteurs** : bing (scraping) et DuckDuckGo (CAPTCHA
+  intermittent) peuvent casser sans préavis ; SearXNG renvoie aujourd'hui
+  20 à 40 résultats en 0,6 à 0,9 s.
 
 ### 5.3 Non intégré — annoncé comme indisponible
 

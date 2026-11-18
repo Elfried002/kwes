@@ -35,8 +35,10 @@ from app.core.config import Settings
 from app.core.errors import NotFound, ProviderUnavailable, ValidationFailed
 from app.core.events import EventBus, event_bus
 from app.core.security import CurrentUser
+from app.core.tenancy import current_tenant, set_current_tenant
 from app.core.utils import iso_utc, payload_hash, redact, truncate, utcnow
 from app.db.base import Database
+from app.db.rls import apply_rls_context, rls_applicable
 from app.db.models import (
     Approval,
     Conversation,
@@ -287,14 +289,20 @@ class Orchestrator:
         )
 
     async def _load_memories(self, session: AsyncSession, user_id: uuid.UUID) -> list[str]:
-        """Faits mémorisés les plus récents, injectés dans le prompt de conversation."""
+        """Faits mémorisés du tenant actif, injectés dans le prompt de conversation.
+
+        La mémoire appartient à l'espace de travail : un membre d'une équipe
+        retrouve les faits utiles au tenant, sans voir ceux d'un autre.
+        """
         limit = max(0, self.settings.max_memories_in_prompt)
         if not limit:
             return []
+        tenant_id = current_tenant()
+        scope = Memory.tenant_id == tenant_id if tenant_id else Memory.user_id == user_id
         rows = (
             await session.execute(
                 select(Memory)
-                .where(Memory.user_id == user_id)
+                .where(scope)
                 .order_by(Memory.updated_at.desc())
                 .limit(limit)
             )
@@ -611,7 +619,10 @@ class Orchestrator:
     ) -> Conversation:
         if conversation_id is not None:
             conversation = await session.get(Conversation, conversation_id)
-            if conversation is None or conversation.user_id != user.id:
+            # L'espace personnel porte l'identifiant du profil : le repli sur
+            # user.id reste correct pour les traitements hors requête (worker).
+            expected_tenant = current_tenant() or user.id
+            if conversation is None or conversation.tenant_id != expected_tenant:
                 raise NotFound("Conversation introuvable.")
             return conversation
         conversation = Conversation(
@@ -835,6 +846,11 @@ class Orchestrator:
                 task = await session.get(Task, task_id, options=[selectinload(Task.steps)])
                 if task is None:
                     return "missing"
+                # Le worker n'a pas de requête HTTP : on repose l'identité du
+                # demandeur pour que la RLS autorise l'exécution de ses lignes.
+                set_current_tenant(task.tenant_id or task.user_id)
+                if rls_applicable(self.settings, session):
+                    await apply_rls_context(session, task.user_id)
                 if task.status in TERMINAL_TASK_STATUSES:
                     return task.status
                 if task.status == "paused":

@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.errors import Unauthenticated
 from app.db.base import get_session
+from app.db.rls import apply_rls_context, rls_applicable
 from app.db.models import Profile
 
 logger = logging.getLogger("kwes.auth")
@@ -223,8 +224,15 @@ async def resolve_user(
 async def authenticate_token(
     token: str, session: AsyncSession, settings: Settings
 ) -> CurrentUser:
-    """Point d'entrée partagé HTTP / WebSocket."""
+    """Point d'entrée partagé HTTP / WebSocket.
+
+    La RLS est déclarée *avant* la création éventuelle du profil : la politique
+    `profiles_insert` exige `id = auth.uid()`, donc l'identité doit déjà être
+    posée quand la première requête d'un nouvel utilisateur arrive.
+    """
     payload = decode_token(token, settings)
+    if rls_applicable(settings, session):
+        await apply_rls_context(session, uuid.UUID(str(payload["sub"])))
     return await resolve_user(payload, session, settings)
 
 

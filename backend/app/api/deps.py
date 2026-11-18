@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.orchestrator import Orchestrator
 from app.core.config import Settings
 from app.core.security import CurrentUser, get_current_user
+from app.core.tenancy import TenantContext, get_tenant
 from app.db.base import Database, get_session
 from app.skills.registry import SkillRegistry
 
@@ -41,6 +42,7 @@ RegistryDep = Annotated[SkillRegistry, Depends(get_registry)]
 VoiceDep = Annotated[Any, Depends(get_voice_provider)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 UserDep = Annotated[CurrentUser, Depends(get_current_user)]
+TenantDep = Annotated[TenantContext, Depends(get_tenant)]
 
 
 class Pagination:

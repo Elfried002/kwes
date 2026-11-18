@@ -31,6 +31,7 @@ from app.api import (
     notifications,
     skills,
     tasks,
+    tenants,
     voice,
     voice_live,
 )
@@ -176,7 +177,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
-    app.state.db = Database(settings.database_url, pool_size=settings.database_pool_size)
+    app.state.db = Database(settings.effective_database_url, pool_size=settings.database_pool_size)
     app.state.rate_limiter = SlidingWindowLimiter()
     registry = SkillRegistry(SKILLS_DIR, settings)
     registry.load()
@@ -222,6 +223,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(approvals.router, prefix=prefix, dependencies=private_deps)
     app.include_router(notifications.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(tenants.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice_live.router, prefix=prefix)
     app.include_router(devices.router, prefix=prefix)
     if settings.app_env in ("dev", "test") and settings.dev_endpoints:

@@ -1,8 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /kwes-api/
 
-# Les routes de l'espace de travail sont rendues côté client après authentification ;
-# seule la page publique est destinée à l'indexation.
+# L'espace de travail est rendu côté client après authentification :
+# seules les pages publiques sont destinées à l'indexation.
 
-Sitemap: https://frontend-phi-pied-lzumzbngjw.vercel.app/sitemap.xml
+Sitemap: https://www.agent-kwes.com/sitemap.xml

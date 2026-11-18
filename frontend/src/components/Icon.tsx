@@ -36,6 +36,7 @@ export type IconName =
   | 'share'
   | 'edit'
   | 'more'
+  | 'chevron'
   | 'file'
   | 'waveform';
 
@@ -159,6 +160,7 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M13.5 3.5v4.5H18" />
     </>
   ),
+  chevron: <path d="m8 5 6 7-6 7" />,
   more: (
     <>
       <circle cx="5.5" cy="12" r="1.6" />

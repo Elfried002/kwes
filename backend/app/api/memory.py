@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
-from app.api.deps import PageDep, SessionDep, UserDep
+from app.api.deps import PageDep, SessionDep, TenantDep, UserDep
 from app.api.serializers import memory_dict
 from app.core.errors import NotFound
 from app.core.utils import truncate, utcnow
@@ -28,9 +28,9 @@ class MemoryUpdate(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
-async def _owned_memory(session, user, memory_id: uuid.UUID) -> Memory:
+async def _owned_memory(session, tenant, memory_id: uuid.UUID) -> Memory:
     row = await session.get(Memory, memory_id)
-    if row is None or row.user_id != user.id:
+    if row is None or row.tenant_id != tenant.id:
         raise NotFound("Élément de mémoire introuvable.")
     return row
 
@@ -39,12 +39,13 @@ async def _owned_memory(session, user, memory_id: uuid.UUID) -> Memory:
 async def list_memory(
     response: Response,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     page: PageDep,
     category: str | None = Query(default=None),
     q: str | None = Query(default=None, max_length=200),
 ) -> list[dict[str, Any]]:
-    stmt = select(Memory).where(Memory.user_id == user.id)
+    stmt = select(Memory).where(Memory.tenant_id == tenant.id)
     if category:
         stmt = stmt.where(Memory.category == category)
     if q:
@@ -57,7 +58,7 @@ async def list_memory(
     ).scalars().all()
     total = (
         await session.execute(
-            select(func.count(Memory.id)).where(Memory.user_id == user.id)
+            select(func.count(Memory.id)).where(Memory.tenant_id == tenant.id)
         )
     ).scalar_one()
     response.headers["X-Total-Count"] = str(total)
@@ -66,9 +67,9 @@ async def list_memory(
 
 @router.patch("/memory/{memory_id}")
 async def update_memory(
-    memory_id: uuid.UUID, payload: MemoryUpdate, user: UserDep, session: SessionDep
+    memory_id: uuid.UUID, payload: MemoryUpdate, user: UserDep, tenant: TenantDep, session: SessionDep
 ) -> dict[str, Any]:
-    row = await _owned_memory(session, user, memory_id)
+    row = await _owned_memory(session, tenant, memory_id)
     if payload.category is not None:
         if payload.category not in MEMORY_CATEGORIES:
             from app.core.errors import ValidationFailed
@@ -96,8 +97,8 @@ async def update_memory(
 
 
 @router.delete("/memory/{memory_id}", status_code=204)
-async def delete_memory(memory_id: uuid.UUID, user: UserDep, session: SessionDep) -> Response:
-    row = await _owned_memory(session, user, memory_id)
+async def delete_memory(memory_id: uuid.UUID, user: UserDep, tenant: TenantDep, session: SessionDep) -> Response:
+    row = await _owned_memory(session, tenant, memory_id)
     await session.delete(row)
     await session.commit()
     return Response(status_code=204)

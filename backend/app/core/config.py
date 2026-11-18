@@ -47,6 +47,11 @@ class Settings(BaseSettings):
 
     # --- Infrastructure -------------------------------------------------
     database_url: str = "postgresql+psycopg://kwes:kwes@127.0.0.1:5432/kwes"
+    # RLS réelle : l'application se connecte avec un rôle sans privilège et
+    # déclare l'identité de l'utilisateur à chaque transaction. Désactiver ce
+    # drapeau est le rollback immédiat (retour au rôle administrateur).
+    db_rls_enabled: bool = False
+    kwes_db_app_password: str = ""
     redis_url: str = "redis://127.0.0.1:6379/0"
     queue_backend: Literal["auto", "redis", "memory"] = "auto"
     database_pool_size: int = 5
@@ -201,6 +206,19 @@ class Settings(BaseSettings):
     def voice_backend(self) -> str:
         """Fournisseur vocal actif, sans ambiguïté : gemini ou dégradé."""
         return "gemini" if self.gemini_api_key else "indisponible"
+
+    @property
+    def effective_database_url(self) -> str:
+        """URL réellement utilisée : rôle applicatif restreint si RLS est active."""
+        if not self.db_rls_enabled or not self.kwes_db_app_password:
+            return self.database_url
+        from urllib.parse import quote, urlsplit, urlunsplit
+
+        parts = urlsplit(self.database_url)
+        host = parts.hostname or "127.0.0.1"
+        port = f":{parts.port}" if parts.port else ""
+        netloc = f"kwes_app:{quote(self.kwes_db_app_password, safe='')}@{host}{port}"
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
     @property
     def cors_origin_list(self) -> list[str]:

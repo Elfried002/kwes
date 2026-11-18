@@ -701,3 +701,182 @@
 .turn--user .turn__documents {
   border-top-color: rgba(255, 255, 255, 0.18);
 }
+
+/* ---------- Sélecteur d'espace de travail ---------- */
+.rail__tenant {
+  padding: 4px 6px 8px;
+}
+
+.rail__tenant .tenant-switch__button {
+  width: 100%;
+}
+
+.rail__tenant .tenant-switch__text {
+  display: none;
+}
+
+.drawer__tenant {
+  padding: 0 14px 10px;
+}
+
+.tenant-switch {
+  position: relative;
+}
+
+.tenant-switch__button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 10px;
+  border: 1px solid rgba(140, 165, 255, 0.14);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tenant-switch__button:hover,
+.tenant-switch__button:focus-visible {
+  border-color: rgba(120, 170, 255, 0.42);
+}
+
+.tenant-switch__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3a7dff, #2559d8);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex: none;
+}
+
+.tenant-switch__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.tenant-switch__name {
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-switch__role {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.tenant-switch__menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-width: 300px;
+  padding: 6px;
+  border: 1px solid rgba(140, 165, 255, 0.16);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+}
+
+.tenant-switch__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tenant-switch__item:hover,
+.tenant-switch__item:focus-visible {
+  background: rgba(120, 170, 255, 0.12);
+}
+
+.tenant-switch__item.is-active {
+  background: rgba(58, 125, 255, 0.18);
+}
+
+.tenant-switch__item-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.tenant-switch__item-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.tenant-switch__new {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px 10px;
+  border: 0;
+  border-top: 1px solid rgba(140, 165, 255, 0.12);
+  background: transparent;
+  color: var(--accent, #6aa2ff);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.tenant-switch__error {
+  margin: 6px 8px 2px;
+  font-size: 0.75rem;
+  color: #ff8a8a;
+}
+
+/* ---------- Accueil : KWES comme signature, le droïde comme point focal ---------- */
+.home-hero__wordmark {
+  margin: 0 0 2px;
+  font-family: var(--font-display, 'Sora', sans-serif);
+  font-size: clamp(2.4rem, 9vw, 4.2rem);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  line-height: 0.95;
+  text-align: center;
+  text-indent: 0.22em;
+  background: linear-gradient(180deg, #ffffff 20%, rgba(150, 185, 255, 0.72) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.home-hero__hi,
+.home-hero__title {
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .home-hero__wordmark {
+    font-size: clamp(3rem, 5vw, 4.6rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero__wordmark {
+    background: none;
+    color: var(--text);
+  }
+}

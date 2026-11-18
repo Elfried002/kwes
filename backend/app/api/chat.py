@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import Orchestrator
-from app.api.deps import OrchestratorDep, SessionDep, UserDep
+from app.api.deps import OrchestratorDep, SessionDep, TenantDep, UserDep
 from app.core.errors import ValidationFailed
 from app.core.security import CurrentUser
 
@@ -45,6 +45,7 @@ class ChatRequest(BaseModel):
 async def chat(
     payload: ChatRequest,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     orchestrator: OrchestratorDep,
 ) -> dict[str, Any]:
@@ -115,6 +116,7 @@ def _stream_events(
 async def chat_stream(
     payload: ChatRequest,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     orchestrator: OrchestratorDep,
 ) -> StreamingResponse:

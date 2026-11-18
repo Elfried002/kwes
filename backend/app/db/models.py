@@ -59,8 +59,57 @@ class Profile(TimestampMixin, Base):
     timezone: Mapped[str] = mapped_column(String(64), default="Africa/Porto-Novo", nullable=False)
 
 
+class Tenant(TimestampMixin, Base):
+    """Espace de travail : frontière d'isolation des données."""
+
+    __tablename__ = "tenants"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    slug: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
+    plan: Mapped[str] = mapped_column(String(24), default="free", server_default="free", nullable=False)
+
+
+class TenantMembership(Base):
+    """Appartenance d'un utilisateur à un tenant, avec son rôle."""
+
+    __tablename__ = "tenant_memberships"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(16), default="member", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (UniqueConstraint("tenant_id", "user_id", name="uq_tenant_memberships"),)
+
+
+class TenantSettings(Base):
+    __tablename__ = "tenant_settings"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    locale: Mapped[str] = mapped_column(String(16), default="fr", server_default="fr", nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Africa/Abidjan", server_default="Africa/Abidjan", nullable=False)
+    voice_language: Mapped[str] = mapped_column(String(16), default="fr", server_default="fr", nullable=False)
+    data: Mapped[dict[str, Any] | None] = mapped_column(JSON_DOC, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
 class Conversation(TimestampMixin, Base):
     __tablename__ = "conversations"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -79,6 +128,9 @@ class Conversation(TimestampMixin, Base):
 
 class Message(Base):
     __tablename__ = "messages"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID] = mapped_column(
@@ -100,6 +152,9 @@ class Message(Base):
 
 class Task(TimestampMixin, Base):
     __tablename__ = "tasks"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -128,6 +183,9 @@ class Task(TimestampMixin, Base):
 
 class TaskStep(TimestampMixin, Base):
     __tablename__ = "task_steps"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_id: Mapped[uuid.UUID] = mapped_column(
@@ -151,6 +209,9 @@ class TaskStep(TimestampMixin, Base):
 
 class Execution(Base):
     __tablename__ = "executions"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_id: Mapped[uuid.UUID] = mapped_column(
@@ -210,6 +271,9 @@ class SkillVersion(Base):
 
 class Memory(TimestampMixin, Base):
     __tablename__ = "memories"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -228,6 +292,9 @@ class Memory(TimestampMixin, Base):
 
 class Approval(Base):
     __tablename__ = "approvals"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -246,6 +313,9 @@ class Approval(Base):
 
 class Integration(TimestampMixin, Base):
     __tablename__ = "integrations"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -261,6 +331,9 @@ class Integration(TimestampMixin, Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -280,6 +353,9 @@ class AuditLog(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -302,6 +378,9 @@ class DeviceConnector(Base):
     """Appareil ou connecteur déclaré par l'utilisateur (Android, desktop, cloud)."""
 
     __tablename__ = "device_connectors"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -323,6 +402,9 @@ class DeviceCommand(Base):
     """Commande adressée à un connecteur, avec résultat réel obligatoire."""
 
     __tablename__ = "device_commands"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     connector_id: Mapped[uuid.UUID] = mapped_column(
@@ -353,6 +435,9 @@ class Document(TimestampMixin, Base):
     """
 
     __tablename__ = "documents"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -373,6 +458,9 @@ class Evidence(Base):
     """
 
     __tablename__ = "evidence"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -403,6 +491,9 @@ class VoiceSession(Base):
     """
 
     __tablename__ = "voice_sessions"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -423,6 +514,9 @@ class VoiceSession(Base):
 
 ALL_MODELS = [
     Profile,
+    Tenant,
+    TenantMembership,
+    TenantSettings,
     Conversation,
     Message,
     Task,

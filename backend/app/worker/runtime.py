@@ -45,7 +45,7 @@ async def build_runtime(
     with_queue: bool = True,
 ) -> Runtime:
     """Construit les composants partagés par l'API et le worker."""
-    db = Database(settings.database_url, pool_size=settings.database_pool_size)
+    db = Database(settings.effective_database_url, pool_size=settings.database_pool_size)
 
     registry = SkillRegistry(SKILLS_DIR, settings)
     registry.load()

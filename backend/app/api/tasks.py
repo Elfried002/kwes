@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import OrchestratorDep, PageDep, SessionDep, UserDep
+from app.api.deps import OrchestratorDep, PageDep, SessionDep, TenantDep, UserDep
 from app.api.serializers import task_dict
 from app.core.errors import NotFound
 from app.db.models import Task
@@ -46,10 +46,10 @@ class TaskCreate(BaseModel):
     steps: list[TaskStepCreate] | None = Field(default=None, max_length=8)
 
 
-async def _owned_task(session, user, task_id: uuid.UUID, *, with_steps: bool = False) -> Task:
+async def _owned_task(session, tenant, task_id: uuid.UUID, *, with_steps: bool = False) -> Task:
     options = [selectinload(Task.steps)] if with_steps else []
     task = await session.get(Task, task_id, options=options)
-    if task is None or task.user_id != user.id:
+    if task is None or task.tenant_id != tenant.id:
         raise NotFound("Mission introuvable.")
     return task
 
@@ -58,6 +58,7 @@ async def _owned_task(session, user, task_id: uuid.UUID, *, with_steps: bool = F
 async def create_task(
     payload: TaskCreate,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     orchestrator: OrchestratorDep,
 ) -> dict[str, Any]:
@@ -78,11 +79,12 @@ async def create_task(
 async def list_tasks(
     response: Response,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     page: PageDep,
     status: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
-    stmt = select(Task).where(Task.user_id == user.id)
+    stmt = select(Task).where(Task.tenant_id == tenant.id)
     if status:
         if status not in TASK_STATUSES:
             status = "__invalid__"
@@ -95,7 +97,7 @@ async def list_tasks(
     total = (
         await session.execute(
             select(func.count(Task.id)).where(
-                Task.user_id == user.id, *([Task.status == status] if status else [])
+                Task.tenant_id == tenant.id, *([Task.status == status] if status else [])
             )
         )
     ).scalar_one()
@@ -105,9 +107,9 @@ async def list_tasks(
 
 @router.get("/tasks/{task_id}")
 async def get_task(
-    task_id: uuid.UUID, user: UserDep, session: SessionDep
+    task_id: uuid.UUID, user: UserDep, tenant: TenantDep, session: SessionDep
 ) -> dict[str, Any]:
-    task = await _owned_task(session, user, task_id, with_steps=True)
+    task = await _owned_task(session, tenant, task_id, with_steps=True)
     return task_dict(task, include_steps=True)
 
 
@@ -115,10 +117,11 @@ async def get_task(
 async def cancel_task(
     task_id: uuid.UUID,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     orchestrator: OrchestratorDep,
 ) -> dict[str, Any]:
-    task = await _owned_task(session, user, task_id, with_steps=True)
+    task = await _owned_task(session, tenant, task_id, with_steps=True)
     task = await orchestrator.cancel_task(session, user, task)
     return task_dict(task, include_steps=True)
 
@@ -127,10 +130,11 @@ async def cancel_task(
 async def pause_task(
     task_id: uuid.UUID,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     orchestrator: OrchestratorDep,
 ) -> dict[str, Any]:
-    task = await _owned_task(session, user, task_id, with_steps=True)
+    task = await _owned_task(session, tenant, task_id, with_steps=True)
     task = await orchestrator.pause_task(session, user, task)
     return task_dict(task, include_steps=True)
 
@@ -139,9 +143,10 @@ async def pause_task(
 async def resume_task(
     task_id: uuid.UUID,
     user: UserDep,
+    tenant: TenantDep,
     session: SessionDep,
     orchestrator: OrchestratorDep,
 ) -> dict[str, Any]:
-    task = await _owned_task(session, user, task_id, with_steps=True)
+    task = await _owned_task(session, tenant, task_id, with_steps=True)
     task = await orchestrator.resume_task(session, user, task)
     return task_dict(task, include_steps=True)

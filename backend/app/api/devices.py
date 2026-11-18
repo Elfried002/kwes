@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import UserDep
+from app.api.deps import TenantDep, UserDep
 from app.core.errors import Forbidden, NotFound, Unauthenticated, ValidationFailed
 from app.db.base import get_session
 from app.db.models import DeviceCommand, DeviceConnector
@@ -120,7 +120,7 @@ DeviceDep = Annotated[DeviceConnector, Depends(_connector_from_header)]
 
 @router.post("/devices", response_model=RegisterResponse, status_code=201)
 async def register_device(
-    payload: RegisterRequest, user: UserDep, session: AsyncSession = Depends(get_session)
+    payload: RegisterRequest, user: UserDep, tenant: TenantDep, session: AsyncSession = Depends(get_session)
 ) -> Any:
     token = secrets.token_urlsafe(32)
     existing = (
@@ -167,7 +167,7 @@ async def register_device(
 
 
 @router.get("/devices", response_model=list[ConnectorOut])
-async def list_devices(user: UserDep, session: AsyncSession = Depends(get_session)) -> Any:
+async def list_devices(user: UserDep, tenant: TenantDep, session: AsyncSession = Depends(get_session)) -> Any:
     rows = (
         await session.execute(
             select(DeviceConnector)
@@ -192,10 +192,10 @@ async def list_devices(user: UserDep, session: AsyncSession = Depends(get_sessio
 
 @router.delete("/devices/{connector_pk}", status_code=204)
 async def revoke_device(
-    connector_pk: uuid.UUID, user: UserDep, session: AsyncSession = Depends(get_session)
+    connector_pk: uuid.UUID, user: UserDep, tenant: TenantDep, session: AsyncSession = Depends(get_session)
 ) -> None:
     row = await session.get(DeviceConnector, connector_pk)
-    if row is None or row.user_id != user.id:
+    if row is None or row.tenant_id != tenant.id:
         raise NotFound("Connecteur introuvable.")
     row.status = "revoked"
     row.token_hash = _hash(secrets.token_urlsafe(8))  # ancien jeton définitivement inutilisable

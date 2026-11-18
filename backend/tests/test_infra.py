@@ -39,9 +39,13 @@ def test_all_tables_exist_with_expected_names() -> None:
         "documents",
         "voice_sessions",
         "evidence",
+        # SaaS multi-tenant (migration 0013)
+        "tenants",
+        "tenant_memberships",
+        "tenant_settings",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 18  # 13 métier + device + documents + voice_sessions + evidence
+    assert len(ALL_MODELS) == 21  # 18 + tenants + appartenances + paramètres d'espace
 
 
 def test_task_columns_match_data_model() -> None:

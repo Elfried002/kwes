@@ -132,6 +132,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.Authorization = `Bearer ${token}`;
   }
 
+  // Espace de travail actif : le serveur vérifie l'appartenance, on ne fait
+  // que déclarer lequel des espaces de l'utilisateur est affiché.
+  try {
+    const tenant = localStorage.getItem('kwes.tenant.v1');
+    if (tenant) headers['X-Tenant-Id'] = tenant;
+  } catch {
+    /* stockage indisponible */
+  }
+
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   const abortFromCaller = (): void => controller.abort();
@@ -191,6 +200,9 @@ function asArray<T>(payload: unknown, key: string): T[] {
 }
 
 /* ---------- Health ---------- */
+
+/** Alias public de `request`, pour les modules qui n'ont pas besoin du reste. */
+export const apiRequest = request;
 
 export function getHealth(signal?: AbortSignal): Promise<Health> {
   return request<Health>('/health', { auth: false, signal, timeoutMs: 8000 });

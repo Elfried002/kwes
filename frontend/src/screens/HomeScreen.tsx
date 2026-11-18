@@ -216,6 +216,7 @@ export function HomeScreen() {
   return (
     <div className="page home-dot" data-phase={state.phase}>
       <header className="home-hero">
+        <p className="home-hero__wordmark" aria-hidden="true">KWES</p>
         <p className="home-hero__hi">{hello ? `Bonjour ${hello}` : 'Bonjour'}</p>
         <h1 className="home-hero__title">Comment puis-je vous aider aujourd’hui&nbsp;?</h1>
       </header>

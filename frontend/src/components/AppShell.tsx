@@ -6,6 +6,7 @@ import { listApprovals } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { useKwes, type UiConnection } from '../state/KwesProvider';
 import { BrandMark } from './BrandMark';
+import { TenantSwitcher } from './TenantSwitcher';
 import { Icon, type IconName } from './Icon';
 
 interface NavEntry {
@@ -133,6 +134,10 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
             <span className="rail__label">Nouvelle demande</span>
           </a>
 
+          <div className="rail__tenant">
+            <TenantSwitcher compact />
+          </div>
+
           <nav className="rail__nav" aria-label="Sections">
             {NAV.map((entry) => (
               <a
@@ -246,6 +251,10 @@ export function AppShell({ children, route }: { children: ReactNode; route: Rout
               <Icon name="edit" size={18} />
               Nouvelle demande
             </a>
+
+            <div className="drawer__tenant">
+              <TenantSwitcher />
+            </div>
 
             <nav className="drawer__nav" aria-label="Sections">
               {NAV.map((entry) => (

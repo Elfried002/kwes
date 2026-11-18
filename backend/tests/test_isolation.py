@@ -40,8 +40,10 @@ def test_memory_is_isolated(
     db_session_factory,
 ) -> None:
     with db_session_factory() as session:
-        mine = Memory(user_id=user_id, category="semantic", content="Mon fournisseur préféré")
-        theirs = Memory(user_id=other_user_id, category="semantic", content="Donnée privée B")
+        # Depuis la migration 0013, chaque ligne porte son espace de travail ;
+        # l'espace personnel d'un utilisateur porte son identifiant.
+        mine = Memory(user_id=user_id, tenant_id=user_id, category="semantic", content="Mon fournisseur préféré")
+        theirs = Memory(user_id=other_user_id, tenant_id=other_user_id, category="semantic", content="Donnée privée B")
         session.add_all([mine, theirs])
         session.commit()
         mine_id, theirs_id = str(mine.id), str(theirs.id)
@@ -66,8 +68,8 @@ def test_memory_delete_and_filters(
     with db_session_factory() as session:
         session.add_all(
             [
-                Memory(user_id=user_id, category="episodic", content="Mission terminée hier"),
-                Memory(user_id=user_id, category="semantic", content="Préférence horaire matin"),
+                Memory(user_id=user_id, tenant_id=user_id, category="episodic", content="Mission terminée hier"),
+                Memory(user_id=user_id, tenant_id=user_id, category="semantic", content="Préférence horaire matin"),
             ]
         )
         session.commit()

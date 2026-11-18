@@ -48,9 +48,9 @@ Kwes est en phase alpha. Les informations ci-dessous reflètent les capacités v
 
 ## Liens publics
 
-- Accueil : https://frontend-phi-pied-lzumzbngjw.vercel.app/
-- Fichier court : https://frontend-phi-pied-lzumzbngjw.vercel.app/llms.txt
-- Plan du site : https://frontend-phi-pied-lzumzbngjw.vercel.app/sitemap.xml
+- Accueil : https://www.agent-kwes.com/
+- Fichier court : https://www.agent-kwes.com/llms.txt
+- Plan du site : https://www.agent-kwes.com/sitemap.xml
 
 ## Ce que ce document ne garantit pas
 

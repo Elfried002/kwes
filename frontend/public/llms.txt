@@ -29,7 +29,7 @@ Kwes est en phase alpha. Cette page décrit uniquement les capacités disponible
 
 ## Pages publiques
 
-- [Accueil](https://frontend-phi-pied-lzumzbngjw.vercel.app/): présentation de Kwes.
+- [Accueil](https://www.agent-kwes.com/): présentation de Kwes.
 
 Les espaces de travail (conversations, missions, réglages) sont privés et ne sont pas destinés à l'indexation.
 
@@ -39,4 +39,4 @@ Les espaces de travail (conversations, missions, réglages) sont privés et ne s
 - Domaines : développement logiciel, architecture technique, intelligence artificielle, systèmes multi-agents et cybersécurité.
 - Localisation professionnelle : Abidjan, Côte d'Ivoire.
 
-Full version : [llms-full.txt](https://frontend-phi-pied-lzumzbngjw.vercel.app/llms-full.txt)
+Full version : [llms-full.txt](https://www.agent-kwes.com/llms-full.txt)

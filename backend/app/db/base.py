@@ -38,7 +38,14 @@ def _normalize_url(url: str) -> str:
 
 
 class Database:
-    def __init__(self, url: str, *, pool_size: int = 5, echo: bool = False) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        pool_size: int = 5,
+        echo: bool = False,
+        rls: bool = False,
+    ) -> None:
         self.url = _normalize_url(url)
         self.is_sqlite = self.url.startswith("sqlite")
         kwargs: dict[str, Any] = {"echo": echo, "future": True}
@@ -62,6 +69,14 @@ class Database:
                     cursor.execute("PRAGMA foreign_keys=ON")
                 finally:
                     cursor.close()
+
+        if rls and not self.is_sqlite:
+            # Chaque connexion empruntée au pool reçoit l'identité de la requête
+            # en cours : un `commit()` rend la connexion au pool, et sans cela la
+            # suivante repartait sans claims (écritures d'audit refusées).
+            from app.db.rls import install_rls_listener
+
+            install_rls_listener(self.engine)
 
         self.session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.engine, expire_on_commit=False, autoflush=False
@@ -102,11 +117,16 @@ class Database:
                 # requête suivante hérite de l'identité précédente.
                 if not self.is_sqlite:
                     try:
+                        # Neutralise l'identité de la connexion et oublie
+                        # l'utilisateur pour les connexions suivantes.
+                        from app.db.rls import set_rls_user
+
                         await session.execute(text("reset role"))
                         await session.execute(
                             text("select set_config('request.jwt.claims', '', false)")
                         )
                         await session.commit()
+                        set_rls_user(None)
                     except Exception:  # noqa: BLE001
                         await session.rollback()
 

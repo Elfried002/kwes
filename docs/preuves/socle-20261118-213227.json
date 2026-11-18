@@ -1,0 +1,85 @@
+{
+  "genere": "20261118-213227",
+  "controles": [
+    {
+      "controle": "Mission multi-outils (code_exec → document_write)",
+      "ok": true,
+      "detail": {
+        "tache": "ac5e41bb-613e-4e5a-bbd6-cbb3989c4908",
+        "statut": "completed",
+        "etapes": [
+          {
+            "skill": "code_exec",
+            "statut": "completed"
+          },
+          {
+            "skill": "document_write",
+            "statut": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "controle": "Document téléchargeable et conforme",
+      "ok": true,
+      "detail": {
+        "document": "Preuve socle — calcul",
+        "http": 200,
+        "octets": 64
+      }
+    },
+    {
+      "controle": "Mémoire écrite puis relue",
+      "ok": true,
+      "detail": {
+        "tache": "988492b9-6171-4585-85bf-a32863f939d7",
+        "statut": "completed",
+        "http_memoire": 200,
+        "marqueur_present": true
+      }
+    },
+    {
+      "controle": "Mémoire réinjectée dans une réponse",
+      "ok": true,
+      "detail": {
+        "http": 200,
+        "extrait": "Vous exigez des preuves horodatées avant toute conclusion."
+      }
+    },
+    {
+      "controle": "Continuité serveur (client déconnecté)",
+      "ok": false,
+      "detail": {
+        "tache": "4fe29071-dce0-4383-ac64-17c237ab7796",
+        "statut": "failed",
+        "stdout": ""
+      }
+    },
+    {
+      "controle": "Approbation humaine avant action R2",
+      "ok": true,
+      "detail": {
+        "tache": "18de260f-1f29-4edf-931f-9e7fc76360fa",
+        "statut_avant": "awaiting_approval",
+        "statut_apres": "completed"
+      }
+    },
+    {
+      "controle": "Pause puis reprise d'une mission",
+      "ok": true,
+      "detail": {
+        "etat_apres_pause": "paused",
+        "statut_final": "completed"
+      }
+    },
+    {
+      "controle": "Traces consultables (missions, preuves)",
+      "ok": true,
+      "detail": {
+        "missions_recentes": 5,
+        "preuves": 20,
+        "http_preuves": 200
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "genere": "20261118-212612",
+  "controles": [
+    {
+      "controle": "Mission multi-outils (code_exec → document_write)",
+      "ok": true,
+      "detail": {
+        "tache": "8ede0cf6-4f2d-4da2-9ecf-6a17096dd1c5",
+        "statut": "completed",
+        "etapes": [
+          {
+            "skill": "code_exec",
+            "statut": "completed",
+            "sortie": "{'stderr': '', 'stdout': 'RESULTAT=1081\\n', 'network': 'available', 'sandbox': 'native-process', 'exit_code': 0, 'trunca"
+          },
+          {
+            "skill": "document_write",
+            "statut": "completed",
+            "sortie": "{'chars': 61, 'title': 'Preuve socle — calcul', 'format': 'markdown', 'preview': '# Preuve socle 23 × 47 = 1081 Calcul e"
+          }
+        ]
+      }
+    },
+    {
+      "controle": "Document téléchargeable et conforme",
+      "ok": true,
+      "detail": {
+        "document": "Preuve socle — calcul",
+        "http": 200,
+        "octets": 64
+      }
+    },
+    {
+      "controle": "Mémoire écrite puis relue",
+      "ok": true,
+      "detail": {
+        "tache": "b5dccea9-0d5c-4ab7-95df-c2b6e12f5b47",
+        "statut": "completed",
+        "http_memoire": 200,
+        "marqueur_present": true
+      }
+    },
+    {
+      "controle": "Continuité serveur (client déconnecté)",
+      "ok": false,
+      "detail": {
+        "creation": 500
+      }
+    },
+    {
+      "controle": "Mémoire réinjectée dans une réponse",
+      "ok": false,
+      "detail": {
+        "http": 503,
+        "extrait": "{\"error\":{\"code\":\"PROVIDER_UNAVAILABLE\",\"message\":\"Le service de réponse est temporairement indisponible.\",\"details\":{\"p"
+      }
+    },
+    {
+      "controle": "Journal d'audit (missions consultables)",
+      "ok": true,
+      "detail": {
+        "missions_recentes": 5
+      }
+    }
+  ]
+}

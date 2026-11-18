@@ -177,7 +177,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
-    app.state.db = Database(settings.effective_database_url, pool_size=settings.database_pool_size)
+    app.state.db = Database(
+        settings.effective_database_url,
+        pool_size=settings.database_pool_size,
+        rls=settings.db_rls_enabled and not settings.db_rls_bypass,
+    )
     app.state.rate_limiter = SlidingWindowLimiter()
     registry = SkillRegistry(SKILLS_DIR, settings)
     registry.load()

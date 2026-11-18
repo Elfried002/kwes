@@ -1,0 +1,51 @@
+{
+  "genere": "20261118-212537",
+  "controles": [
+    {
+      "controle": "Mission multi-outils (code_exec → document_write)",
+      "ok": true,
+      "detail": {
+        "tache": "1b8eca39-3026-449a-b3b7-6e88bf238306",
+        "statut": "completed",
+        "etapes": [
+          {
+            "skill": "code_exec",
+            "statut": "completed",
+            "sortie": "{'stderr': '', 'stdout': 'RESULTAT=1081\\n', 'network': 'available', 'sandbox': 'native-process', 'exit_code': 0, 'trunca"
+          },
+          {
+            "skill": "document_write",
+            "statut": "completed",
+            "sortie": "{'chars': 61, 'title': 'Preuve socle — calcul', 'format': 'markdown', 'preview': '# Preuve socle 23 × 47 = 1081 Calcul e"
+          }
+        ]
+      }
+    },
+    {
+      "controle": "Document téléchargeable et conforme",
+      "ok": true,
+      "detail": {
+        "document": "Preuve socle — calcul",
+        "http": 200,
+        "octets": 64
+      }
+    },
+    {
+      "controle": "Mémoire écrite puis relue",
+      "ok": false,
+      "detail": {
+        "tache": "abf47d33-6cd3-41e0-8eb1-823c662ecc08",
+        "statut": "failed",
+        "http_memoire": 200,
+        "marqueur_present": false
+      }
+    },
+    {
+      "controle": "Journal d'audit (missions consultables)",
+      "ok": true,
+      "detail": {
+        "missions_recentes": 5
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "genere": "20261118-213506",
+  "controles": [
+    {
+      "controle": "Mission multi-outils (code_exec → document_write)",
+      "ok": true,
+      "detail": {
+        "tache": "d032beeb-fee4-4c64-9e21-a7356aace339",
+        "statut": "completed",
+        "etapes": [
+          {
+            "skill": "code_exec",
+            "statut": "completed"
+          },
+          {
+            "skill": "document_write",
+            "statut": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "controle": "Document téléchargeable et conforme",
+      "ok": true,
+      "detail": {
+        "document": "Preuve socle — calcul",
+        "http": 200,
+        "octets": 64
+      }
+    },
+    {
+      "controle": "Mémoire écrite puis relue",
+      "ok": true,
+      "detail": {
+        "tache": "77241282-c209-4145-8824-8ebd25d54e64",
+        "statut": "completed",
+        "http_memoire": 200,
+        "marqueur_present": true
+      }
+    },
+    {
+      "controle": "Mémoire réinjectée dans une réponse",
+      "ok": true,
+      "detail": {
+        "http": 200,
+        "extrait": "Vous exigez des preuves horodatées avant toute conclusion de ma part."
+      }
+    },
+    {
+      "controle": "Continuité serveur (client déconnecté)",
+      "ok": true,
+      "detail": {
+        "tache": "5a667667-d4ca-407f-be6e-152a8542e4c5",
+        "statut": "completed",
+        "stdout": "CONTINUITE_OK"
+      }
+    },
+    {
+      "controle": "Approbation humaine avant action R2",
+      "ok": true,
+      "detail": {
+        "tache": "304aef2b-6067-492d-b191-c3b1c6a4004c",
+        "statut_avant": "awaiting_approval",
+        "statut_apres": "completed"
+      }
+    },
+    {
+      "controle": "Pause puis reprise d'une mission",
+      "ok": true,
+      "detail": {
+        "etat_apres_pause": "paused",
+        "statut_final": "completed"
+      }
+    },
+    {
+      "controle": "Traces consultables (missions, preuves)",
+      "ok": true,
+      "detail": {
+        "missions_recentes": 5,
+        "preuves": 20,
+        "http_preuves": 200
+      }
+    }
+  ]
+}

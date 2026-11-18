@@ -243,7 +243,7 @@ export function HomeScreen() {
           </p>
 
           {state.answer ? (
-            <p className="home-answer">{state.answer}</p>
+            <p className="home-answer" tabIndex={0} aria-label="Réponse de Kwes">{state.answer}</p>
           ) : null}
 
           <div className="home-dot__actions">

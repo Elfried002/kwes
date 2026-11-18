@@ -147,6 +147,17 @@
   text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* Réponse longue : zone bornée à six lignes, défilable, sans étirer la page. */
+  max-height: calc(1.6em * 6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.home-answer:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
 }
 
 /* Ordre visuel : suggestions, actions, puis la zone de saisie. */

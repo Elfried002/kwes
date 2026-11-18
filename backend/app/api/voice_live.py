@@ -22,12 +22,14 @@ from typing import Any
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from pydantic import BaseModel, Field
 
 from app.agent.gemini_live import GeminiLiveSession, LiveUnavailable
 from app.agent.tools import CHAT_TOOL_NAMES, tool_definitions
+from app.core.tenancy import set_current_tenant
+from app.db.rls import apply_rls_context, rls_applicable
 from app.api.deps import DatabaseDep, SettingsDep, UserDep
 from app.db.models import Memory, VoiceSession
 from app.voice_cost import estimate
@@ -438,9 +440,28 @@ async def voice_live(
         )
         try:
             async with app.state.db.session() as session:
+                # Cette écriture ouvre sa propre session, hors requête HTTP : sans
+                # ce contexte, `auth.uid()` est vide et la politique RLS refuse
+                # l'insertion (la session vocale n'était donc jamais enregistrée).
+                if rls_applicable(settings, session):
+                    await apply_rls_context(session, user_id)
+                # La politique d'insertion exige l'appartenance à l'espace : sans
+                # `tenant_id`, `is_tenant_member(NULL)` est faux et la ligne est
+                # refusée — c'était la vraie cause de la perte des sessions.
+                tenant_id = (
+                    await session.execute(
+                        text(
+                            "select tenant_id from tenant_memberships "
+                            "where user_id = :user_id order by created_at limit 1"
+                        ),
+                        {"user_id": user_id},
+                    )
+                ).scalar()
+                set_current_tenant(tenant_id)
                 session.add(
                     VoiceSession(
                         user_id=user_id,
+                        tenant_id=tenant_id,
                         model=settings.google_live_model,
                         voice=settings.google_voice,
                         language=language,
@@ -456,5 +477,5 @@ async def voice_live(
                     )
                 )
                 await session.commit()
-        except Exception:  # noqa: BLE001
-            logger.warning("Enregistrement de la session vocale impossible.")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Enregistrement de la session vocale impossible: %s", str(exc)[:160])

@@ -259,15 +259,30 @@ class GeminiLiveSession:
     async def start(self) -> None:
         if self._session is not None:
             return
-        self._context = self._client.aio.live.connect(
-            model=self.model_name, config=self._config
-        )
-        try:
-            self._session = await self._context.__aenter__()
-        except Exception as exc:  # noqa: BLE001 — remonté en erreur normalisée
-            self._context = None
-            logger.warning("Connexion Gemini Live impossible: %s", type(exc).__name__)
-            raise LiveUnavailable("Connexion au service vocal impossible.") from exc
+        last_error: Exception | None = None
+        # La poignée de main Gemini a déjà expiré par intermittence (10 s) :
+        # une seconde tentative évite de renvoyer une erreur à l'utilisateur
+        # pour un incident réseau passager.
+        for attempt in range(2):
+            context = self._client.aio.live.connect(
+                model=self.model_name, config=self._config
+            )
+            self._context = context
+            try:
+                self._session = await asyncio.wait_for(
+                    context.__aenter__(), timeout=self.settings.gemini_timeout_seconds
+                )
+                return
+            except Exception as exc:  # noqa: BLE001 — remonté en erreur normalisée
+                last_error = exc
+                self._context = None
+                logger.warning(
+                    "Connexion Gemini Live impossible (essai %s/2): %s",
+                    attempt + 1,
+                    type(exc).__name__,
+                )
+                await asyncio.sleep(0.4)
+        raise LiveUnavailable("Connexion au service vocal impossible.") from last_error
 
     async def close(self) -> None:
         self._closed = True

@@ -196,7 +196,7 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
       if (data.session) return;
       setOtpEmail(clean);
       setInfo(
-        `Un code à 6 chiffres a été envoyé à ${clean}. Saisissez-le pour activer votre compte.`,
+        `Compte créé. Un e-mail de confirmation a été envoyé à ${clean} : ouvrez-le et cliquez le lien pour activer votre compte.`,
       );
       setPassword('');
       setConfirm('');
@@ -407,7 +407,7 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
           {otpEmail ? (
             <div className="stack" style={{ gap: 8 }}>
               <label htmlFor="otp" style={{ fontSize: '0.8125rem' }}>
-                Code de vérification envoyé à {otpEmail}
+                Vous avez reçu un code à 6 chiffres ? Saisissez-le ici.
               </label>
               <input
                 id="otp"

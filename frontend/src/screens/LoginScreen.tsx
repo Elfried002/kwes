@@ -20,14 +20,6 @@ function isProviderDisabled(...texts: Array<string | undefined>): boolean {
   return texts.some((text) => !!text && /provider is not enabled|unsupported provider/i.test(text));
 }
 
-function AppleMark() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 384 512" aria-hidden="true" fill="currentColor">
-      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
-    </svg>
-  );
-}
-
 function GoogleMark() {
   return (
     <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
@@ -103,7 +95,11 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [busy, setBusy] = useState<'email' | 'google' | 'apple' | 'reset' | null>(null);
+  const [busy, setBusy] = useState<'email' | 'google' | 'reset' | null>(null);
+  // Inscription en attente de vérification : e-mail + code à 6 chiffres.
+  const [otpEmail, setOtpEmail] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   // Erreur renvoyée par Google/Supabase au retour de la connexion (?error=…).
@@ -197,8 +193,10 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
         );
         return;
       }
+      if (data.session) return;
+      setOtpEmail(clean);
       setInfo(
-        `Compte créé. Un e-mail de confirmation a été envoyé à ${clean} : ouvrez le lien qu’il contient, puis revenez vous connecter.`,
+        `Un code à 6 chiffres a été envoyé à ${clean}. Saisissez-le pour activer votre compte.`,
       );
       setPassword('');
       setConfirm('');
@@ -271,26 +269,31 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
     }
   };
 
-  const handleApple = async (): Promise<void> => {
-    resetFeedback();
-    if (requireConfig()) return;
-    setBusy('apple');
+  /** Vérifie le code à 6 chiffres reçu par e-mail après une inscription. */
+  const verifyCode = async (): Promise<void> => {
+    if (!otpEmail) return;
+    const code = otpCode.trim();
+    if (code.length < 6) {
+      setError('Saisissez le code à 6 chiffres reçu par e-mail.');
+      return;
+    }
+    setOtpBusy(true);
+    setError(null);
     try {
-      const { error: failure } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: { redirectTo: redirectTo() },
+      const { error: failure } = await supabase.auth.verifyOtp({
+        email: otpEmail,
+        token: code,
+        type: 'signup',
       });
       if (failure) {
-        setError(
-          isProviderDisabled(failure.message)
-            ? 'La connexion Apple n’est pas encore activée sur ce service.'
-            : authErrorMessage(failure),
-        );
+        setError(authErrorMessage(failure));
+        return;
       }
+      // Session publiée par onAuthStateChange : l'espace s'ouvre seul.
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
-      setBusy(null);
+      setOtpBusy(false);
     }
   };
 
@@ -399,6 +402,31 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
               <Icon name="alert" size={16} />
               <span>{SUPABASE_CONFIG_ERROR}</span>
             </p>
+          ) : null}
+
+          {otpEmail ? (
+            <div className="stack" style={{ gap: 8 }}>
+              <label htmlFor="otp" style={{ fontSize: '0.8125rem' }}>
+                Code de vérification envoyé à {otpEmail}
+              </label>
+              <input
+                id="otp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otpCode}
+                onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ''))}
+                placeholder="123456"
+              />
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => void verifyCode()}
+                disabled={otpBusy}
+              >
+                {otpBusy ? 'Vérification…' : 'Valider le code'}
+              </button>
+            </div>
           ) : null}
 
           {error ?? oauthNotice ? (
@@ -632,15 +660,6 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
                 >
                   <GoogleMark />
                   {busy === 'google' ? 'Ouverture de Google…' : 'Continuer avec Google'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--soft btn--block login__google"
-                  onClick={() => void handleApple()}
-                  disabled={busy !== null || !supabaseConfigured}
-                >
-                  <AppleMark />
-                  {busy === 'apple' ? 'Ouverture d’Apple…' : 'Continuer avec Apple'}
                 </button>
               </div>
             </>

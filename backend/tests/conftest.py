@@ -55,6 +55,10 @@ def settings(tmp_path: Path) -> Settings:
         max_task_steps=6,
         max_step_retries=1,
         step_retry_backoff_seconds=0.01,
+        agents_package_root=str(
+            Path(__file__).resolve().parents[2] / "docs/audit/KWES_AGENTIC_TEAM_CONFIG_V3_1"
+        ),
+        connectors_dir=str(Path(__file__).resolve().parents[2] / "connectors"),
     )
 
 
@@ -113,6 +117,10 @@ def db_session_factory(settings: Settings):
     url = settings.database_url.replace("+aiosqlite", "")
     engine = create_engine(url)
     Base.metadata.create_all(engine)
+    # `create_all` laisse une transaction ouverte sur SQLite : sans ce
+    # recyclage, la connexion synchrone verrouille le fichier et l'API échoue
+    # en « database is locked » dès qu'elle doit écrire.
+    engine.dispose()
     factory = sessionmaker(engine, expire_on_commit=False)
     yield factory
     engine.dispose()

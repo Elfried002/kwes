@@ -1,0 +1,18 @@
+provider_id: telegram
+display_name: Telegram
+category: messagerie
+auth_mode: bot_token
+docs_url: https://core.telegram.org/bots
+env_required: []
+scopes:
+  - scope: bot
+    usage: Envoyer et recevoir des messages via un bot
+    risk: accès au bot uniquement, jamais au compte personnel
+capabilities:
+  - id: telegram.send
+    label: Envoyer un message via un bot
+    status: implemented
+  - id: telegram.receive
+    label: Recevoir les messages (webhook)
+    status: declared
+limits: "Un bot Telegram ne donne aucun accès aux conversations personnelles de l'utilisateur."

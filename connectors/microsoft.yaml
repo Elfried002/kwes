@@ -1,0 +1,20 @@
+provider_id: microsoft
+display_name: Microsoft 365 (Outlook et Agenda)
+category: messagerie
+auth_mode: oauth2_pkce
+docs_url: https://learn.microsoft.com/graph/
+env_required:
+  - MICROSOFT_OAUTH_CLIENT_ID
+  - MICROSOFT_OAUTH_CLIENT_SECRET
+scopes:
+  - scope: Mail.Read
+    usage: Lire les messages
+    risk: lecture de contenu privé
+  - scope: Calendars.ReadWrite
+    usage: Lire et créer des événements
+    risk: modification d'agenda
+capabilities:
+  - id: outlook.read
+    label: Lire les e-mails récents
+    status: implemented
+limits: "Nécessite une application Entra (Azure AD) avec les permissions déléguées."

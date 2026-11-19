@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     redis_url: str = "redis://127.0.0.1:6379/0"
     queue_backend: Literal["auto", "redis", "memory"] = "auto"
     database_pool_size: int = 5
+    #: Racine du package d'agents (SOUL/AGENT/SPEC/config.yaml par agent).
+    agents_package_root: str = "/opt/kwes/agents_pkg"
+    #: Manifestes des connecteurs (YAML versionnés dans le dépôt).
+    connectors_dir: str = "connectors"
+    #: Base publique de l'API, utilisée pour les URLs de retour OAuth.
+    public_api_url: str = "https://api.agent-kwes.com"
+    #: Application web, destination après une connexion OAuth réussie.
+    frontend_url: str = "https://kwes.vercel.app"
 
     # --- Authentification ----------------------------------------------
     dev_jwt_secret: str = DEFAULT_DEV_JWT_SECRET

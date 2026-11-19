@@ -39,6 +39,7 @@ class AgentTask(BaseModel):
     autonomy_level: AUTONOMY = "A1"
     deadline_seconds: int = Field(default=180, ge=1, le=600)
     max_tool_calls: int = Field(default=12, ge=1, le=100)
+    max_llm_turns: int = Field(default=4, ge=1, le=20)
     dependencies: list[uuid.UUID] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
     language: Literal["fr", "en"] = "fr"

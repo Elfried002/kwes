@@ -11,7 +11,10 @@ export type Route =
   | { name: 'tasks' }
   | { name: 'task'; id: string }
   | { name: 'approvals' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'connectors' }
+  | { name: 'whatsapp' }
+  | { name: 'admin' };
 
 export const HOME: Route = { name: 'home' };
 
@@ -47,6 +50,14 @@ export function parseHash(hash: string): Route {
       return { name: 'approvals' };
     case 'settings':
       return { name: 'settings' };
+    case 'connecteurs':
+    case 'connectors':
+      return { name: 'connectors' };
+    case 'whatsapp':
+      return { name: 'whatsapp' };
+    case 'admin':
+    case 'cockpit':
+      return { name: 'admin' };
     default:
       return { name: 'home' };
   }
@@ -76,6 +87,12 @@ export function routeToPath(route: Route): string {
       return '/approvals';
     case 'settings':
       return '/settings';
+    case 'connectors':
+      return '/connecteurs';
+    case 'whatsapp':
+      return '/whatsapp';
+    case 'admin':
+      return '/admin';
   }
 }
 

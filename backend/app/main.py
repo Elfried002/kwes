@@ -19,9 +19,12 @@ from app.agent.llm import GeminiTextClient
 from app.agent.orchestrator import build_orchestrator
 from app.agent.voice import build_voice_provider
 from app.api import (
+    admin,
     approvals,
     chat,
+    connectors,
     conversations,
+    missions,
     dev,
     devices,
     documents,
@@ -132,6 +135,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         registry: SkillRegistry = application.state.registry
         await seed_skills(db, registry)
 
+        # Catalogue des connecteurs : aligné sur les manifestes du dépôt.
+        from app.connectors.catalog import sync_catalog
+
+        racine_connecteurs = Path(settings.connectors_dir)
+        if not racine_connecteurs.is_absolute():
+            racine_connecteurs = Path(__file__).resolve().parents[2] / settings.connectors_dir
+        try:
+            await sync_catalog(db, racine_connecteurs)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Synchronisation du catalogue de connecteurs impossible : %s", exc)
+
         queue = await build_queue(settings)
         application.state.queue = queue
         llm = GeminiTextClient(settings)
@@ -145,6 +159,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             fetcher=application.state.fetcher,
         )
         application.state.orchestrator = orchestrator
+
+        # Dispatcher agentique : plan → spécialistes → résultats consolidés.
+        # Un package absent ne doit pas empêcher l'API de servir le chat :
+        # on désactive les missions et on le dit clairement.
+        from app.agents.service import MissionService, build_dispatcher
+
+        try:
+            dispatcher = build_dispatcher(
+                settings=settings,
+                db=db,
+                registry=registry,
+                llm=llm,
+                fetcher=application.state.fetcher,
+                package_root=Path(settings.agents_package_root),
+            )
+            application.state.missions = MissionService(dispatcher, db)
+            logger.info(
+                "Dispatcher agentique prêt (%s agents).",
+                len(dispatcher.agents.all()),
+            )
+        except Exception as exc:  # noqa: BLE001
+            application.state.missions = None
+            logger.warning("Dispatcher agentique indisponible : %s", exc)
 
         # P0 : le worker vit dans son propre processus (service kwes-worker).
         # L'API ne le démarre que si on le demande explicitement (tests, dev).
@@ -228,6 +265,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notifications.router, prefix=prefix, dependencies=private_deps)
     app.include_router(voice.router, prefix=prefix, dependencies=private_deps)
     app.include_router(tenants.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(missions.router, prefix=prefix, dependencies=private_deps)
+    app.include_router(connectors.router, prefix=prefix)
+    app.include_router(admin.router, prefix=prefix)
     app.include_router(voice_live.router, prefix=prefix)
     app.include_router(devices.router, prefix=prefix)
     if settings.app_env in ("dev", "test") and settings.dev_endpoints:

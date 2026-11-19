@@ -45,9 +45,21 @@ def test_all_tables_exist_with_expected_names() -> None:
         "tenant_settings",
         # Instrumentation des agents (migration 0016)
         "llm_usage",
+        # Socle agentique (migration 0017)
+        "agent_tasks",
+        "run_events",
+        "tool_invocations",
+        "connector_catalog",
+        "tenant_connections",
+        "oauth_states",
+        "cost_rates",
+        "platform_roles",
+        "admin_alerts",
+        # Coffre des connecteurs (migration 0018)
+        "connector_secrets",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 22  # 18 + 3 espaces + instrumentation LLM
+    assert len(ALL_MODELS) == 32  # 31 + coffre des connecteurs
 
 
 def test_task_columns_match_data_model() -> None:

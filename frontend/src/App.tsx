@@ -16,6 +16,9 @@ import { TasksScreen } from './screens/TasksScreen';
 import { TaskDetailScreen } from './screens/TaskDetailScreen';
 import { ApprovalsScreen } from './screens/ApprovalsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { ConnectorsScreen } from './screens/ConnectorsScreen';
+import { WhatsAppGuideScreen } from './screens/WhatsAppGuideScreen';
+import { AdminScreen } from './screens/AdminScreen';
 import { VoiceScreen } from './screens/VoiceScreen';
 
 function titleFor(route: Route): string {
@@ -38,6 +41,12 @@ function titleFor(route: Route): string {
       return 'Il attend votre accord';
     case 'settings':
       return 'Réglages';
+    case 'connectors':
+      return 'Connecteurs';
+    case 'whatsapp':
+      return 'WhatsApp';
+    case 'admin':
+      return 'Cockpit';
   }
 }
 
@@ -111,6 +120,15 @@ function RoutedApp() {
       break;
     case 'settings':
       screen = <SettingsScreen />;
+      break;
+    case 'connectors':
+      screen = <ConnectorsScreen />;
+      break;
+    case 'whatsapp':
+      screen = <WhatsAppGuideScreen />;
+      break;
+    case 'admin':
+      screen = <AdminScreen />;
       break;
     case 'voice':
       // Plein écran : ni barre latérale, ni barre du bas, ni carte.

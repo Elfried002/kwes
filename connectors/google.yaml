@@ -1,0 +1,29 @@
+provider_id: google
+display_name: Google (Gmail et Agenda)
+category: messagerie
+auth_mode: oauth2_pkce
+docs_url: https://developers.google.com/identity/protocols/oauth2
+env_required:
+  - GOOGLE_OAUTH_CLIENT_ID
+  - GOOGLE_OAUTH_CLIENT_SECRET
+scopes:
+  - scope: https://www.googleapis.com/auth/gmail.readonly
+    usage: Lire les messages pour répondre et résumer
+    risk: lecture de contenu privé
+  - scope: https://www.googleapis.com/auth/gmail.compose
+    usage: Préparer un brouillon sans l'envoyer
+    risk: écriture de brouillon
+  - scope: https://www.googleapis.com/auth/calendar.events
+    usage: Lire et créer des événements
+    risk: modification d'agenda
+capabilities:
+  - id: gmail.read
+    label: Lire les e-mails récents
+    status: implemented
+  - id: gmail.draft
+    label: Préparer un brouillon
+    status: implemented
+  - id: mail.send
+    label: Envoyer un e-mail
+    status: declared
+limits: "L'envoi réel (gmail.send) exige une vérification OAuth de l'application par Google."

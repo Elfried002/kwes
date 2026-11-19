@@ -541,6 +541,237 @@ class LLMUsage(Base):
     )
 
 
+# --------------------------------------------------------------------------
+# Socle agentique (migration 0017)
+# --------------------------------------------------------------------------
+
+
+class AgentTask(TimestampMixin, Base):
+    """Un nœud du graphe de mission : tâche confiée à un spécialiste par Core."""
+
+    __tablename__ = "agent_tasks"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    mission_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    agent_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_output: Mapped[str] = mapped_column(Text, nullable=False)
+    acceptance: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)
+    autonomy_level: Mapped[str] = mapped_column(String(2), nullable=False, default="A1")
+    depends_on: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    allowed_tools: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    max_tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
+    max_llm_turns: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    deadline_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    limitations: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunEvent(Base):
+    """Journal d'exécution : une ligne par fait observable d'une mission."""
+
+    __tablename__ = "run_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    mission_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    agent_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=True
+    )
+    agent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tool_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    approval_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    usage_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    evidence_ref: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    safe_metadata: Mapped[dict[str, Any]] = mapped_column(JSON_DOC, nullable=False, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+
+
+class ToolInvocation(Base):
+    """Appel d'outil réellement tenté, avec arguments expurgés et preuve."""
+
+    __tablename__ = "tool_invocations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    mission_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True
+    )
+    agent_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=True
+    )
+    agent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tool_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    tool_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    arguments: Mapped[dict[str, Any]] = mapped_column(JSON_DOC, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_ref: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+
+
+class ConnectorCatalog(Base):
+    """Catalogue global des fournisseurs connectables."""
+
+    __tablename__ = "connector_catalog"
+
+    provider_id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(96), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    auth_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="needs_configuration")
+    capabilities: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    scopes: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    limits: Mapped[str | None] = mapped_column(Text, nullable=True)
+    docs_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSON_DOC, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class TenantConnection(TimestampMixin, Base):
+    """Connexion d'un utilisateur d'un tenant à un fournisseur.
+
+    Le secret n'est jamais ici : `secret_ref` pointe une entrée du coffre.
+    """
+
+    __tablename__ = "tenant_connections"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    provider_id: Mapped[str] = mapped_column(
+        String(48), ForeignKey("connector_catalog.provider_id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    scopes: Mapped[list[Any]] = mapped_column(JSON_DOC, nullable=False, default=list)
+    secret_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    account_label: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OAuthState(Base):
+    """État OAuth à usage unique (anti-CSRF, PKCE, anti-replay)."""
+
+    __tablename__ = "oauth_states"
+
+    state: Mapped[str] = mapped_column(String(96), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    provider_id: Mapped[str] = mapped_column(String(48), nullable=False)
+    code_verifier: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    redirect_to: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    consumed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CostRate(Base):
+    """Tarif versionné. `status=draft` n'est jamais utilisé pour facturer."""
+
+    __tablename__ = "cost_rates"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model: Mapped[str] = mapped_column(String(96), nullable=False)
+    unit: Mapped[str] = mapped_column(String(24), nullable=False, default="token")
+    input_per_million: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    output_per_million: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class ConnectorSecret(Base):
+    """Secret chiffré d'une connexion (aucun jeton en clair en base)."""
+
+    __tablename__ = "connector_secrets"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    ref: Mapped[str] = mapped_column(String(120), primary_key=True)
+    provider_id: Mapped[str] = mapped_column(String(48), nullable=False)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
+class PlatformRole(Base):
+    """Rôle d'administration. Un agent ne peut jamais s'en attribuer un."""
+
+    __tablename__ = "platform_roles"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AdminAlert(Base):
+    """Alerte d'exploitation visible dans le cockpit."""
+
+    __tablename__ = "admin_alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    mission_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSON_DOC, nullable=False, default=dict)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 ALL_MODELS = [
     Profile,
     Tenant,
@@ -564,4 +795,14 @@ ALL_MODELS = [
     Document,
     VoiceSession,
     LLMUsage,
+    AgentTask,
+    RunEvent,
+    ToolInvocation,
+    ConnectorCatalog,
+    TenantConnection,
+    OAuthState,
+    CostRate,
+    PlatformRole,
+    AdminAlert,
+    ConnectorSecret,
 ]

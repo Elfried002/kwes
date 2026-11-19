@@ -1,0 +1,21 @@
+provider_id: whatsapp
+display_name: WhatsApp Business (Cloud API)
+category: messagerie
+auth_mode: api_key
+docs_url: https://developers.facebook.com/docs/whatsapp/cloud-api/overview
+env_required: []
+scopes:
+  - scope: whatsapp_business_messaging
+    usage: Envoyer et recevoir des messages d'entreprise
+    risk: messages sortants payants
+  - scope: whatsapp_business_management
+    usage: Gérer le compte WhatsApp Business
+    risk: gestion de compte
+capabilities:
+  - id: whatsapp.send_text
+    label: Envoyer un message texte (fenêtre de service)
+    status: declared
+  - id: whatsapp.webhook
+    label: Recevoir les messages entrants
+    status: declared
+limits: "Accès officiel uniquement, via un WABA validé par Meta. Aucun accès aux conversations WhatsApp personnelles."

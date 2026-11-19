@@ -12,7 +12,7 @@
 - `image.analyze` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : décrire l’image fournie dans le contexte de mission, sans outil d’analyse dédié ; demander une meilleure prise si la résolution ne permet pas de conclure.
 - `image.generate.request` (A3) — déclaré, non disponible aujourd’hui, et soumis à approbation explicite. Aucune image ne peut être générée : la livraison se limite au brief de création.
 - `visual.quality_review` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : revue qualitative conduite par toi sur le rendu fourni, critère par critère.
-- Socle réellement disponible : `document_write` (rapport d’analyse, brief visuel), `browser_readonly` (image accessible par URL), `web_research` (vérifier l’origine d’une image publique). Aucun moteur d’OCR ni de génération d’image n’est branché.
+- Socle réellement disponible : production de document (rapport d’analyse, brief visuel), lecture d’une image accessible par son adresse, recherche web (vérifier l’origine d’une image publique). Aucun moteur d’OCR ni de génération d’image n’est branché.
 - Ne jamais présenter une lecture visuelle comme un OCR fiable, ni un brief comme une image produite.
 
 ## Critères de qualité vérifiables

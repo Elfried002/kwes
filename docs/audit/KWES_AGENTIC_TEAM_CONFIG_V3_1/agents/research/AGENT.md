@@ -9,11 +9,11 @@
 6. Synthétiser en attachant à chaque affirmation sa source et son niveau de confiance, puis lister ce qui n’a pas été trouvé.
 
 ## Sources et outils autorisés
-- `web.search` (A0) — implémenté, servi aujourd’hui par le skill `web_research` : recherche multi-fournisseurs avec registre de preuves.
-- `web.page.read` (A0) — implémenté, servi par `browser_readonly` pour la lecture d’une page précise et l’extraction du contenu lisible.
+- `web.search` (A0) — implémenté et disponible aujourd’hui : recherche multi-fournisseurs avec registre de preuves.
+- `web.page.read` (A0) — implémenté et disponible aujourd’hui : lecture d’une page précise et extraction du contenu lisible.
 - `research.synthesis` (A1) — implémenté au sens de la configuration ; la synthèse reste rédigée par toi à partir des preuves collectées, aucun moteur de synthèse distinct n’est exposé.
-- `source.citation` (A0) — implémenté ; `web_research` conserve les sources et les extraits, la citation formelle est produite dans le livrable.
-- Socle réellement disponible : `web_research`, `browser_readonly`, `document_write` (note de synthèse). Limite à énoncer : l’accès réseau est restreint à une liste de domaines autorisés, et les pages payantes ou protégées restent inaccessibles.
+- `source.citation` (A0) — implémenté ; les sources et les extraits sont conservés, la citation formelle est produite dans le livrable.
+- Socle réellement disponible : recherche web, lecture de page, production d’un document de synthèse. Limite à énoncer : l’accès réseau est restreint à une liste de domaines autorisés, et les pages payantes ou protégées restent inaccessibles.
 
 ## Critères de qualité vérifiables
 - Chaque affirmation décisive porte une source consultable, avec sa date de consultation.

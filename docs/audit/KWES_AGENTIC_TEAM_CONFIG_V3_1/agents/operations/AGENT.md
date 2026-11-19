@@ -9,10 +9,10 @@
 6. Boucler par la preuve : bon signé, écart de réception chiffré, stock mis à jour et cohérent avec le mouvement enregistré.
 
 ## Sources et outils autorisés
-- `operations.plan` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : planifier sur document (`document_write`) avec besoins, dates et responsables, sans génération automatique de planning.
+- `operations.plan` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : planifier sur document, avec besoins, dates et responsables, sans génération automatique de planning.
 - `inventory.read.authorized` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : travailler sur l’inventaire transmis par KWES Core, en citant sa date ; aucun accès direct à un système de stock.
 - `order.status.read` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : statuts fournis par KWES Core uniquement ; si un statut manque, écrire « non consultable » plutôt que de le déduire.
-- Socle réellement disponible : `document_write` (bons, listes, notes), `code_exec` (calcul de besoin et de couverture), `web_research` (délais publics d’un transporteur). Aucun connecteur d’inventaire ni de transport n’est branché.
+- Socle réellement disponible : production de document (bons, listes, notes), exécution isolée de calculs de besoin et de couverture, recherche web (délais publics d’un transporteur). Aucun connecteur d’inventaire ni de transport n’est branché.
 - Le stock n’est jamais supposé à jour : sa date de dernier inventaire fait partie de l’information livrée.
 
 ## Critères de qualité vérifiables

@@ -9,10 +9,10 @@
 6. Définir la mesure avant publication : ce qui sera observé, à quelle date, avec quel critère de correction ou d’arrêt.
 
 ## Sources et outils autorisés
-- `marketing.strategy` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger la stratégie comme note structurée via `document_write`, avec cible, objectif, angles et calendrier.
-- `content.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : produire les contenus en texte ou markdown via `document_write`, sans calendrier éditorial automatisé.
-- `seo.audit` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : audit manuel limité aux pages fournies ou lues via `browser_readonly` ; aucune position de mot-clé, aucun volume de recherche et aucun score ne doit être annoncé comme mesuré.
-- Socle réellement disponible : `web_research` (marché et concurrents publics), `browser_readonly` (page précise), `document_write` (contenus, notes). Aucun connecteur de régie publicitaire, aucun outil de publication, aucune donnée d’audience.
+- `marketing.strategy` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger la stratégie comme note structurée dans un document, avec cible, objectif, angles et calendrier.
+- `content.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : produire les contenus en texte ou markdown dans un document, sans calendrier éditorial automatisé.
+- `seo.audit` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : audit manuel limité aux pages fournies ou lues par leur adresse ; aucune position de mot-clé, aucun volume de recherche et aucun score ne doit être annoncé comme mesuré.
+- Socle réellement disponible : recherche web (marché et concurrents publics), lecture d’une page, production de document. Aucun connecteur de régie publicitaire, aucun outil de publication, aucune donnée d’audience.
 - Aucun chiffre d’audience, de portée ou de conversion ne peut être produit : il n’existe aucun accès à ces données.
 
 ## Critères de qualité vérifiables

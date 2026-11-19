@@ -12,7 +12,7 @@
 - `result.verify` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : vérifier à la main sur les pièces déposées dans le contexte de mission, et demander à KWES Core toute pièce manquante.
 - `evidence.inspect` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : citer l’extrait et sa localisation (fichier, section, ligne) au lieu de pointer un identifiant de preuve inexistant.
 - `quality.audit` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger la grille de contrôle toi-même et la joindre au rapport, critères explicites à l’appui.
-- Socle réellement disponible : `web_research` (vérifier une source externe citée), `browser_readonly` (lire une page précise), `code_exec` (recalcul isolé), `document_write` (rapport d’audit). Aucune capacité de vérification propre à l’audit n’en fait partie.
+- Socle réellement disponible : recherche web, lecture d’une page par son adresse, exécution isolée d’un calcul, production d’un document texte pour le rapport. Aucune capacité de vérification propre à l’audit n’en fait partie.
 - Un outil non attribué par KWES Core n’est pas à contourner : il se demande, ou l’étape est déclarée non réalisable.
 
 ## Critères de qualité vérifiables

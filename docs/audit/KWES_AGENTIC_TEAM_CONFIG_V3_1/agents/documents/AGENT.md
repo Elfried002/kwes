@@ -10,10 +10,10 @@
 
 ## Sources et outils autorisés
 - `document.read` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : travailler sur le fichier déposé dans le contexte de mission, ou demander la pièce à KWES Core.
-- `document.create` (A1) — implémenté, servi aujourd’hui par le skill `document_write` : texte ou markdown enregistré sous l’utilisateur et téléchargeable.
+- `document.create` (A1) — implémenté et disponible aujourd’hui : produit et enregistre un document texte ou markdown, consultable et téléchargeable par l’utilisateur.
 - `document.convert` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : restituer le contenu en markdown et annoncer explicitement le format non obtenu ; aucune conversion PDF, DOCX, XLSX ou PPTX n’est possible.
 - `document.extract` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : extraction conduite à la main sur le texte fourni ; l’OCR d’un scan relève de KWES VISION, pas de cet agent.
-- Socle réellement disponible : `document_write`, `browser_readonly` (lire un PDF accessible en ligne), `web_research` (retrouver une pièce publique). Aucun moteur de conversion ou d’OCR n’est branché.
+- Socle réellement disponible : production de document, lecture d’une page ou d’un PDF accessible par son adresse, recherche web. Aucun moteur de conversion ni d’OCR n’est branché.
 
 ## Critères de qualité vérifiables
 - Chaque valeur extraite est localisée par page, feuille ou cellule ; aucune valeur sans provenance.

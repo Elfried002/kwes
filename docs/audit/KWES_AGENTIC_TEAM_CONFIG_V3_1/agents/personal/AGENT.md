@@ -10,10 +10,10 @@
 
 ## Sources et outils autorisés
 - `calendar.read` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : travailler sur les créneaux et occupations transmis par KWES Core ; aucun calendrier n’est lisible directement.
-- `task.manage` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : livrer les tâches comme liste structurée via `document_write`, sans écriture dans un gestionnaire de tâches.
+- `task.manage` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : livrer les tâches comme liste structurée dans un document, sans écriture dans un gestionnaire de tâches.
 - `reminder.propose` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : formuler le rappel proposé en texte (date, heure, fuseau, canal) ; aucune notification n’est réellement programmée.
-- `profile.preference.read` (A0) — implémenté, dans la limite de ce que KWES Core transmet et de ce que le skill `remember` conserve comme préférences déclarées.
-- Socle réellement disponible : `document_write`, `remember` (fait durable sur l’utilisateur), rarement `web_research`. Aucun accès direct à un agenda, une messagerie ou un téléphone.
+- `profile.preference.read` (A0) — implémenté, dans cette seule limite : les préférences transmises par KWES Core et le fait durable conservé par la mémoire du moteur.
+- Socle réellement disponible : production de document, mémoire d’un fait durable, rarement recherche web. Aucun accès direct à un agenda, une messagerie ou un téléphone.
 
 ## Critères de qualité vérifiables
 - Aucune proposition ne contredit une préférence déclarée.

@@ -10,9 +10,9 @@
 
 ## Sources et outils autorisés
 - `sales.pipeline.read` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : travailler sur l’état de pipeline transmis par KWES Core ; si aucun état n’est fourni, livrer une liste datée plutôt qu’un pipeline reconstitué.
-- `lead.research` (A0) — implémenté, servi aujourd’hui par la recherche web du moteur (`web_research`) : informations publiques sur une entreprise ou un secteur.
-- `sales.proposal.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger la proposition en markdown via `document_write`, avec périmètre, conditions et réserves.
-- Socle réellement disponible : `web_research`, `document_write`, `browser_readonly`. Aucun connecteur CRM, aucune boîte d’envoi : une sollicitation ne peut pas être émise depuis cet agent.
+- `lead.research` (A0) — implémenté et disponible aujourd’hui sous la forme de la recherche web du moteur : informations publiques sur une entreprise ou un secteur.
+- `sales.proposal.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger la proposition en markdown dans un document, avec périmètre, conditions et réserves.
+- Socle réellement disponible : recherche web, production de document, lecture d’une page. Aucun connecteur CRM, aucune boîte d’envoi : une sollicitation ne peut pas être émise depuis cet agent.
 - Un prix sans grille ni validation n’existe pas : il est soit sourcé, soit explicitement absent du livrable.
 
 ## Critères de qualité vérifiables

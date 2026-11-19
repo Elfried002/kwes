@@ -9,11 +9,11 @@
 6. Confronter le plan aux contraintes de capacité, de délai et de trésorerie ; le chiffrage financier et les marges sont renvoyés à KWES FINANCE plutôt que devinés.
 
 ## Sources et outils autorisés
-- `business.analysis` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : analyser à partir des tableaux et pièces fournis par KWES Core, puis consigner la note via `document_write`.
-- `business.planning` (A1) — implémenté, servi aujourd’hui par le skill `business_planning` (structuration d’un plan d’action, risques, indicateurs). C’est le seul outil de ce périmètre réellement exécutable.
+- `business.analysis` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : analyser à partir des tableaux et pièces fournis par KWES Core, puis consigner la note dans un document.
+- `business.planning` (A1) — implémenté et disponible aujourd’hui : structuration d’un plan d’action, risques et indicateurs. C’est le seul outil de ce périmètre réellement exécutable.
 - `business.kpi.read` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : recalculer l’indicateur depuis les lignes fournies et publier la formule employée.
-- `business.report.create` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : `document_write` produit une note ou un rapport en texte ou markdown, sans mise en page avancée.
-- Socle réellement disponible : `business_planning`, `document_write`, `web_research` (benchmark externe). Aucun accès direct à une base de gestion n’existe aujourd’hui.
+- `business.report.create` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : produire une note ou un rapport en texte ou markdown, sans mise en page avancée.
+- Socle réellement disponible : plan d’action structuré, production de document, recherche web (benchmark externe). Aucun accès direct à une base de gestion n’existe aujourd’hui.
 
 ## Critères de qualité vérifiables
 - Chaque indicateur porte sa période, sa source et sa date d’arrêté.

@@ -9,11 +9,11 @@
 6. Préparer le déploiement sans l’exécuter : diff exact, plan de retour arrière, fenêtre, vérification post-déploiement.
 
 ## Sources et outils autorisés
-- `code.read` (A0) — implémenté, lecture du code dans les environnements autorisés.
-- `code.write.workspace` (A2) — implémenté, écriture confinée à l’espace de travail, soumise au contrôle de politique.
-- `test.run.sandbox` (A2) — implémenté, servi par `code_exec` : court programme dans un conteneur jetable, sans réseau ni secret.
+- `code.read` (A0) — implémenté et disponible aujourd’hui : lecture du code dans les environnements autorisés.
+- `code.write.workspace` (A2) — implémenté et disponible aujourd’hui : écriture confinée à l’espace de travail, soumise au contrôle de politique.
+- `test.run.sandbox` (A2) — implémenté et disponible aujourd’hui : exécution d’un court programme dans un conteneur jetable, sans réseau ni secret.
 - `deployment.prepare` (A3) — déclaré, non disponible aujourd’hui. Contournement autorisé : produire le dossier de déploiement (diff, ordre des étapes, retour arrière, contrôles) sans aucun déclenchement.
-- Socle réellement disponible : `code_exec`, `document_write` (note de conception, journal de changement), `web_research` (documentation publique). Aucun accès Git distant ni pipeline CI n’est exposé.
+- Socle réellement disponible : exécution isolée, production de document (note de conception, journal de changement), recherche web (documentation publique). Aucun accès Git distant ni pipeline CI n’est exposé.
 - Le périmètre d’écriture est l’espace de travail : ni production, ni base de données réelle, ni secret.
 
 ## Critères de qualité vérifiables

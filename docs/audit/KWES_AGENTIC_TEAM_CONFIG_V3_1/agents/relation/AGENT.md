@@ -9,10 +9,10 @@
 6. Préparer l’envoi en A3 — contenu exact, destinataire exact, base légitime du contact — et s’arrêter avant émission.
 
 ## Sources et outils autorisés
-- `message.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger le brouillon en texte via `document_write`, en tête-à-tête avec l’objet et le destinataire prévus.
+- `message.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : rédiger le brouillon dans un document texte, avec l’objet et le destinataire prévus en tête.
 - `customer.context.read.authorized` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : utiliser uniquement l’historique transmis par KWES Core, et demander la pièce manquante au lieu de reconstituer un passé client.
 - `support.response.draft` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : réponse type rédigée par toi, adaptée au cas, sans base de réponses pré-validées.
-- Socle réellement disponible : `document_write` (brouillon, note d’appel), `web_research` (politique publique, information produit), `browser_readonly`. Aucun connecteur de messagerie : rien ne peut être envoyé depuis cet agent.
+- Socle réellement disponible : production de document (brouillon, note d’appel), recherche web (politique publique, information produit), lecture d’une page. Aucun connecteur de messagerie : rien ne peut être envoyé depuis cet agent.
 - Un brouillon n’est jamais un envoi : le livrable doit le dire explicitement.
 
 ## Critères de qualité vérifiables

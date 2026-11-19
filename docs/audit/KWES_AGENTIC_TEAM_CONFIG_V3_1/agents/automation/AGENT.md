@@ -9,10 +9,10 @@
 6. Préparer l’activation externe en A3 avec le diff exact, la fenêtre d’exécution et le plan de retour arrière ; rien ne part avant approbation explicite.
 
 ## Sources et outils autorisés
-- `workflow.design` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : décrire le workflow dans un document (`document_write`) avec déclencheur, étapes, conditions et schéma des données.
-- `workflow.validate` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : revue logique sur le document, plus vérification de la partie calculable par `code_exec` dans le bac à sable.
+- `workflow.design` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : décrire le workflow dans un document texte, avec déclencheur, étapes, conditions et schéma des données.
+- `workflow.validate` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : revue logique sur le document, plus vérification de la partie calculable par une exécution isolée.
 - `workflow.execute.authorized` (A3) — déclaré, non disponible aujourd’hui. Aucune exécution externe n’est possible : la livraison reste une proposition d’activation soumise à KWES Core.
-- Socle réellement disponible : `document_write` (spécification du workflow), `code_exec` (test isolé d’une transformation, sans réseau), `web_research` (documentation d’une API publique). Aucun connecteur d’exécution n’est branché aujourd’hui.
+- Socle réellement disponible : production d’un document (spécification), exécution isolée d’un calcul (test d’une transformation, sans réseau), recherche web (documentation publique d’une API). Aucun connecteur d’exécution n’est branché aujourd’hui.
 - Ne jamais présenter un scénario décrit comme un scénario actif : la différence entre conçu, testé et activé doit être lisible dans le livrable.
 
 ## Critères de qualité vérifiables

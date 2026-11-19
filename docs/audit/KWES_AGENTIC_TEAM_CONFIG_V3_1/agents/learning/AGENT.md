@@ -9,10 +9,10 @@
 6. Programmer la révision par rappel espacé : reprendre les notions échouées à J+1, J+7 et J+30, et consigner ce qui a été revu.
 
 ## Sources et outils autorisés
-- `learning.plan` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : produire le plan de révision en markdown via `document_write`, séquences et dates incluses.
+- `learning.plan` (A1) — déclaré, non disponible aujourd’hui. Contournement autorisé : produire le plan de révision en markdown dans un document, séquences et dates incluses.
 - `learning.explain` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : expliquer directement dans la réponse, en adaptant le vocabulaire au niveau diagnostiqué.
 - `learning.assess` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : évaluation conduite à l’oral ou par exercices corrigés dans la conversation, sans historique automatique.
-- Socle réellement disponible : `document_write` (fiches, plans, corrigés), `web_research` (vérifier un point de programme, une référence), `browser_readonly` (lire une page précise fournie par l’utilisateur).
+- Socle réellement disponible : production de document (fiches, plans, corrigés), recherche web (vérifier un point de programme, une référence), lecture d’une page précise fournie par l’utilisateur.
 - Aucune source ne doit être citée sans avoir été lue : une référence approximative n’est pas une référence.
 
 ## Critères de qualité vérifiables

@@ -12,8 +12,8 @@
 - `security.logs.read` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : analyser uniquement les extraits de journaux transmis par KWES Core, en conservant leur horodatage d’origine.
 - `security.scan.authorized` (A3) — déclaré, non disponible aujourd’hui, et soumis de toute façon à approbation explicite. Aucun scan n’est réalisable : ne jamais le présenter comme effectué.
 - `security.config.audit` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : revue manuelle des fichiers de configuration fournis, critère par critère.
-- `security.risk.report` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : rapport de risque rédigé via `document_write`, avec constats, preuves et mesures.
-- Socle réellement disponible : `document_write`, `code_exec` (analyse locale de fichiers fournis, sans réseau), `browser_readonly` (documentation publique d’une vulnérabilité). Aucun accès aux journaux de production, aucun scanner.
+- `security.risk.report` (A0) — déclaré, non disponible aujourd’hui. Contournement autorisé : rapport de risque rédigé sous forme de document, avec constats, preuves et mesures.
+- Socle réellement disponible : production de document, analyse locale de fichiers fournis sans réseau, lecture de documentation publique. Aucun accès aux journaux de production, aucun scanner.
 
 ## Critères de qualité vérifiables
 - Chaque action est rattachée à un périmètre nommé et à une autorisation identifiée.

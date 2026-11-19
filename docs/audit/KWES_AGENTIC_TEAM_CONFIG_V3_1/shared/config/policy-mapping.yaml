@@ -1,0 +1,67 @@
+mapping_version: 1.0.0
+principle: La correspondance ne peut jamais relever une action d'un niveau inférieur.
+  En cas de doute, c'est le niveau le plus élevé des deux systèmes qui s'applique.
+levels:
+- package: A0
+  label: Consultation
+  engine:
+  - R0
+  - R1
+  approval: none
+  examples:
+  - lire une page
+  - chercher sur le web
+  - analyser un document
+  rule: Aucune action extérieure. Lecture seule autorisée par les permissions.
+- package: A1
+  label: Préparation
+  engine:
+  - R1
+  approval: none
+  examples:
+  - rédiger un brouillon
+  - produire un plan
+  - créer un document interne
+  rule: Effet interne uniquement. Rien ne sort du système sans passage en A3.
+- package: A2
+  label: Action réversible
+  engine:
+  - R1
+  - R2
+  approval: policy_checked
+  examples:
+  - exécuter du code dans l'espace de travail
+  - lancer une suite de tests
+  rule: Réversible et confiné. Exige un contrôle de politique ; si l'outil est classé
+    R2 côté moteur, l'approbation R2 s'applique.
+- package: A3
+  label: Action externe
+  engine:
+  - R2
+  approval: explicit
+  examples:
+  - envoyer un email
+  - publier
+  - exécuter un workflow externe
+  - scan autorisé
+  rule: Effet hors du système. Approbation explicite obligatoire, avec le contenu
+    exact affiché. Une approbation ne vaut que pour l'action décrite (hash du payload).
+- package: A4
+  label: Action financière ou critique
+  engine:
+  - R3
+  - R4
+  approval: strong
+  examples:
+  - paiement
+  - transfert
+  - suppression définitive
+  - changement d'accès critique
+  rule: Le moteur refuse R3 et R4 tant que KWES Pay et les validations renforcées
+    ne sont pas activés. Aucune correspondance ne peut transformer A4 en R2.
+forbidden_downgrades:
+- A3 → R1 (action externe traitée comme lecture)
+- A4 → R2 (action financière traitée comme réversible)
+- A2 → R0 (exécution de code traitée comme consultation)
+verification: Le chargeur d'agents doit refuser toute matrice d'approbation où un
+  outil A3/A4 correspond à un niveau moteur inférieur à R2/R3.

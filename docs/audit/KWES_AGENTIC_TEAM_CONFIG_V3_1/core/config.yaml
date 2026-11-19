@@ -1,0 +1,173 @@
+config_schema_version: 1.0.0
+agent_id: kwes.core
+display_name: KWES
+agent_type: orchestrator
+version: 1.1.0
+status: defined_not_activated
+authority:
+  reports_to: null
+  may_dispatch_agents: true
+  may_change_user_permissions: false
+  may_override_policy: false
+  may_execute_outside_domain: true
+  can_request_permission_change_through_user_approval: true
+autonomy:
+  supported_levels:
+  - A0
+  - A1
+  - A2
+  - A3
+  - A4
+  default_level: A1
+  max_level_without_confirmation: A2
+  policy_engine_enforced_outside_model: true
+execution:
+  sandbox_required_for_untrusted_code: true
+  idempotency_required_for_mutations: true
+  default_timeout_seconds: 180
+  max_retries: 2
+  retry_only_if_safe: true
+  cancel_supported: true
+  max_parallel_tasks: 4
+  budget:
+    quota_source: kwes_existing_quotas
+    max_tool_calls_per_task: 12
+    max_tool_calls_per_mission: 60
+    max_wall_clock_seconds_per_task: 180
+    max_wall_clock_seconds_per_mission: 900
+    max_cost_eur_per_task: null
+    max_cost_eur_per_mission: null
+    status: proposal_pending_owner_validation
+    reference: docs/integration/KWES_BUDGET_PROPOSAL.md
+  isolation:
+    db_role: kwes_app
+    rls_context: per_task
+    bypass_rls_forbidden: true
+principles:
+  default_deny: true
+  least_privilege: true
+  policy_engine_authoritative: true
+  untrusted_agent_outputs: true
+  honest_capability_reporting: true
+observability:
+  audit_log: true
+  record_tool_calls: true
+  record_approvals: true
+  record_mission_state: true
+  redact_secrets: true
+integrations:
+  enabled_only_after_connection_and_test: true
+  declared_capabilities_are_not_proof_of_availability: true
+orchestration:
+  registry: registry/agents.yaml
+  dispatch_mode: central_dynamic
+  specialists_may_self_dispatch: false
+  parallel_execution: true
+  max_parallel_agents: 4
+  plan_required_for_multistep_missions: true
+  dependency_tracking: true
+  progress_tracking: true
+  result_aggregation: evidence_weighted
+  conflict_resolution: request_specialist_reconciliation_then_audit
+  audit_required_for_high_impact: true
+delegation:
+  enabled: true
+  max_hops: 2
+  max_iterations_per_mission: 60
+  require_agent_capability_match: true
+  pass_minimum_context: true
+  return_structured_result: true
+  specialists_can_delegate: false
+tool_loop_guardrails:
+  warnings_enabled: true
+  hard_stop_enabled: true
+  max_same_tool_failures: 3
+  max_no_progress_iterations: 3
+  stop_on_policy_denial: true
+  require_user_update_on_blocker: true
+mission:
+  persistent_store: supabase
+  states:
+  - queued
+  - planning
+  - awaiting_approval
+  - running
+  - blocked
+  - verifying
+  - completed
+  - failed
+  - cancelled
+  checkpoint_interval_steps: 3
+  allow_pause_resume: true
+  allow_cancel: true
+  completion_requires_verification: true
+voice:
+  enabled: true
+  wake_word: Kwes
+  stt_language: auto
+  primary_language: fr
+  barge_in: true
+  voice_chat_mode: live
+  voice_actions_follow_same_policy: true
+  wake_word_platform_support: must_be_verified
+channels:
+  web_pwa:
+    enabled: true
+  android:
+    status: planned_or_to_be_verified
+  telegram:
+    status: not_enabled_until_official_integration_verified
+  whatsapp:
+    status: not_enabled_until_official_integration_verified
+  email:
+    status: not_enabled_until_connector_verified
+runtime:
+  api: fastapi
+  frontend: react_vite_pwa
+  deployment: vercel_frontend_vps_backend
+  persistent_data: supabase
+  queue_cache: redis_optional
+  workers: separate_process
+  container_runtime: isolated_sandbox_required_for_code
+browser:
+  enabled_only_if_connector_verified: true
+  private_network_access: deny_by_default
+  real_user_profile: false
+  authenticated_actions: require_explicit_authorization
+security:
+  redact_secrets: true
+  allow_private_urls: false
+  ssrf_protection: true
+  restrict_metadata_endpoints: true
+  sandbox_network_policy: deny_by_default
+  security_testing_requires_scope: true
+approvals:
+  A0: none
+  A1: none
+  A2: policy_checked
+  A3: explicit_or_bounded_delegation
+  A4: strong_confirmation
+  default: require_confirmation_for_external_side_effects
+  approval_mode: enforced
+finance:
+  kwes_pay_enabled: false
+  enable_only_after_legal_compliance_and_security_review: true
+  llm_can_execute_transaction: false
+  require_server_side_authorization: true
+  require_idempotency_and_reconciliation: true
+telemetry:
+  shared_metrics: false
+  user_content_analytics: false
+  operational_logs: true
+  retention: documented_and_configurable
+data:
+  system_of_record: supabase
+  database: supabase_postgresql
+  object_storage: supabase_storage
+  tenant_isolation: mandatory_rls
+  secrets_source: environment_or_secret_manager
+  never_store_secrets_in_config: true
+inherits: shared/config/defaults.yaml
+overrides: []
+updated_at: '2026-11-19'
+owner: Elfried Yobouet

@@ -1,0 +1,159 @@
+version: 1.0.0
+status: architecture_defined_not_deployed
+core:
+  agent_id: kwes.core
+  slug: core
+  name: KWES
+  domain: Orchestration centrale
+  config: core/config.yaml
+  soul: core/SOUL.md
+  agent: core/AGENT.md
+  spec: core/AGENT_SPEC.md
+  status: defined_not_activated
+dispatch_policy: central_dynamic
+agents:
+- agent_id: kwes.business
+  slug: business
+  name: KWES BUSINESS
+  domain: Pilotage des activités
+  config: agents/business/config.yaml
+  soul: agents/business/SOUL.md
+  agent: agents/business/AGENT.md
+  spec: agents/business/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.sales
+  slug: sales
+  name: KWES SALES
+  domain: Vente et développement commercial
+  config: agents/sales/config.yaml
+  soul: agents/sales/SOUL.md
+  agent: agents/sales/AGENT.md
+  spec: agents/sales/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.marketing
+  slug: marketing
+  name: KWES MARKETING
+  domain: Marketing et visibilité
+  config: agents/marketing/config.yaml
+  soul: agents/marketing/SOUL.md
+  agent: agents/marketing/AGENT.md
+  spec: agents/marketing/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.relation
+  slug: relation
+  name: KWES RELATION
+  domain: Communication et relation client
+  config: agents/relation/config.yaml
+  soul: agents/relation/SOUL.md
+  agent: agents/relation/AGENT.md
+  spec: agents/relation/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.operations
+  slug: operations
+  name: KWES OPERATIONS
+  domain: Opérations, commandes et logistique
+  config: agents/operations/config.yaml
+  soul: agents/operations/SOUL.md
+  agent: agents/operations/AGENT.md
+  spec: agents/operations/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.personal
+  slug: personal
+  name: KWES PERSONAL
+  domain: Organisation personnelle
+  config: agents/personal/config.yaml
+  soul: agents/personal/SOUL.md
+  agent: agents/personal/AGENT.md
+  spec: agents/personal/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.learning
+  slug: learning
+  name: KWES LEARNING
+  domain: Éducation et apprentissage
+  config: agents/learning/config.yaml
+  soul: agents/learning/SOUL.md
+  agent: agents/learning/AGENT.md
+  spec: agents/learning/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.research
+  slug: research
+  name: KWES RESEARCH
+  domain: Recherche et intelligence informationnelle
+  config: agents/research/config.yaml
+  soul: agents/research/SOUL.md
+  agent: agents/research/AGENT.md
+  spec: agents/research/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.documents
+  slug: documents
+  name: KWES DOCUMENTS
+  domain: Documents et traitement de données
+  config: agents/documents/config.yaml
+  soul: agents/documents/SOUL.md
+  agent: agents/documents/AGENT.md
+  spec: agents/documents/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.vision
+  slug: vision
+  name: KWES VISION
+  domain: Perception et création visuelle
+  config: agents/vision/config.yaml
+  soul: agents/vision/SOUL.md
+  agent: agents/vision/AGENT.md
+  spec: agents/vision/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.finance
+  slug: finance
+  name: KWES FINANCE
+  domain: Gestion et analyse financière
+  config: agents/finance/config.yaml
+  soul: agents/finance/SOUL.md
+  agent: agents/finance/AGENT.md
+  spec: agents/finance/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.life
+  slug: life
+  name: KWES LIFE
+  domain: Services et assistance quotidienne
+  config: agents/life/config.yaml
+  soul: agents/life/SOUL.md
+  agent: agents/life/AGENT.md
+  spec: agents/life/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.audit
+  slug: audit
+  name: KWES AUDIT
+  domain: Vérification et assurance qualité
+  config: agents/audit/config.yaml
+  soul: agents/audit/SOUL.md
+  agent: agents/audit/AGENT.md
+  spec: agents/audit/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.automation
+  slug: automation
+  name: KWES AUTOMATION
+  domain: Automatisation et workflows
+  config: agents/automation/config.yaml
+  soul: agents/automation/SOUL.md
+  agent: agents/automation/AGENT.md
+  spec: agents/automation/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.tech
+  slug: tech
+  name: KWES TECH
+  domain: Ingénierie logicielle et assistance technique
+  config: agents/tech/config.yaml
+  soul: agents/tech/SOUL.md
+  agent: agents/tech/AGENT.md
+  spec: agents/tech/AGENT_SPEC.md
+  status: defined_not_activated
+- agent_id: kwes.security
+  slug: security
+  name: KWES SECURITY
+  domain: Sécurité et protection
+  config: agents/security/config.yaml
+  soul: agents/security/SOUL.md
+  agent: agents/security/AGENT.md
+  spec: agents/security/AGENT_SPEC.md
+  status: defined_not_activated
+config_version: 1.1.0

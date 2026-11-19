@@ -116,7 +116,16 @@ class LiveReasoner:
             key = self.settings.gemini_api_key
             if not key:
                 raise RuntimeError("Clé Gemini absente.")
-            self._client = genai.Client(api_key=key, http_options={"api_version": "v1beta"})
+            # Sans délai explicite, la bibliothèque coupe la poignée de main à
+            # 10 s : le fournisseur peut légitimement en mettre 25, et l'utilisateur
+            # recevait alors « service indisponible » au lieu d'une réponse.
+            self._client = genai.Client(
+                api_key=key,
+                http_options={
+                    "api_version": "v1beta",
+                    "timeout": int(self.settings.gemini_timeout_seconds * 1000),
+                },
+            )
         return self._client
 
     def _config(
@@ -218,11 +227,26 @@ class LiveReasoner:
                     await _read(session, parts, calls)
                 return "".join(parts).strip(), calls
 
-        try:
-            text, calls = await asyncio.wait_for(_run(), timeout=limit)
-        except asyncio.TimeoutError as exc:
-            raise TimeoutError(f"Gemini Live ({model}) sans réponse en {limit:.0f} s.") from exc
-        return text, calls, model
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                text, calls = await asyncio.wait_for(_run(), timeout=limit)
+                return text, calls, model
+            except asyncio.TimeoutError as exc:
+                last_error = exc
+            except Exception as exc:  # noqa: BLE001 — réseau, poignée de main, quota
+                last_error = exc
+            # Un incident passager ne doit pas coûter la réponse : une seconde
+            # tentative, puis on remonte l'erreur normalisée.
+            await asyncio.sleep(0.5)
+        if isinstance(last_error, asyncio.TimeoutError):
+            raise TimeoutError(f"Gemini Live ({model}) sans réponse en {limit:.0f} s.") from last_error
+        # Import local : `llm` importe ce module, un import en tête créerait un cycle.
+        from app.agent.llm import LLMError
+
+        raise LLMError(
+            "Le service de réponse est momentanément indisponible.", retryable=True
+        ) from last_error
 
     async def stream(
         self,

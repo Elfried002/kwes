@@ -108,6 +108,19 @@ class Usage:
 
 ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
+# Outils assez longs pour justifier une phrase d'attente. Le texte est la consigne
+# donnée au modèle : il la reformule lui-même, dans la langue de la conversation.
+_NARRATED_TOOLS = {
+    "web_research": (
+        "Dis à l'utilisateur, en une seule phrase courte et naturelle, que tu lances "
+        "la recherche et que tu reviens dès que tu as le résultat."
+    ),
+    "browser_readonly": (
+        "Dis à l'utilisateur, en une seule phrase courte, que tu ouvres la page "
+        "et que tu reviens tout de suite après."
+    ),
+}
+
 
 class LiveClientProtocol(Protocol):
     """Surface minimale du SDK, pour injecter un faux client dans les tests."""
@@ -239,6 +252,8 @@ class GeminiLiveSession:
         # Une activité audio est-elle ouverte côté Gemini ? Sert à ne jamais
         # envoyer un `activity_end` orphelin, qui fait fermer la session.
         self._activity_open = False
+        # Outils en cours d'exécution, pour ne pas bloquer la lecture de l'audio.
+        self._tool_tasks: dict[str, asyncio.Task] = {}
 
     def _build_client(self) -> Any:
         key = self.settings.gemini_api_key
@@ -286,6 +301,9 @@ class GeminiLiveSession:
 
     async def close(self) -> None:
         self._closed = True
+        for task in list(self._tool_tasks.values()):
+            task.cancel()
+        self._tool_tasks.clear()
         if self._context is not None:
             try:
                 await self._context.__aexit__(None, None, None)
@@ -383,6 +401,12 @@ class GeminiLiveSession:
             await asyncio.sleep(0)
 
     async def _handle(self, message: Any) -> AsyncIterator[LiveEvent]:
+        # Les outils tournent en tâche de fond : sans cela, la boucle de lecture
+        # restait bloquée pendant toute la recherche et l'annonce vocale n'arrivait
+        # qu'à la fin de l'attente, c'est-à-dire trop tard.
+        async for event in self._drain_tools():
+            yield event
+
         content = getattr(message, "server_content", None)
         if content is not None:
             if getattr(content, "interrupted", False):
@@ -413,7 +437,7 @@ class GeminiLiveSession:
         tool_call = getattr(message, "tool_call", None)
         if tool_call is not None:
             for function_call in getattr(tool_call, "function_calls", []) or []:
-                async for event in self._run_tool(function_call):
+                async for event in self._start_tool(function_call):
                     yield event
 
         resumption = getattr(message, "session_resumption_update", None)
@@ -429,44 +453,101 @@ class GeminiLiveSession:
             logger.info("Gemini Live annonce une fermeture imminente.")
             yield LiveEvent("reconnecting", {"reason": "go_away"})
 
-    async def _run_tool(self, function_call: Any) -> AsyncIterator[LiveEvent]:
+    async def _announce(self, tool_name: str) -> None:
+        """Fait dire au modèle, dans sa voix, ce qu'il est en train de faire."""
+        if self._session is None:
+            return
+        consigne = _NARRATED_TOOLS[tool_name]
+        try:
+            await self._session.send_client_content(
+                turns=types.Content(
+                    role="user",
+                    parts=[
+                        types.Part(
+                            text=(
+                                "(Consigne interne, ne la répète pas et ne la commente pas) "
+                                f"{consigne}"
+                            )
+                        )
+                    ],
+                ),
+                turn_complete=True,
+            )
+        except Exception:  # noqa: BLE001 — la narration ne doit jamais bloquer l'outil
+            logger.debug("Narration indisponible pour %s.", tool_name)
+
+    async def _start_tool(self, function_call: Any) -> AsyncIterator[LiveEvent]:
         name = str(getattr(function_call, "name", "") or "")
         arguments = dict(getattr(function_call, "args", None) or {})
         call_id = str(getattr(function_call, "id", "") or "")
         yield LiveEvent("tool", {"name": name, "status": "running"})
 
+        # Narration : une recherche prend 20 à 40 s. Sans un mot pendant ce temps,
+        # l'utilisateur croit que l'agent est bloqué. On demande au modèle de dire
+        # en une phrase ce qu'il fait, dans sa propre voix, avant l'attente.
+        if self.executor is not None and name in _NARRATED_TOOLS:
+            await self._announce(name)
+
+        # L'outil tourne en tâche de fond : la boucle de lecture continue, donc
+        # l'audio de l'annonce arrive tout de suite au lieu d'être libéré à la fin.
+        task = asyncio.create_task(self._execute_tool(function_call))
+        self._tool_tasks[call_id or f"{name}:{id(function_call)}"] = task
+
+    async def _execute_tool(self, function_call: Any) -> dict[str, Any]:
+        name = str(getattr(function_call, "name", "") or "")
+        arguments = dict(getattr(function_call, "args", None) or {})
+        call_id = str(getattr(function_call, "id", "") or "")
         if self.executor is None:
-            payload = {"status": "error", "summary": "Aucun outil disponible.", "output": None}
+            payload: dict[str, Any] = {
+                "status": "error",
+                "summary": "Aucun outil disponible.",
+                "output": None,
+            }
         else:
             try:
                 payload = await self.executor(name, arguments)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Outil Live %s en échec: %s", name, type(exc).__name__)
                 payload = {"status": "error", "summary": "Outil indisponible.", "output": None}
+        return {"name": name, "call_id": call_id, "payload": payload}
 
-        yield LiveEvent(
-            "tool",
-            {
-                "name": name,
-                "status": payload.get("status", "error"),
-                "summary": payload.get("summary", ""),
-                "reference": payload.get("reference"),
-            },
-        )
+    async def _drain_tools(self) -> AsyncIterator[LiveEvent]:
+        """Remonte les outils terminés et transmet leur résultat à Gemini."""
+        for key, task in list(self._tool_tasks.items()):
+            if not task.done():
+                continue
+            self._tool_tasks.pop(key, None)
+            try:
+                done = task.result()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Tâche d'outil perdue: %s", type(exc).__name__)
+                continue
 
-        response = types.FunctionResponse(
-            id=call_id or None,
-            name=name,
-            response={
-                "status": payload.get("status", "error"),
-                "summary": payload.get("summary", ""),
-                "data": payload.get("output") or {},
-            },
-        )
-        try:
-            await self._session.send_tool_response(function_responses=[response])
-        except Exception:  # noqa: BLE001
-            logger.warning("Envoi de la réponse d'outil %s impossible.", name)
+            name = done["name"]
+            payload = done["payload"]
+            yield LiveEvent(
+                "tool",
+                {
+                    "name": name,
+                    "status": payload.get("status", "error"),
+                    "summary": payload.get("summary", ""),
+                    "reference": payload.get("reference"),
+                },
+            )
+            response = types.FunctionResponse(
+                id=done["call_id"] or None,
+                name=name,
+                response={
+                    "status": payload.get("status", "error"),
+                    "summary": payload.get("summary", ""),
+                    "data": payload.get("output") or {},
+                },
+            )
+            try:
+                assert self._session is not None
+                await self._session.send_tool_response(function_responses=[response])
+            except Exception:  # noqa: BLE001
+                logger.warning("Envoi de la réponse d'outil %s impossible.", name)
 
 
 async def wait_for_idle(session: GeminiLiveSession, idle_seconds: int) -> None:

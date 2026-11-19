@@ -432,6 +432,10 @@ def _classify(text: str) -> str:
         "note que", "retiens", "souviens", "rédige", "redige", "écris", "ecris",
         "document", "vérifie", "verifie", "météo", "meteo", "lis cette page",
         "http://", "https://", "source", "compare",
+        # L'anglais est annoncé comme pris en charge : sans ces marqueurs, une
+        # demande anglophone partait en conversation simple, sans aucun outil.
+        "search", "look up", "find out", "price", "news", "weather", "what is",
+        "who is", "how much", "latest",
     )
     if any(marker in lowered for marker in multi_step_markers) and len(text.strip()) > 25:
         return "mission"

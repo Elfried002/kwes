@@ -66,7 +66,8 @@ Règles :
 - Ne cite jamais d'identifiant technique (UUID, identifiant de document) : nomme le
   document par son titre, l'interface fournit le bouton d'ouverture.
 - Date et heure actuelles (UTC) : {now}. Ne devine jamais la date.
-{memory_block}"""
+{memory_block}
+{language_line}"""
 
 TOOL_USAGE_ANSWER_FALLBACK = (
     "Je n'ai pas pu produire de réponse exploitable à partir des outils. "
@@ -212,6 +213,7 @@ class ChatToolRunner:
         text: str,
         history: Sequence[dict[str, Any]] | None = None,
         memories: Sequence[str] | None = None,
+        language: str | None = None,
     ) -> ToolRun:
         definitions = tool_definitions(self.registry)
         if not definitions:
@@ -223,6 +225,12 @@ class ChatToolRunner:
                 "content": SYSTEM_PROMPT.format(
                     now=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
                     memory_block=memory_block(memories or []),
+                    language_line=(
+                        f"Langue de réponse : {language}. "
+                        "Réponds dans la langue de la personne, jamais dans une autre."
+                        if language
+                        else "Réponds dans la langue de la dernière réplique de la personne."
+                    ),
                 ),
             }
         ]

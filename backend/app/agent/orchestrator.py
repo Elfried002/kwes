@@ -256,12 +256,17 @@ class Orchestrator:
         memories = await self._load_memories(session, user.id)
         tool_run = ToolRun(answer="")
         if intent == "outil" and self.tool_runner.available:
+            # Langue réellement imposée : celle du message, sinon déduite.
+            langue_outil = language if language in {"fr", "en"} else (
+                "en" if _looks_english(text) else "fr"
+            )
             tool_run = await self.tool_runner.run(
                 session=session,
                 user_id=user.id,
                 text=text,
                 history=history,
                 memories=memories,
+                language="anglais" if langue_outil == "en" else "français",
             )
             response = tool_run.answer.strip()
             if not response:

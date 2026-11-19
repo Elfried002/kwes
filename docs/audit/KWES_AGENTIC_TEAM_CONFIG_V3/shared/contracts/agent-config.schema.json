@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kwes.agent.config",
+  "type": "object",
+  "required": [
+    "agent_id",
+    "agent_type",
+    "version",
+    "status",
+    "inherits",
+    "execution"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "pattern": "^kwes\\.[a-z]+$"
+    },
+    "agent_type": {
+      "enum": [
+        "orchestrator",
+        "specialist"
+      ]
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "defined_not_activated",
+        "tested",
+        "active",
+        "retired"
+      ]
+    },
+    "inherits": {
+      "type": "string"
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "authority": {
+      "type": "object",
+      "required": [
+        "may_dispatch_agents",
+        "may_change_user_permissions",
+        "may_override_policy"
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "declared_tool_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tool_status": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "implemented",
+              "declared"
+            ]
+          }
+        }
+      }
+    },
+    "approval_matrix": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "level",
+          "approval"
+        ],
+        "properties": {
+          "level": {
+            "enum": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ]
+          },
+          "approval": {
+            "enum": [
+              "none",
+              "policy_checked",
+              "explicit",
+              "strong"
+            ]
+          }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "timeout_seconds",
+        "max_retries"
+      ],
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "budget": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

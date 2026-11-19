@@ -1,0 +1,291 @@
+{
+  "inventaire": {
+    "dossier": "/home/babayaga/business/kwes/docs/audit/KWES_AGENTIC_TEAM_CONFIG_V3",
+    "agents_detectes": 17,
+    "fichiers": {
+      "SOUL.md": 17,
+      "AGENT.md": 17,
+      "AGENT_SPEC.md": 17,
+      "config.yaml": 17
+    },
+    "total_fichiers": 77,
+    "taille_octets": 211213
+  },
+  "agents": {
+    "kwes.audit": "agents/audit/config.yaml",
+    "kwes.automation": "agents/automation/config.yaml",
+    "kwes.business": "agents/business/config.yaml",
+    "kwes.core": "core/config.yaml",
+    "kwes.documents": "agents/documents/config.yaml",
+    "kwes.finance": "agents/finance/config.yaml",
+    "kwes.learning": "agents/learning/config.yaml",
+    "kwes.life": "agents/life/config.yaml",
+    "kwes.marketing": "agents/marketing/config.yaml",
+    "kwes.operations": "agents/operations/config.yaml",
+    "kwes.personal": "agents/personal/config.yaml",
+    "kwes.relation": "agents/relation/config.yaml",
+    "kwes.research": "agents/research/config.yaml",
+    "kwes.sales": "agents/sales/config.yaml",
+    "kwes.security": "agents/security/config.yaml",
+    "kwes.tech": "agents/tech/config.yaml",
+    "kwes.vision": "agents/vision/config.yaml"
+  },
+  "constats": [
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/audit/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : evidence.inspect, quality.audit, result.verify",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/automation/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : workflow.design, workflow.execute.authorized, workflow.validate",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/business/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : business.analysis, business.kpi.read, business.report.create",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/documents/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : document.convert, document.extract, document.read",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/finance/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : budget.read.authorized, finance.analysis, transaction.prepare",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/learning/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : learning.assess, learning.explain, learning.plan",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/life/config.yaml",
+      "probleme": "1 outil(s) déclaré(s) sans implémentation, correctement étiquetés : daily.planning",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/marketing/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : content.draft, marketing.strategy, seo.audit",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/operations/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : inventory.read.authorized, operations.plan, order.status.read",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/personal/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : calendar.read, reminder.propose, task.manage",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/relation/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : customer.context.read.authorized, message.draft, support.response.draft",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/sales/config.yaml",
+      "probleme": "2 outil(s) déclaré(s) sans implémentation, correctement étiquetés : sales.pipeline.read, sales.proposal.draft",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/security/config.yaml",
+      "probleme": "4 outil(s) déclaré(s) sans implémentation, correctement étiquetés : security.config.audit, security.logs.read, security.risk.report, security.scan.authorized",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/tech/config.yaml",
+      "probleme": "1 outil(s) déclaré(s) sans implémentation, correctement étiquetés : deployment.prepare",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "MOYEN",
+      "controle": "Compatibilité",
+      "fichier": "agents/vision/config.yaml",
+      "probleme": "3 outil(s) déclaré(s) sans implémentation, correctement étiquetés : image.analyze, image.generate.request, visual.quality_review",
+      "risque": "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+      "correction": "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/audit/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/automation/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/security/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/business/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/documents/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/finance/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/learning/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/life/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/marketing/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/relation/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/operations/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/finance/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/personal/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/relation/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/relation/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/personal/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/research/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/relation/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/sales/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/security/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/tech/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/vision/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/security/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    }
+  ],
+  "synthese": {
+    "CRITIQUE": 0,
+    "ÉLEVÉ": 16,
+    "MOYEN": 15,
+    "FAIBLE": 0,
+    "total": 31
+  },
+  "empreinte_package": "66fbe98587320b26"
+}

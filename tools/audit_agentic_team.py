@@ -21,6 +21,23 @@ import yaml
 REQUIRED_FILES = ("SOUL.md", "AGENT.md", "AGENT_SPEC.md", "config.yaml")
 ALLOWED_MODELS = {"gemini-3.8-live", "gemini-3.8-live-extended-thinking"}
 # Skills réellement présents dans le dépôt KWES aujourd'hui.
+# Correspondance entre le vocabulaire du package et les skills réellement installés.
+TOOL_TO_SKILL = {
+    "web.search": "web_research",
+    "research.synthesis": "web_research",
+    "source.citation": "web_research",
+    "local.info.research": "web_research",
+    "service.compare": "web_research",
+    "lead.research": "web_research",
+    "web.page.read": "browser_readonly",
+    "code.read": "code_exec",
+    "code.write.workspace": "code_exec",
+    "test.run.sandbox": "code_exec",
+    "document.create": "document_write",
+    "profile.preference.read": "remember",
+    "business.planning": "business_planning",
+}
+
 REAL_SKILLS = {
     "web_research",
     "browser_readonly",
@@ -149,21 +166,54 @@ def main(root: Path) -> int:
                 f"Remplacer par l'un des modèles autorisés : {sorted(ALLOWED_MODELS)}.",
             )
 
-        niveau = str(data.get("autonomy") or data.get("autonomy_level") or "")
-        if niveau and niveau not in AUTONOMY:
-            add("ÉLEVÉ", "Autonomie", rel, f"Niveau d'autonomie inconnu : {niveau}", "Politique d'approbation indéterminée.", "Utiliser A0 à A4.")
+        raw_autonomy = data.get("autonomy") or data.get("autonomy_level") or ""
+        if isinstance(raw_autonomy, dict):
+            niveaux = raw_autonomy.get("supported_levels") or list((raw_autonomy.get("levels") or {}).keys())
+            inconnus_auto = [n for n in niveaux if n not in AUTONOMY]
+            niveau = ",".join(niveaux)
+        else:
+            inconnus_auto = [raw_autonomy] if raw_autonomy and raw_autonomy not in AUTONOMY else []
+            niveau = str(raw_autonomy)
+        if inconnus_auto:
+            add("ÉLEVÉ", "Autonomie", rel, f"Niveaux d'autonomie inconnus : {inconnus_auto}", "Politique d'approbation indéterminée.", "Utiliser A0 à A4.")
 
-        tools = data.get("tools") or data.get("skills") or []
+        caps = data.get("capabilities") or {}
+        tools = (
+            caps.get("declared_tool_ids")
+            or data.get("tools")
+            or data.get("skills")
+            or []
+        )
+        statuts = caps.get("tool_status") or {}
         if isinstance(tools, list):
-            inconnus = [t for t in tools if isinstance(t, str) and t not in REAL_SKILLS]
-            if inconnus:
+            # Un outil étiqueté `declared` est assumé comme non implémenté : ce
+            # n'est plus une fausse capacité, c'est une feuille de route.
+            def couvert(t: str) -> bool:
+                return TOOL_TO_SKILL.get(t) in REAL_SKILLS or t in REAL_SKILLS
+
+            annonces = [
+                t for t in tools
+                if isinstance(t, str) and not couvert(t) and statuts.get(t) != "declared"
+            ]
+            if annonces:
                 add(
                     "ÉLEVÉ",
                     "Compatibilité",
                     rel,
-                    f"Outils déclarés absents du moteur KWES : {', '.join(sorted(set(inconnus)))}",
+                    f"Outils présentés comme disponibles mais absents du moteur : {', '.join(sorted(set(annonces)))}",
                     "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
-                    "Soit implémenter le skill correspondant, soit retirer la déclaration.",
+                    "Marquer l'outil `declared` dans tool_status, ou implémenter le skill.",
+                )
+            declares = [t for t in tools if statuts.get(t) == "declared"]
+            if declares:
+                add(
+                    "MOYEN",
+                    "Compatibilité",
+                    rel,
+                    f"{len(declares)} outil(s) déclaré(s) sans implémentation, correctement étiquetés : "
+                    f"{', '.join(sorted(declares)[:6])}{'…' if len(declares) > 6 else ''}",
+                    "Feuille de route à tenir ; aucun risque tant que le moteur refuse les outils non enregistrés.",
+                    "Ne jamais exposer un outil `declared` au modèle, et suivre l'avancement dans le registre.",
                 )
 
     # ---------- 3. Doublons d'identité ----------
@@ -174,26 +224,47 @@ def main(root: Path) -> int:
             signature[rel] = shingles(texte)
 
     cles = sorted(signature)
-    for i, left in enumerate(cles):
-        for right in cles[i + 1 :]:
+    # Une anomalie par agent (et non par paire) : on retient son voisin le plus proche.
+    plus_proche: dict[str, tuple[float, str]] = {}
+    for left in cles:
+        for right in cles:
+            if left == right:
+                continue
             a, b = signature[left], signature[right]
             if not a or not b:
                 continue
-            jaccard = len(a & b) / len(a | b)
-            if jaccard > 0.55:
-                add(
-                    "ÉLEVÉ",
-                    "Identités",
-                    f"{left} ↔ {right}",
-                    f"Similarité de contenu {jaccard:.0%} : identités quasi identiques.",
-                    "Deux agents se ressemblent : responsabilités confondues, délégation incohérente.",
-                    "Différencier les rôles ou justifier explicitement la proximité.",
-                )
+            score = len(a & b) / len(a | b)
+            if score > plus_proche.get(left, (0.0, ""))[0]:
+                plus_proche[left] = (score, right)
+    for fichier, (score, voisin) in sorted(plus_proche.items()):
+        if score > 0.60 and fichier.endswith("AGENT.md"):
+            add(
+                "ÉLEVÉ",
+                "Identités",
+                fichier,
+                f"Contenu similaire à {score:.0%} avec {voisin}.",
+                "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+                "Rédiger des sections propres au métier (méthode, sources, critères, échecs).",
+            )
+        elif score > 0.75:
+            add(
+                "MOYEN",
+                "Identités",
+                fichier,
+                f"Contenu similaire à {score:.0%} avec {voisin}.",
+                "Risque de confusion de rôle sur les parties communes.",
+                "Vérifier que la partie spécifique suffit à distinguer l'agent.",
+            )
 
     # ---------- 4. Orchestration : graphe de délégation ----------
     noms = {}
     for rel, data in configs_data.items():
-        nom = str(data.get("name") or data.get("agent") or "").strip()
+        nom = str(
+            data.get("agent_id")
+            or (data.get("agent") or {}).get("agent_id")
+            or data.get("display_name")
+            or ""
+        ).strip()
         if not nom:
             add("ÉLEVÉ", "Registre", rel, "Aucun nom d'agent déclaré.", "Registre impossible à construire.", "Ajouter une clé name.")
         elif nom in noms:

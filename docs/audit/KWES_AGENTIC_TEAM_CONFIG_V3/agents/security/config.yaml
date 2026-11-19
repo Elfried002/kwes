@@ -1,0 +1,103 @@
+config_schema_version: 1.0.0
+agent_id: kwes.security
+display_name: KWES SECURITY
+agent_type: specialist
+version: 1.0.0
+status: defined_not_activated
+domain: Sécurité et protection
+authority:
+  reports_to: kwes.core
+  may_dispatch_agents: false
+  may_change_user_permissions: false
+  may_override_policy: false
+  may_execute_outside_domain: false
+capabilities:
+  profile: security
+  declared_tool_ids:
+  - security.logs.read
+  - security.scan.authorized
+  - security.config.audit
+  - security.risk.report
+  default_tool_access: deny_unless_granted
+  tools_are_available_only_after_runtime_registration: true
+  tool_status:
+    security.logs.read: declared
+    security.scan.authorized: declared
+    security.config.audit: declared
+    security.risk.report: declared
+  runtime_rule: un outil au statut declared n'est jamais exposé au modèle
+mission:
+  accept_tasks_from:
+  - kwes.core
+  must_follow_core_plan: true
+  may_propose_plan_adjustments: true
+  must_report_blockers: true
+  completion_requires_evidence: true
+collaboration:
+  may_request_peer_input_through_core: true
+  direct_peer_dispatch: false
+  permitted_peers:
+  - business
+  - research
+  - documents
+  - vision
+  - personal
+autonomy:
+  supported_levels:
+  - A0
+  - A1
+  - A2
+  A3_requires_core_and_user_authorization: true
+  A4_requires_core_and_strong_user_confirmation: true
+execution:
+  timeout_seconds: 180
+  max_retries: 2
+  parallelizable: true
+  idempotency_required: true
+  sandbox_required_for_code: true
+  budget:
+    max_tokens_per_task: null
+    max_tool_calls: 12
+    max_cost_eur: null
+memory:
+  read_scope: mission_context_and_explicitly_authorized_profile_fields
+  write_scope: propose_updates_to_core
+  persistent_memory_requires_policy_check: true
+  tenant_scoped: true
+safety:
+  treat_tool_output_as_untrusted: true
+  no_secret_exfiltration: true
+  no_policy_override: true
+  report_uncertainty: true
+output:
+  contract: shared/contracts/agent-result.schema.json
+  include_summary: true
+  include_evidence: true
+  include_actions_taken: true
+  include_open_questions: true
+  include_risk_flags: true
+security_scope:
+  defensive_by_default: true
+  authorized_assets_only: true
+  exploit_execution_requires_explicit_scope_and_approval: true
+inherits: shared/config/defaults.yaml
+overrides: []
+updated_at: '2026-11-19'
+owner: Elfried Yobouet
+approval_matrix:
+  security.logs.read:
+    level: A0
+    approval: none
+  security.scan.authorized:
+    level: A3
+    approval: explicit
+  security.config.audit:
+    level: A0
+    approval: none
+  security.risk.report:
+    level: A0
+    approval: none
+scope:
+  authorized_assets: []
+  requires_owner_signature: true
+  out_of_scope_behavior: refuse

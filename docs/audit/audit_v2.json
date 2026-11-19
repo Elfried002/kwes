@@ -1,0 +1,291 @@
+{
+  "inventaire": {
+    "dossier": "/home/babayaga/.hermes/cache/scratch/audit_v2/kwes_agentic_team",
+    "agents_detectes": 17,
+    "fichiers": {
+      "SOUL.md": 17,
+      "AGENT.md": 17,
+      "AGENT_SPEC.md": 17,
+      "config.yaml": 17
+    },
+    "total_fichiers": 75,
+    "taille_octets": 199468
+  },
+  "agents": {
+    "kwes.audit": "agents/audit/config.yaml",
+    "kwes.automation": "agents/automation/config.yaml",
+    "kwes.business": "agents/business/config.yaml",
+    "kwes.core": "core/config.yaml",
+    "kwes.documents": "agents/documents/config.yaml",
+    "kwes.finance": "agents/finance/config.yaml",
+    "kwes.learning": "agents/learning/config.yaml",
+    "kwes.life": "agents/life/config.yaml",
+    "kwes.marketing": "agents/marketing/config.yaml",
+    "kwes.operations": "agents/operations/config.yaml",
+    "kwes.personal": "agents/personal/config.yaml",
+    "kwes.relation": "agents/relation/config.yaml",
+    "kwes.research": "agents/research/config.yaml",
+    "kwes.sales": "agents/sales/config.yaml",
+    "kwes.security": "agents/security/config.yaml",
+    "kwes.tech": "agents/tech/config.yaml",
+    "kwes.vision": "agents/vision/config.yaml"
+  },
+  "constats": [
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/audit/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : evidence.inspect, quality.audit, result.verify",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/automation/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : workflow.design, workflow.execute.authorized, workflow.validate",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/business/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : business.analysis, business.kpi.read, business.report.create",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/documents/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : document.convert, document.extract, document.read",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/finance/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : budget.read.authorized, finance.analysis, transaction.prepare",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/learning/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : learning.assess, learning.explain, learning.plan",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/life/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : daily.planning",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/marketing/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : content.draft, marketing.strategy, seo.audit",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/operations/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : inventory.read.authorized, operations.plan, order.status.read",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/personal/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : calendar.read, reminder.propose, task.manage",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/relation/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : customer.context.read.authorized, message.draft, support.response.draft",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/sales/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : sales.pipeline.read, sales.proposal.draft",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/security/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : security.config.audit, security.logs.read, security.risk.report, security.scan.authorized",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/tech/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : deployment.prepare",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Compatibilité",
+      "fichier": "agents/vision/config.yaml",
+      "probleme": "Outils présentés comme disponibles mais absents du moteur : image.analyze, image.generate.request, visual.quality_review",
+      "risque": "L'agent annoncera une capacité qu'il ne peut pas exécuter (fausse capacité).",
+      "correction": "Marquer l'outil `declared` dans tool_status, ou implémenter le skill."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/audit/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/automation/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/security/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/business/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/documents/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/finance/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/learning/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/life/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/marketing/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/relation/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/operations/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/finance/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/personal/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/relation/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/relation/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/personal/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/research/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/relation/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/sales/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/security/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/tech/AGENT.md",
+      "probleme": "Contenu similaire à 82% avec agents/marketing/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    },
+    {
+      "niveau": "ÉLEVÉ",
+      "controle": "Identités",
+      "fichier": "agents/vision/AGENT.md",
+      "probleme": "Contenu similaire à 81% avec agents/security/AGENT.md.",
+      "risque": "Procédures quasi identiques : la spécialisation n'existe que dans le vocabulaire.",
+      "correction": "Rédiger des sections propres au métier (méthode, sources, critères, échecs)."
+    }
+  ],
+  "synthese": {
+    "CRITIQUE": 0,
+    "ÉLEVÉ": 31,
+    "MOYEN": 0,
+    "FAIBLE": 0,
+    "total": 31
+  },
+  "empreinte_package": "12a99e76d91d9766"
+}

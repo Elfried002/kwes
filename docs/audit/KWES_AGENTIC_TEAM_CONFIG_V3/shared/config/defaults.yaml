@@ -1,0 +1,66 @@
+config_schema_version: 1.0.0
+product: KWES
+environment: production
+status: architecture_defined_not_deployed
+principles:
+  default_deny: true
+  least_privilege: true
+  policy_engine_authoritative: true
+  untrusted_agent_outputs: true
+  honest_capability_reporting: true
+model_policy:
+  allowed_models:
+  - gemini-3.8-live
+  - gemini-3.8-live-extended-thinking
+  default_model: gemini-3.8-live
+  reasoning_model: gemini-3.8-live-extended-thinking
+  allow_unlisted_models: false
+  automatic_provider_fallback: false
+  model_change_requires_user_approval: true
+data:
+  system_of_record: supabase
+  database: supabase_postgresql
+  object_storage: supabase_storage
+  tenant_isolation: mandatory_rls
+  secrets_source: environment_or_secret_manager
+  never_store_secrets_in_config: true
+memory:
+  enabled: true
+  profile_memory: true
+  mission_memory: true
+  write_mode: propose_then_policy_check
+  explicit_consent_for_sensitive_data: true
+  user_controls:
+  - review
+  - edit
+  - disable
+  - export
+  - delete
+  tenant_scoped: true
+autonomy:
+  levels:
+    A0: consultation_only
+    A1: prepare_and_recommend
+    A2: reversible_actions
+    A3: external_actions_with_confirmation_or_bounded_delegation
+    A4: financial_or_critical_actions_with_strong_confirmation
+  default_level: A1
+  max_level_without_confirmation: A2
+  policy_engine_enforced_outside_model: true
+execution:
+  sandbox_required_for_untrusted_code: true
+  idempotency_required_for_mutations: true
+  default_timeout_seconds: 180
+  max_retries: 2
+  retry_only_if_safe: true
+  cancel_supported: true
+  max_parallel_tasks: 4
+observability:
+  audit_log: true
+  record_tool_calls: true
+  record_approvals: true
+  record_mission_state: true
+  redact_secrets: true
+integrations:
+  enabled_only_after_connection_and_test: true
+  declared_capabilities_are_not_proof_of_availability: true

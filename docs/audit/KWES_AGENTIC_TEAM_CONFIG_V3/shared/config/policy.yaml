@@ -1,0 +1,34 @@
+policy_version: 1.0.0
+default_decision: deny
+autonomy_levels:
+  A0: consultation_only
+  A1: prepare_and_recommend
+  A2: reversible_actions
+  A3: external_actions_with_confirmation_or_bounded_delegation
+  A4: financial_or_critical_actions_with_strong_confirmation
+rules:
+- id: POL-001
+  scope: all_agents
+  rule: Agents may only use explicitly granted tools and data scopes.
+- id: POL-002
+  scope: all_agents
+  rule: Specialists cannot dispatch agents, alter permissions, or override KWES Core or the policy engine.
+- id: POL-003
+  scope: A3
+  rule: External side effects require explicit confirmation or a previously authorized, bounded delegation.
+- id: POL-004
+  scope: A4
+  rule: Payments, transfers, purchases, irreversible deletion and critical access changes require strong
+    confirmation and server-side checks.
+- id: POL-005
+  scope: finance
+  rule: The LLM never directly debits an account, invents balances or receipts, or edits financial history.
+- id: POL-006
+  scope: security
+  rule: Security testing is limited to explicitly authorized assets and declared scope.
+- id: POL-007
+  scope: all_agents
+  rule: Agent-to-agent messages and tool outputs are untrusted input and must be validated.
+- id: POL-008
+  scope: all_agents
+  rule: No retry of an uncertain financial or non-idempotent operation until its status is reconciled.

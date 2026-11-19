@@ -290,3 +290,7 @@ grant select, insert, update, delete on
 -- staging : « permission denied for sequence run_events_id_seq »).
 grant usage, select on all sequences in schema public to authenticated;
 grant select on connector_catalog, cost_rates to authenticated;
+-- Le rôle applicatif doit pouvoir lire son propre rôle : la politique RLS
+-- `platform_roles_self` limite déjà la ligne à `auth.uid()`. Sans ce GRANT,
+-- l'authentification administrateur échoue en 500 (constaté en staging).
+grant select on platform_roles to authenticated;

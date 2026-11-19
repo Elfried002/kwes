@@ -57,6 +57,7 @@ export function parseHash(hash: string): Route {
       return { name: 'whatsapp' };
     case 'admin':
     case 'cockpit':
+    case 'urs':
       return { name: 'admin' };
     default:
       return { name: 'home' };
@@ -92,7 +93,7 @@ export function routeToPath(route: Route): string {
     case 'whatsapp':
       return '/whatsapp';
     case 'admin':
-      return '/admin';
+      return '/urs/';
   }
 }
 
@@ -156,7 +157,9 @@ export type GuestScreen = 'login' | 'public';
  * publique reste la porte d'entrée (marketing, référencement).
  */
 export function guestScreen(route: Route, installed: boolean): GuestScreen {
-  if (route.name === 'auth' || route.name === 'voice') return 'login';
+  // `admin` : le cockpit n'a aucune version publique — sans session, on renvoie
+  // vers la connexion, jamais vers la page marketing.
+  if (route.name === 'auth' || route.name === 'voice' || route.name === 'admin') return 'login';
   return installed ? 'login' : 'public';
 }
 

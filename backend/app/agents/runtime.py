@@ -179,10 +179,13 @@ class AgentRuntime:
                         )
         if output.get("url"):
             preuves.append(Evidence(kind="source", reference=str(output["url"])[:400]))
-        if output.get("document_id"):
-            preuves.append(
-                Evidence(kind="fichier", reference=str(output["document_id"]), detail=tool_id)
-            )
+        # Un document produit est une preuve : identifiant, chemin ou fichier.
+        for cle in ("document_id", "file_id", "path", "filename"):
+            if output.get(cle):
+                preuves.append(
+                    Evidence(kind="fichier", reference=str(output[cle])[:400], detail=tool_id)
+                )
+                break
         stdout = output.get("stdout")
         if isinstance(stdout, str) and stdout.strip():
             preuves.append(

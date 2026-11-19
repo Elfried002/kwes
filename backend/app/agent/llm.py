@@ -26,6 +26,7 @@ from typing import Any, AsyncIterator, Protocol, Sequence
 from google import genai
 from google.genai import types
 
+from app.agent import usage
 from app.core.config import Settings
 from app.agent.live_reasoner import LiveReasoner
 
@@ -243,8 +244,9 @@ class GeminiTextClient:
     ) -> LLMResult:
         if self.mock:
             return self._mock(messages, json_mode=json_mode, purpose=purpose, tools=tools)
+        debut = time.monotonic()
         try:
-            text, calls, model = await self._live().generate(
+            text, calls, model, consommation = await self._live().generate(
                 messages, purpose=purpose, tools=tools, timeout=timeout
             )
         except TimeoutError as exc:
@@ -252,7 +254,22 @@ class GeminiTextClient:
         except Exception as exc:  # noqa: BLE001 — erreurs SDK variées
             logger.warning("Gemini Live en échec (%s)", type(exc).__name__)
             raise LLMError("Fournisseur LLM indisponible.", retryable=True) from exc
-        return LLMResult(content=text, tool_calls=calls, model=model, mock=False)
+        # Instrumentation : chaque appel texte alimente le tampon de consommation
+        # (tokens réels renvoyés par le fournisseur, jamais estimés).
+        usage.record(
+            model=model,
+            input_tokens=consommation.get("input_tokens"),
+            output_tokens=consommation.get("output_tokens"),
+            purpose=purpose,
+            duration_ms=int((time.monotonic() - debut) * 1000),
+        )
+        return LLMResult(
+            content=text,
+            tool_calls=calls,
+            usage=consommation,
+            model=model,
+            mock=False,
+        )
 
     async def stream_chat(
         self,

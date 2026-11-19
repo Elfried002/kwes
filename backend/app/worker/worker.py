@@ -34,9 +34,13 @@ class TaskWorker:
         db: Database,
         orchestrator: Orchestrator,
         queue: TaskQueue,
+        system_db: Database | None = None,
     ) -> None:
         self.settings = settings
         self.db = db
+        # `system_db` sert uniquement à la gestion de file (claim, reprise,
+        # marquage d'échec). L'exécution des missions garde `db`, donc la RLS.
+        self.system_db = system_db or db
         self.orchestrator = orchestrator
         self.queue = queue
         self.owner = settings.worker_name
@@ -88,7 +92,7 @@ class TaskWorker:
                 logger.warning("Arrêt : %s tâche(s) interrompue(s), elles seront reprises.", len(still))
         self._inflight.clear()
 
-        released = await release_all(self.db, self.owner)
+        released = await release_all(self.system_db, self.owner)
         if released:
             logger.info("Arrêt : %s verrou(s) libéré(s).", released)
         await self.queue.requeue_processing()
@@ -120,7 +124,7 @@ class TaskWorker:
         claimed = False
         try:
             claimed = await claim_task(
-                self.db, task_id, self.owner, self.settings.worker_claim_ttl_seconds
+                self.system_db, task_id, self.owner, self.settings.worker_claim_ttl_seconds
             )
             if not claimed:
                 logger.info("Task %s ignorée : déjà détenue par un autre worker.", task_id)
@@ -137,7 +141,7 @@ class TaskWorker:
         finally:
             if claimed:
                 try:
-                    await release_task(self.db, task_id, self.owner)
+                    await release_task(self.system_db, task_id, self.owner)
                 except Exception:
                     logger.exception("Libération du verrou impossible task=%s", task_id)
             await self.queue.ack(task_id)
@@ -145,7 +149,7 @@ class TaskWorker:
 
     async def _mark_worker_failure(self, task_id: uuid.UUID) -> None:
         try:
-            async with self.db.session() as session:
+            async with self.system_db.session() as session:
                 task = await session.get(Task, task_id)
                 if task is None or task.status in TERMINAL_TASK_STATUSES:
                     return
@@ -196,9 +200,11 @@ class TaskWorker:
         """Remet en file les tâches sans worker : queued, ou running/planning périmées."""
         if not self.settings.orphan_recovery_enabled:
             return 0
+        # Le balayage est une opération système : il voit toutes les tâches.
+        # L'exécution, elle, passe par la connexion applicative (RLS).
         cutoff = utcnow() - timedelta(seconds=self.settings.worker_heartbeat_ttl_seconds)
         recovered: list[uuid.UUID] = []
-        async with self.db.session() as session:
+        async with self.system_db.session() as session:
             rows = (
                 await session.execute(
                     select(Task).where(Task.status.in_(("queued", "planning", "running")))

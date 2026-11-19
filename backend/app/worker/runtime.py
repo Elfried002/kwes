@@ -32,10 +32,16 @@ class Runtime:
     registry: SkillRegistry
     queue: TaskQueue
     orchestrator: Orchestrator
+    # Connexion système réservée à la gestion de file (claim, reprise). Elle ne
+    # sert jamais à lire les données d'une mission : l'exécution passe par `db`,
+    # avec le rôle applicatif et le contexte du tenant de la tâche.
+    db_system: Database | None = None
 
     async def aclose(self) -> None:
         await self.queue.close()
         await self.db.dispose()
+        if self.db_system is not None and self.db_system is not self.db:
+            await self.db_system.dispose()
 
 
 async def build_runtime(
@@ -45,7 +51,20 @@ async def build_runtime(
     with_queue: bool = True,
 ) -> Runtime:
     """Construit les composants partagés par l'API et le worker."""
-    db = Database(settings.effective_database_url, pool_size=settings.database_pool_size)
+    # `rls=True` installe l'écouteur de pool : chaque connexion empruntée reçoit
+    # l'identité de la tâche en cours, y compris après un commit. Sans cela, les
+    # écritures de fin de mission (notifications) sont refusées par la politique.
+    db = Database(
+        settings.effective_database_url,
+        pool_size=settings.database_pool_size,
+        rls=settings.db_rls_enabled and not settings.db_rls_bypass,
+    )
+    # Quand la RLS est active pour l'application, la gestion de file a besoin
+    # d'une vue système (claim/sweep). Elle est séparée de la connexion
+    # d'exécution, qui reste soumise aux politiques.
+    db_system: Database | None = None
+    if settings.db_rls_enabled and not settings.db_rls_bypass:
+        db_system = Database(settings.database_url, pool_size=2)
 
     registry = SkillRegistry(SKILLS_DIR, settings)
     registry.load()
@@ -74,10 +93,16 @@ async def build_runtime(
         "sqlite" if "sqlite" in settings.database_url else "postgres",
         len(registry.manifests()),
     )
+    # Le worker amorce la lecture d'une tâche via la connexion système, puis
+    # exécute sous RLS : l'orchestrateur a besoin des deux.
+    if db_system is not None:
+        orchestrator.system_db = db_system  # type: ignore[attr-defined]
+
     return Runtime(
         settings=settings,
         db=db,
         registry=registry,
         queue=queue,
         orchestrator=orchestrator,
+        db_system=db_system,
     )

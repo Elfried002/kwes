@@ -117,16 +117,15 @@ class Database:
                 # requête suivante hérite de l'identité précédente.
                 if not self.is_sqlite:
                     try:
-                        # Neutralise l'identité de la connexion et oublie
-                        # l'utilisateur pour les connexions suivantes.
-                        from app.db.rls import set_rls_user
-
+                        # Neutralise la connexion rendue au pool. L'identité de la
+                        # tâche reste en mémoire (contextvar) : un worker exécute
+                        # plusieurs sessions pour une même mission, et les effacer
+                        # ici faisait perdre les droits au milieu de l'exécution.
                         await session.execute(text("reset role"))
                         await session.execute(
                             text("select set_config('request.jwt.claims', '', false)")
                         )
                         await session.commit()
-                        set_rls_user(None)
                     except Exception:  # noqa: BLE001
                         await session.rollback()
 

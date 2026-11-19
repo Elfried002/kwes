@@ -20,6 +20,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -512,6 +513,34 @@ class VoiceSession(Base):
     close_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
+class LLMUsage(Base):
+    """Une ligne par appel LLM : tokens réels, modèle, fournisseur, durée.
+
+    Table d'instrumentation, isolée par tenant comme les autres données métier.
+    `cost_eur` reste nullable tant qu'aucun barème n'est validé.
+    """
+
+    __tablename__ = "llm_usage"
+
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    mission_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True, index=True)
+    agent_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    model: Mapped[str] = mapped_column(String(96), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="google")
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False, default="chat")
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="provider")
+    cost_eur: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
 ALL_MODELS = [
     Profile,
     Tenant,
@@ -534,4 +563,5 @@ ALL_MODELS = [
     DeviceCommand,
     Document,
     VoiceSession,
+    LLMUsage,
 ]

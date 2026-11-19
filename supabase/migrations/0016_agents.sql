@@ -140,6 +140,46 @@ drop policy if exists agent_messages_tenant on agent_messages;
 create policy agent_messages_tenant on agent_messages
     for all using (is_tenant_member(tenant_id)) with check (is_tenant_member(tenant_id));
 
+-- --------------------------------------------------------------------------
+-- Instrumentation : une ligne par appel LLM (tokens réels, modèle, durée)
+-- --------------------------------------------------------------------------
+create table if not exists llm_usage (
+    id            uuid primary key default gen_random_uuid(),
+    tenant_id     uuid references tenants (id) on delete cascade,
+    mission_id    uuid,
+    agent_id      text,
+    model         text not null,
+    provider      text not null default 'google',
+    purpose       text not null default 'chat',
+    input_tokens  integer,
+    output_tokens integer,
+    duration_ms   integer not null default 0,
+    source        text not null default 'provider',
+    cost_eur      numeric(12, 6),
+    created_at    timestamptz not null default now()
+);
+
+create index if not exists idx_llm_usage_tenant on llm_usage (tenant_id, created_at desc);
+create index if not exists idx_llm_usage_mission on llm_usage (mission_id);
+
+alter table llm_usage enable row level security;
+
+drop policy if exists llm_usage_tenant on llm_usage;
+create policy llm_usage_tenant on llm_usage
+    for all using (is_tenant_member(tenant_id)) with check (is_tenant_member(tenant_id));
+
+alter table llm_usage force row level security;
+
+-- Droits explicites : le rôle applicatif bascule en `authenticated` pendant une
+-- requête (voir app/db/rls.py), et `authenticated` doit pouvoir lire/écrire les
+-- lignes que les politiques autorisent. Sans ces GRANT, la migration crée des
+-- tables inutilisables par l'API (constaté en staging le 19/11/2026).
+grant select, insert, update, delete on agents             to kwes_app, authenticated;
+grant select, insert, update, delete on agent_capabilities to kwes_app, authenticated;
+grant select, insert, update, delete on agent_runs         to kwes_app, authenticated;
+grant select, insert, update, delete on agent_messages     to kwes_app, authenticated;
+grant select, insert, update, delete on llm_usage          to kwes_app, authenticated;
+
 alter table agent_runs     force row level security;
 alter table agent_messages force row level security;
 alter table agents         force row level security;

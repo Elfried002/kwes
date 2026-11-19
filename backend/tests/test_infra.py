@@ -43,9 +43,11 @@ def test_all_tables_exist_with_expected_names() -> None:
         "tenants",
         "tenant_memberships",
         "tenant_settings",
+        # Instrumentation des agents (migration 0016)
+        "llm_usage",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 21  # 18 + tenants + appartenances + paramètres d'espace
+    assert len(ALL_MODELS) == 22  # 18 + 3 espaces + instrumentation LLM
 
 
 def test_task_columns_match_data_model() -> None:

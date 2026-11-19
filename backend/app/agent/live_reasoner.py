@@ -165,19 +165,22 @@ class LiveReasoner:
         purpose: str = "chat",
         tools: Sequence[dict[str, Any]] | None = None,
         timeout: float | None = None,
-    ) -> tuple[str, list[dict[str, Any]], str]:
-        """Renvoie (texte, appels d'outils, modèle utilisé)."""
+    ) -> tuple[str, list[dict[str, Any]], str, dict[str, int]]:
+        """Renvoie (texte, appels d'outils, modèle utilisé, consommation)."""
         model = self.model_for(purpose, has_tools=bool(tools))
         system, turns = _turns(messages)
         if not turns:
-            return "", [], model
+            return "", [], model, {}
         limit = timeout or self.settings.gemini_timeout_seconds
         # La réflexion n'est envoyée qu'au modèle qui la supporte.
         thinking = purpose in {"plan", "mission"} and model == self.model_thinking
         force_tool = "propose_plan" if purpose == "plan" and tools else None
 
-        async def _read(session: Any, parts: list[str], calls: list[dict[str, Any]]) -> None:
-            """Lit un tour : transcription + appels d'outils, jusqu'à turn_complete."""
+        async def _read(
+            session: Any, parts: list[str], calls: list[dict[str, Any]]
+        ) -> dict[str, int]:
+            """Lit un tour : transcription, appels d'outils et consommation de tokens."""
+            consommation: dict[str, int] = {}
             async for message in session.receive():
                 tool_call = getattr(message, "tool_call", None)
                 if tool_call is not None:
@@ -196,17 +199,26 @@ class LiveReasoner:
                 chunk = str(getattr(transcription, "text", "") or "") if transcription else ""
                 if chunk:
                     parts.append(chunk)
+                meta = getattr(message, "usage_metadata", None)
+                if meta is not None:
+                    entree = getattr(meta, "prompt_token_count", None)
+                    sortie = getattr(meta, "response_token_count", None)
+                    if entree is not None:
+                        consommation["input_tokens"] = int(entree)
+                    if sortie is not None:
+                        consommation["output_tokens"] = int(sortie)
                 if getattr(content, "turn_complete", False):
                     break
+            return consommation
 
-        async def _run() -> tuple[str, list[dict[str, Any]]]:
+        async def _run() -> tuple[str, list[dict[str, Any]], dict[str, int]]:
             async with self._sdk().aio.live.connect(
                 model=model, config=self._config(system, tools, thinking=thinking)
             ) as session:
                 await session.send_client_content(turns=turns[-1], turn_complete=True)
                 parts: list[str] = []
                 calls: list[dict[str, Any]] = []
-                await _read(session, parts, calls)
+                consommation = await _read(session, parts, calls)
                 # Le modèle approfondi répond parfois en texte au lieu d'appeler
                 # l'outil : on le relance dans la même session, une seule fois.
                 if force_tool and not calls:
@@ -224,14 +236,14 @@ class LiveReasoner:
                         ),
                         turn_complete=True,
                     )
-                    await _read(session, parts, calls)
-                return "".join(parts).strip(), calls
+                    consommation = await _read(session, parts, calls) or consommation
+                return "".join(parts).strip(), calls, consommation
 
         last_error: Exception | None = None
         for attempt in range(2):
             try:
-                text, calls = await asyncio.wait_for(_run(), timeout=limit)
-                return text, calls, model
+                text, calls, consommation = await asyncio.wait_for(_run(), timeout=limit)
+                return text, calls, model, consommation
             except asyncio.TimeoutError as exc:
                 last_error = exc
             except Exception as exc:  # noqa: BLE001 — réseau, poignée de main, quota

@@ -35,6 +35,8 @@ from app.core.config import Settings
 from app.core.errors import NotFound, ProviderUnavailable, ValidationFailed
 from app.core.events import EventBus, event_bus
 from app.core.security import CurrentUser
+from app.agent import usage
+from app.agent.usage_store import flush as flush_usage
 from app.core.tenancy import current_tenant, set_current_tenant
 from app.core.utils import iso_utc, payload_hash, redact, truncate, utcnow
 from app.db.base import Database
@@ -187,6 +189,8 @@ class Orchestrator:
                 {"max_chars": self.settings.max_message_chars},
             )
 
+        # Attribution des consommations LLM de ce tour au tenant courant.
+        usage.set_context(tenant_id=current_tenant())
         conversation = await self._get_or_create_conversation(
             session, user, conversation_id=conversation_id, title=truncate(text, 80), language=language
         )
@@ -244,6 +248,7 @@ class Orchestrator:
                 },
             )
             await self._enqueue(task.id)
+            await flush_usage(session)
             return ChatOutcome(
                 conversation=conversation,
                 user_message=user_message,
@@ -295,6 +300,7 @@ class Orchestrator:
             "conversation.delta",
             {"conversation_id": str(conversation.id), "message_id": str(assistant_message.id), "delta": response},
         )
+        await flush_usage(session)
         await self.events.publish(
             user.id,
             "conversation.completed",
@@ -881,16 +887,21 @@ class Orchestrator:
         if started is None:
             return "skipped"
 
+        # Identité du demandeur, lue une fois via la connexion système : elle est
+        # reposée avant *chaque* lecture, car la session applicative ne voit rien
+        # sans contexte sous RLS.
+        identite = await self._task_owner(task_id)
+        if identite is None:
+            return "missing"
+
         for _ in range(self.settings.max_task_steps * 3 + 3):
             async with self.db.session() as session:
+                if rls_applicable(self.settings, session):
+                    await apply_rls_context(session, identite)
                 task = await session.get(Task, task_id, options=[selectinload(Task.steps)])
                 if task is None:
                     return "missing"
-                # Le worker n'a pas de requête HTTP : on repose l'identité du
-                # demandeur pour que la RLS autorise l'exécution de ses lignes.
                 set_current_tenant(task.tenant_id or task.user_id)
-                if rls_applicable(self.settings, session):
-                    await apply_rls_context(session, task.user_id)
                 if task.status in TERMINAL_TASK_STATUSES:
                     return task.status
                 if task.status == "paused":
@@ -923,8 +934,41 @@ class Orchestrator:
         await self._finalize_task(task_id)
         return "completed"
 
+    async def _task_owner(self, task_id: uuid.UUID) -> uuid.UUID | None:
+        """Demandeur d'une tâche, lu hors RLS (connexion système du worker)."""
+        bootstrap = getattr(self, "system_db", None) or self.db
+        async with bootstrap.session() as probe:
+            row = (
+                await probe.execute(
+                    select(Task.user_id, Task.tenant_id).where(Task.id == task_id)
+                )
+            ).first()
+        if row is None:
+            return None
+        demandeur, espace = row
+        set_current_tenant(espace or demandeur)
+        return demandeur
+
     async def _mark_running(self, task_id: uuid.UUID) -> uuid.UUID | None:
+        # Amorçage : sous RLS, la session applicative ne voit aucune ligne avant
+        # de connaître le demandeur. On lit donc l'identité de la tâche avec la
+        # connexion système (claim), puis on repose le contexte avant toute
+        # lecture de données de mission.
+        bootstrap = getattr(self, "system_db", None) or self.db
+        async with bootstrap.session() as probe:
+            row = (
+                await probe.execute(
+                    select(Task.user_id, Task.tenant_id).where(Task.id == task_id)
+                )
+            ).first()
+        if row is None:
+            logger.warning("Tâche introuvable au démarrage: %s", task_id)
+            return None
+        demandeur, espace = row
+        set_current_tenant(espace or demandeur)
         async with self.db.session() as session:
+            if rls_applicable(self.settings, session):
+                await apply_rls_context(session, demandeur)
             task = await session.get(Task, task_id, options=[selectinload(Task.steps)])
             if task is None:
                 logger.warning("Tâche introuvable au démarrage: %s", task_id)

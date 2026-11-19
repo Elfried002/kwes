@@ -43,7 +43,11 @@ async def _run() -> int:
 
     runtime = await build_runtime(settings)
     worker = TaskWorker(
-        settings=settings, db=runtime.db, orchestrator=runtime.orchestrator, queue=runtime.queue
+        settings=settings,
+        db=runtime.db,
+        orchestrator=runtime.orchestrator,
+        queue=runtime.queue,
+        system_db=runtime.db_system,
     )
 
     stop_event = asyncio.Event()

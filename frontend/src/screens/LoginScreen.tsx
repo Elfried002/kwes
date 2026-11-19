@@ -97,9 +97,11 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState<'email' | 'google' | 'reset' | null>(null);
   // Inscription en attente de vérification : e-mail + code à 6 chiffres.
-  const [otpEmail, setOtpEmail] = useState<string | null>(null);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpBusy, setOtpBusy] = useState(false);
+  // Lien envoyé par e-mail (confirmation d'inscription ou connexion sans mot de passe).
+  const [lienEmail, setLienEmail] = useState<string | null>(null);
+  const [lienType, setLienType] = useState<'signup' | 'magiclink'>('signup');
+  const [renvoiBusy, setRenvoiBusy] = useState(false);
+  const [renvoiFait, setRenvoiFait] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   // Erreur renvoyée par Google/Supabase au retour de la connexion (?error=…).
@@ -194,7 +196,9 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
         return;
       }
       if (data.session) return;
-      setOtpEmail(clean);
+      setLienType('signup');
+      setLienEmail(clean);
+      setRenvoiFait(false);
       setInfo(
         `Compte créé. Un e-mail de confirmation a été envoyé à ${clean} : ouvrez-le et cliquez le lien pour activer votre compte.`,
       );
@@ -269,31 +273,63 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
     }
   };
 
-  /** Vérifie le code à 6 chiffres reçu par e-mail après une inscription. */
-  const verifyCode = async (): Promise<void> => {
-    if (!otpEmail) return;
-    const code = otpCode.trim();
-    if (code.length < 6) {
-      setError('Saisissez le code à 6 chiffres reçu par e-mail.');
+  /** Connexion sans mot de passe : un lien à usage unique est envoyé par e-mail. */
+  const envoyerLienMagique = async (): Promise<void> => {
+    resetFeedback();
+    if (requireConfig()) return;
+    const clean = email.trim();
+    if (!clean.includes('@')) {
+      setError('Saisissez votre adresse e-mail pour recevoir le lien.');
       return;
     }
-    setOtpBusy(true);
-    setError(null);
+    setBusy('email');
     try {
-      const { error: failure } = await supabase.auth.verifyOtp({
-        email: otpEmail,
-        token: code,
-        type: 'signup',
+      const { error: failure } = await supabase.auth.signInWithOtp({
+        email: clean,
+        options: { emailRedirectTo: redirectTo(), shouldCreateUser: false },
       });
       if (failure) {
         setError(authErrorMessage(failure));
         return;
       }
-      // Session publiée par onAuthStateChange : l'espace s'ouvre seul.
+      setLienType('magiclink');
+      setLienEmail(clean);
+      setRenvoiFait(false);
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
-      setOtpBusy(false);
+      setBusy(null);
+    }
+  };
+
+  /** Renvoie le lien de confirmation après une inscription. */
+  const renvoyerLien = async (): Promise<void> => {
+    if (!lienEmail) return;
+    setRenvoiBusy(true);
+    setError(null);
+    try {
+      // Supabase ne « resend » que les confirmations : pour un lien de
+      // connexion, on redemande simplement un lien à usage unique.
+      const { error: failure } =
+        lienType === 'magiclink'
+          ? await supabase.auth.signInWithOtp({
+              email: lienEmail,
+              options: { emailRedirectTo: redirectTo(), shouldCreateUser: false },
+            })
+          : await supabase.auth.resend({
+              type: 'signup',
+              email: lienEmail,
+              options: { emailRedirectTo: redirectTo() },
+            });
+      if (failure) {
+        setError(authErrorMessage(failure));
+        return;
+      }
+      setRenvoiFait(true);
+    } catch (cause) {
+      setError(authErrorMessage(cause));
+    } finally {
+      setRenvoiBusy(false);
     }
   };
 
@@ -404,27 +440,19 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
             </p>
           ) : null}
 
-          {otpEmail ? (
+          {lienEmail ? (
             <div className="stack" style={{ gap: 8 }}>
-              <label htmlFor="otp" style={{ fontSize: '0.8125rem' }}>
-                Vous avez reçu un code à 6 chiffres ? Saisissez-le ici.
-              </label>
-              <input
-                id="otp"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={otpCode}
-                onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ''))}
-                placeholder="123456"
-              />
+              <p className="muted" style={{ fontSize: '0.8125rem', margin: 0 }}>
+                Un lien vient d’être envoyé à <strong>{lienEmail}</strong>. Ouvrez-le sur cet
+                appareil : il vous connecte directement, sans code à recopier.
+              </p>
               <button
                 type="button"
-                className="btn btn--primary"
-                onClick={() => void verifyCode()}
-                disabled={otpBusy}
+                className="btn"
+                onClick={() => void renvoyerLien()}
+                disabled={renvoiBusy || renvoiFait}
               >
-                {otpBusy ? 'Vérification…' : 'Valider le code'}
+                {renvoiFait ? 'Lien renvoyé' : renvoiBusy ? 'Envoi…' : 'Renvoyer le lien'}
               </button>
             </div>
           ) : null}
@@ -651,6 +679,15 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
               <div className="login__divider">
                 <span>ou</span>
               </div>
+              <button
+                type="button"
+                className="btn btn--ghost btn--block"
+                onClick={() => void envoyerLienMagique()}
+                disabled={busy !== null || !supabaseConfigured}
+              >
+                Recevoir un lien de connexion par e-mail
+              </button>
+
               <div className="login__google-block">
                 <button
                   type="button"

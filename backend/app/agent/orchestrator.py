@@ -58,6 +58,27 @@ from app.skills.registry import SkillRegistry
 
 logger = logging.getLogger("kwes.orchestrator")
 
+# Mots outils très fréquents en anglais : suffisant pour choisir la langue de
+# réponse quand le client n'envoie aucune indication (constat de dérive en
+# espagnol/italien sur des messages français).
+_ENGLISH_HINTS = frozenset(
+    {
+        "the", "and", "you", "your", "can", "could", "what", "how", "with", "for",
+        "please", "search", "tell", "about", "have", "this", "that", "would", "give",
+    }
+)
+
+
+def _looks_english(text: str) -> bool:
+    words = [w.strip(".,!?;:'\"()[]") for w in (text or "").lower().split()]
+    words = [w for w in words if w]
+    if not words:
+        return False
+    hits = sum(1 for w in words if w in _ENGLISH_HINTS)
+    # Un ou deux mots isolés ne suffisent pas ; on exige une proportion nette.
+    return hits / len(words) >= 0.25 and hits >= 2
+
+
 TERMINAL_TASK_STATUSES = {"completed", "failed", "cancelled"}
 RUNNABLE_TASK_STATUSES = {"queued", "running", "planning"}
 META_KEY = "_meta"
@@ -343,10 +364,14 @@ class Orchestrator:
         # réel et hallucine sinon une date (constaté en production le 16/11).
         now = datetime.now(timezone.utc)
         system = (
-            "Tu es Kwes, un agent personnel autonome. Tu parles : une phrase, douze mots "
-            "maximum, sans préambule ni liste. Si la personne veut plus, elle le demandera. "
-            "Tu ne prétends jamais avoir exécuté une action que "
-            "tu n'as pas exécutée. Si une mission est nécessaire, propose-la. "
+            "Tu es Kwes, un agent personnel autonome. Tu écris comme une personne : "
+            "une à trois phrases naturelles, sans préambule, sans liste, sans jargon. "
+            # Honnêteté d'exécution : c'est la règle qui a le plus de valeur ici.
+            "Tu ne prétends jamais avoir exécuté une action que tu n'as pas exécutée : "
+            "ne dis jamais « je lance la recherche » ou « je vérifie » si aucun outil "
+            "n'a réellement tourné. Si tu ne peux pas agir dans cette conversation, dis-le "
+            "simplement et propose ce que tu peux faire (chercher, lire une page, écrire "
+            "un document, lancer une mission). "
             # Découverte : Kwes apprend à connaître son utilisateur au fil de la
             # conversation, sans jamais transformer l'échange en formulaire.
             "Quand tu apprends à connaître la personne, pose une seule question "
@@ -355,8 +380,18 @@ class Orchestrator:
             f"Date et heure actuelles (UTC) : {now.strftime('%Y-%m-%d %H:%M')}. "
             "Ne devine jamais la date : utilise celle-ci."
         )
-        if language:
-            system += f" Langue de réponse : {language}."
+        # Langue : sans consigne explicite, le modèle dérivait vers l'espagnol ou
+        # l'italien. On impose la langue de la dernière réplique, par défaut le français.
+        langue = (language or "").strip().lower()
+        if langue not in {"fr", "en"}:
+            langue = "en" if _looks_english(message) else "fr"
+        system += (
+            f" Langue de réponse : {'anglais' if langue == 'en' else 'français'}, "
+            "celle de la dernière réplique de la personne. Ne mélange jamais deux langues, "
+            "pas même un mot. Si la personne écrit en français, tu réponds en français ; "
+            "si elle écrit en anglais, tu réponds en anglais ; dans toute autre langue, "
+            "réponds en français."
+        )
         known = [line.strip() for line in (memories or []) if line and line.strip()]
         if known:
             system += (

@@ -412,21 +412,29 @@ class GeminiTextClient:
         return {"goal": goal, "steps": steps}
 
 def _classify(text: str) -> str:
-    """Repli heuristique (LLM indisponible) : mission > outil > direct."""
+    """Oriente une demande : mission (plusieurs étapes) ou outil (une action).
+
+    L'ancienne version classait « recherche » comme une mission : demander un prix
+    créait une mission dont le plan était vide, au lieu de chercher réellement.
+    Une demande d'information simple doit passer par les outils, pas par un plan.
+    """
     lowered = text.lower()
-    mission_markers = (
-        "mission", "prépare", "prepare", "recherche", "étude", "etude", "analyse",
-        "plan", "stratégie", "strategie", "business", "compare", "veille",
-        "publie", "envoie", "partage", "rapport", "synthèse", "synthese",
+    # Une mission suppose plusieurs étapes explicites, pas une simple question.
+    multi_step_markers = (
+        "mission", "rapport", "plan d'action", "stratégie", "strategie",
+        "organise", "prépare", "prepare", "étude de marché", "etude de marche",
+        "analyse approfondie", "compare plusieurs", "veille", "synthèse complète",
+        "synthese complete", "business plan", "proposition commerciale",
     )
-    if any(marker in lowered for marker in mission_markers) and len(text.strip()) > 12:
-        return "mission"
     tool_markers = (
-        "cherche", "trouve", "actualité", "actualités", "nouvelle", "prix",
-        "combien coûte", "note que", "retiens", "souviens", "rédige", "redige",
-        "écris", "ecris", "document", "vérifie", "verifie", "météo", "meteo",
-        "lis cette page", "http://", "https://",
+        "cherche", "recherche", "trouve", "actualité", "actualités", "nouvelle",
+        "prix", "combien", "c'est quoi", "qu'est-ce que", "qui est", "où en est",
+        "note que", "retiens", "souviens", "rédige", "redige", "écris", "ecris",
+        "document", "vérifie", "verifie", "météo", "meteo", "lis cette page",
+        "http://", "https://", "source", "compare",
     )
+    if any(marker in lowered for marker in multi_step_markers) and len(text.strip()) > 25:
+        return "mission"
     if any(marker in lowered for marker in tool_markers):
         return "outil"
     return "direct"

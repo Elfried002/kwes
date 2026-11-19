@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { clearSession, completePasswordRecovery } from '../lib/auth';
+import { clearAuthNotice, clearSession, completePasswordRecovery, useAuthNotice } from '../lib/auth';
 import { authErrorMessage, passwordScore, validatePassword } from '../lib/auth-errors';
 import { supabase, supabaseConfigured, SUPABASE_CONFIG_ERROR } from '../lib/supabase';
 import { useKwes } from '../state/KwesProvider';
@@ -98,10 +98,13 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
   const [busy, setBusy] = useState<'email' | 'google' | 'reset' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Erreur renvoyée par Google/Supabase au retour de la connexion (?error=…).
+  const oauthNotice = useAuthNotice();
 
   const resetFeedback = (): void => {
     setError(null);
     setInfo(null);
+    if (oauthNotice) clearAuthNotice();
   };
 
   const switchMode = (next: Mode): void => {
@@ -367,10 +370,10 @@ export function LoginScreen({ initialMode = 'signin' }: { initialMode?: Mode }) 
             </p>
           ) : null}
 
-          {error ? (
+          {error ?? oauthNotice ? (
             <p className="notice notice--danger" role="alert">
               <Icon name="alert" size={16} />
-              <span>{error}</span>
+              <span>{error ?? oauthNotice}</span>
             </p>
           ) : null}
 

@@ -26,6 +26,8 @@ interface LiveMessage {
 
 export interface GeminiLive extends VoiceSessionState {
   supported: boolean;
+  /** Vrai quand seul un toucher peut débloquer le micro (permission, audio suspendu). */
+  needsGesture: boolean;
   listening: boolean;
   /** Dernier outil appelé pendant la session (nom technique masqué à l'écran). */
   tool: string | null;
@@ -79,6 +81,7 @@ export function useGeminiLive(): GeminiLive {
     queued: 0,
     streaming: false,
     error: null as string | null,
+    needsGesture: false,
   });
   const [tool, setTool] = useState<string | null>(null);
   const levelRef = useRef(0);
@@ -243,10 +246,36 @@ export function useGeminiLive(): GeminiLive {
   const activate = useCallback(async () => {
     if (activeRef.current || !supported) return;
     activeRef.current = true;
-    setState((prev) => ({ ...prev, active: true, error: null, phase: 'thinking', answer: '' }));
+    setState((prev) => ({
+      ...prev,
+      active: true,
+      error: null,
+      needsGesture: false,
+      phase: 'thinking',
+      answer: '',
+    }));
     pendingAnswerRef.current = '';
 
     try {
+      // Le micro est demandé AVANT d'ouvrir la session : sur téléphone, la
+      // permission peut prendre plusieurs secondes et la session Gemini se
+      // fermait pour inactivité pendant que l'utilisateur répondait au système.
+      const mic = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      micRef.current = mic;
+
+      const context = new AudioContext({ sampleRate: INPUT_RATE });
+      inputCtxRef.current = context;
+      // Sur mobile, un contexte créé hors geste naît suspendu : sans reprise,
+      // aucune trame ne part et l'agent n'entend rien.
+      if (context.state === 'suspended') await context.resume();
+      if (context.state !== 'running') {
+        const blocked = new Error('audio-bloque');
+        blocked.name = 'NotAllowedError';
+        throw blocked;
+      }
+
       const ticket = await createVoiceTicket(getPreferences().language);
       const socket = new WebSocket(buildVoiceUrl(ticket.ticket));
       socketRef.current = socket;
@@ -272,12 +301,6 @@ export function useGeminiLive(): GeminiLive {
         socket.addEventListener('error', () => reject(new Error('ws')), { once: true });
       });
 
-      const mic = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      micRef.current = mic;
-      const context = new AudioContext({ sampleRate: INPUT_RATE });
-      inputCtxRef.current = context;
       const source = context.createMediaStreamSource(mic);
       sourceRef.current = source;
       const processor = context.createScriptProcessor(CHUNK, 1, 1);
@@ -327,14 +350,18 @@ export function useGeminiLive(): GeminiLive {
     } catch (error) {
       activeRef.current = false;
       teardown();
+      const nom = error instanceof Error ? error.name : '';
+      const geste = nom === 'NotAllowedError' || nom === 'SecurityError';
       setState((prev) => ({
         ...prev,
         active: false,
         phase: 'idle',
-        error:
-          error instanceof Error && error.name === 'NotAllowedError'
-            ? 'Micro refusé par le navigateur.'
-            : 'Impossible de démarrer la conversation vocale.',
+        // `geste` distingue ce que l'utilisateur peut débloquer d'un toucher
+        // (permission, audio suspendu) d'une panne réseau ou serveur.
+        error: geste
+          ? 'Micro bloqué par le navigateur.'
+          : 'Impossible de démarrer la conversation vocale.',
+        needsGesture: geste,
       }));
     }
   }, [ensureOutput, handleMessage, supported, teardown]);

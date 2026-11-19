@@ -84,8 +84,11 @@ export function VoiceScreen() {
       setNeedsStart(false);
       return;
     }
-    if (voice.error) setNeedsStart(true);
-  }, [voice.active, voice.error]);
+    // Seul un blocage que l'utilisateur peut lever d'un toucher justifie
+    // l'écran « Touchez pour parler ». Une panne réseau ou serveur s'affiche
+    // comme une erreur, pas comme une invitation à toucher.
+    setNeedsStart(voice.needsGesture);
+  }, [voice.active, voice.needsGesture]);
 
   // `pulse` anime le dot sur la parole reconnue ; le niveau réel vient de
   // l'analyseur branché sur la sortie audio de Gemini (aucun élément <audio>).

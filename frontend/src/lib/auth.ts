@@ -35,9 +35,36 @@ interface AuthState {
   session: Session | null;
   ready: boolean;
   recovery: boolean;
+  /** Message renvoyé par le fournisseur d'identité après un retour de Google. */
+  notice: string | null;
 }
 
-let state: AuthState = { session: readStored(), ready: false, recovery: false };
+let state: AuthState = { session: readStored(), ready: false, recovery: false, notice: null };
+
+const OAUTH_PARAMS = ['code', 'error', 'error_description', 'state', 'type'] as const;
+
+/**
+ * Retire de l'URL les paramètres du retour OAuth.
+ *
+ * Sans cela, `?code=…` reste visible et un rechargement rejouerait un échange
+ * déjà consommé (erreur « code already used »).
+ */
+function clearOauthParams(routeForcee?: string): void {
+  try {
+    const url = new URL(window.location.href);
+    if (!OAUTH_PARAMS.some((key) => url.searchParams.has(key))) return;
+    for (const key of OAUTH_PARAMS) url.searchParams.delete(key);
+    const route =
+      routeForcee ??
+      (window.location.hash.startsWith('#/') ? window.location.hash : '#/');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${route}`);
+    // `replaceState` n'émet aucun `hashchange` : sans cette notification, le
+    // routeur reste sur l'écran précédent alors que l'URL a changé.
+    if (routeForcee) window.dispatchEvent(new HashChangeEvent('hashchange'));
+  } catch {
+    /* URL illisible : le nettoyage n'est pas critique */
+  }
+}
 const listeners = new Set<() => void>();
 
 function toSession(session: SupabaseSession | null): Session | null {
@@ -134,6 +161,15 @@ export function useSession(): Session | null {
   return useSyncExternalStore(subscribeSession, getSession, getSession);
 }
 
+/** Message d'erreur renvoyé par Google/Supabase au retour de la connexion. */
+export function useAuthNotice(): string | null {
+  return useSyncExternalStore(subscribeSession, () => state.notice, () => null);
+}
+
+export function clearAuthNotice(): void {
+  if (state.notice !== null) setState({ notice: null });
+}
+
 export function useAuthReady(): boolean {
   return useSyncExternalStore(subscribeSession, isAuthReady, isAuthReady);
 }
@@ -172,9 +208,39 @@ if (typeof window !== 'undefined') {
     /* ignore */
   }
 
+  // Retour de Google : lire tout de suite l'éventuelle erreur du fournisseur.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const failure = params.get('error_description') ?? params.get('error');
+    if (failure) {
+      setState({ notice: decodeURIComponent(failure.replace(/\+/g, ' ')) });
+      clearOauthParams();
+    }
+  } catch {
+    /* query illisible : rien à signaler */
+  }
+
   void supabase.auth.getSession().then(({ data }) => {
     applySession(data.session);
     setState({ ready: true });
+    // Échange PKCE en cours au retour de Google : si aucun session n'apparaît
+    // avec un `code` encore présent, c'est que l'échange a échoué (code expiré,
+    // vérificateur perdu). On nettoie et on le dit, au lieu de laisser
+    // l'utilisateur devant l'écran de connexion sans explication.
+    if (!data.session) {
+      window.setTimeout(() => {
+        if (getSession()) return;
+        try {
+          if (!new URLSearchParams(window.location.search).has('code')) return;
+        } catch {
+          return;
+        }
+        setState({ notice: 'La connexion Google n’a pas abouti. Réessayez.' });
+        // Retour sur la connexion : c'est là que le message et le bouton Google
+        // sont visibles, pas sur la page publique.
+        clearOauthParams('#/connexion');
+      }, 2500);
+    }
   });
 
   // Repli : lien de réinitialisation arrivé avec `type=recovery` dans le fragment.
@@ -188,6 +254,12 @@ if (typeof window !== 'undefined') {
   supabase.auth.onAuthStateChange((event, session) => {
     applySession(session);
     if (event === 'PASSWORD_RECOVERY') setState({ recovery: true });
+    if (event === 'SIGNED_IN' && session) {
+      // Connexion établie (Google ou e-mail) : on nettoie l'URL d'échange et on
+      // ouvre l'accueil plutôt que de laisser l'utilisateur sur la connexion.
+      clearOauthParams();
+      if (!window.location.hash.startsWith('#/')) window.location.hash = '#/';
+    }
   });
 
   // Un 401 de l'API Kwes invalide la session : on repart d'un état propre.

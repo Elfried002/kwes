@@ -26,6 +26,11 @@ const FALLBACK_KEY = 'configuration-absente';
 
 export const supabase = createClient(rawUrl || FALLBACK_URL, rawAnonKey || FALLBACK_KEY, {
   auth: {
+    // PKCE : le retour de Google arrive en `?code=…` dans la requête. Le flux
+    // implicite plaçait les jetons dans le fragment, que le routeur à hash
+    // consommait avant Supabase — la connexion aboutissait sur l'écran de
+    // connexion, sans session.
+    flowType: 'pkce',
     persistSession: true,
     detectSessionInUrl: true,
     autoRefreshToken: true,

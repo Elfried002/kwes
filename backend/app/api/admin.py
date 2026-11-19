@@ -22,10 +22,12 @@ from app.core.errors import Forbidden, NotFound
 from app.db.base import Database
 from app.db.models import (
     AdminAlert,
+    AgentOverride,
     AuditLog,
     LLMUsage,
     PlatformRole,
     RunEvent,
+    TenantQuota,
     Task,
     Tenant,
     TenantMembership,
@@ -160,6 +162,12 @@ async def overview(
             # Aucun tarif validé : le coût reste inconnu, jamais zéro trompeur.
             "cost": None,
             "cost_currency": None,
+        },
+        "sentry": {
+            "configured": bool(getattr(request.app.state.settings, "sentry_dsn", "")),
+            "detail": "Aucun DSN configuré : aucune erreur n'est transmise."
+            if not getattr(request.app.state.settings, "sentry_dsn", "")
+            else "DSN configuré.",
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -336,6 +344,125 @@ async def admin_cancel_mission(
     )
     await session.commit()
     return {"id": str(mission_id), "status": "cancelled", "before": avant}
+
+
+class SuspendIn(BaseModel):
+    suspended: bool
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.post("/tenants/{tenant_id}/suspend")
+async def suspend_tenant(
+    tenant_id: uuid.UUID,
+    payload: SuspendIn,
+    request: Request,
+    session: SessionDep,
+    user: UserDep,
+    role: Annotated[str, Depends(require_roles("super_admin", "ops_admin"))],
+) -> dict[str, Any]:
+    db = _admin_db(request)
+    async with db.session() as admin:
+        tenant = await admin.get(Tenant, tenant_id)
+        if tenant is None:
+            raise NotFound("Espace introuvable.")
+        tenant.suspended_at = datetime.now(timezone.utc) if payload.suspended else None
+        tenant.suspended_reason = payload.reason if payload.suspended else None
+        await admin.commit()
+    await _audit(
+        session,
+        actor=user.id,
+        action="admin.tenant.suspend" if payload.suspended else "admin.tenant.reactivate",
+        target=str(tenant_id),
+        details={"role": role, "reason": payload.reason},
+    )
+    await session.commit()
+    return {"id": str(tenant_id), "suspended": payload.suspended}
+
+
+class ToggleIn(BaseModel):
+    enabled: bool
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.get("/agents")
+async def agents_list(
+    request: Request,
+    session: SessionDep,
+    role: Annotated[str, Depends(require_roles(*ROLES))],
+) -> dict[str, Any]:
+    service = getattr(request.app.state, "missions", None)
+    if service is None:
+        return {"items": [], "detail": "Dispatcher indisponible."}
+    db = _admin_db(request)
+    async with db.session() as admin:
+        lignes = (await admin.execute(select(AgentOverride))).scalars().all()
+    etats = {ligne.agent_id: ligne.enabled for ligne in lignes}
+    items = []
+    for agent in service.dispatcher.agents.all():
+        items.append(
+            {
+                "agent_id": agent.agent_id,
+                "display_name": agent.config.display_name,
+                "type": agent.config.agent_type,
+                "status": agent.config.status,
+                "tools": agent.executable_tools(),
+                "enabled": etats.get(agent.agent_id, True),
+            }
+        )
+    return {"items": items}
+
+
+@router.post("/agents/{agent_id}/toggle")
+async def toggle_agent(
+    agent_id: str,
+    payload: ToggleIn,
+    request: Request,
+    session: SessionDep,
+    user: UserDep,
+    role: Annotated[str, Depends(require_roles("super_admin", "ops_admin"))],
+) -> dict[str, Any]:
+    db = _admin_db(request)
+    async with db.session() as admin:
+        ligne = await admin.get(AgentOverride, agent_id)
+        if ligne is None:
+            ligne = AgentOverride(agent_id=agent_id, enabled=payload.enabled)
+            admin.add(ligne)
+        ligne.enabled = payload.enabled
+        ligne.reason = payload.reason
+        ligne.updated_by = user.id
+        ligne.updated_at = datetime.now(timezone.utc)
+        await admin.commit()
+    await _audit(
+        session,
+        actor=user.id,
+        action="admin.agent.enable" if payload.enabled else "admin.agent.disable",
+        target=agent_id,
+        details={"role": role, "reason": payload.reason},
+    )
+    await session.commit()
+    return {"agent_id": agent_id, "enabled": payload.enabled}
+
+
+@router.get("/quotas/{tenant_id}")
+async def tenant_quotas(
+    tenant_id: uuid.UUID,
+    request: Request,
+    role: Annotated[str, Depends(require_roles("super_admin", "ops_admin", "billing_admin"))],
+) -> dict[str, Any]:
+    db = _admin_db(request)
+    async with db.session() as admin:
+        quota = await admin.get(TenantQuota, tenant_id)
+        if quota is None:
+            from app.core import quotas as quota_service
+
+            quota = await quota_service.get_or_create(admin, tenant_id)
+    return {
+        "tenant_id": str(tenant_id),
+        "max_concurrent_missions": quota.max_concurrent_missions,
+        "max_missions_per_day": quota.max_missions_per_day,
+        "max_tool_calls_per_mission": quota.max_tool_calls_per_mission,
+        "max_llm_tokens_per_month": quota.max_llm_tokens_per_month,
+    }
 
 
 @router.post("/alerts/{alert_id}/ack")

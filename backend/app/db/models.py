@@ -69,6 +69,9 @@ class Tenant(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     slug: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
     plan: Mapped[str] = mapped_column(String(24), default="free", server_default="free", nullable=False)
+    #: Suspendu par l'administration : aucune nouvelle mission n'est acceptée.
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TenantMembership(Base):
@@ -742,6 +745,37 @@ class ConnectorSecret(Base):
     )
 
 
+class TenantQuota(Base):
+    """Plafonds d'usage d'un espace (missions simultanées, volume, tokens)."""
+
+    __tablename__ = "tenant_quotas"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    max_concurrent_missions: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    max_missions_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    max_tool_calls_per_mission: Mapped[int] = mapped_column(Integer, nullable=False, default=24)
+    max_llm_tokens_per_month: Mapped[int] = mapped_column(Integer, nullable=False, default=2_000_000)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
+class AgentOverride(Base):
+    """Kill-switch : désactivation d'un agent au niveau plateforme."""
+
+    __tablename__ = "agent_overrides"
+
+    agent_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
 class PlatformRole(Base):
     """Rôle d'administration. Un agent ne peut jamais s'en attribuer un."""
 
@@ -805,4 +839,6 @@ ALL_MODELS = [
     PlatformRole,
     AdminAlert,
     ConnectorSecret,
+    TenantQuota,
+    AgentOverride,
 ]

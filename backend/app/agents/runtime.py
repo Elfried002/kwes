@@ -21,6 +21,7 @@ from app.agents.contracts import AgentResult, AgentTask, Evidence
 from app.agents.registry import AgentRegistry, LoadedAgent
 from app.agent.llm import LLMClient, LLMError
 from app.agent.tools import tool_definitions
+from app.connectors import tools as connector_tools
 from app.skills.base import SkillContext, SkillError
 from app.skills.registry import SkillRegistry
 from app.core.config import Settings
@@ -72,6 +73,10 @@ class MissionScope:
     session: Any | None = None
     language: str = "fr"
     journal: Any | None = None
+    # Accès base et réglages : nécessaires aux outils de connecteurs, qui lisent
+    # le secret chiffré du tenant au moment de l'appel.
+    db: Any | None = None
+    settings: Any | None = None
 
 
 @dataclass
@@ -209,6 +214,19 @@ class AgentRuntime:
         agent = self.agents.get(task.agent_id)
         skills = skills_for(task.allowed_tools)
         definitions = tool_definitions(self.skills, skills)
+
+        # Outils issus des connecteurs : uniquement si le tenant a une connexion
+        # active. Sans connexion, l'outil n'existe pas pour l'agent.
+        connecteurs: list[str] = []
+        if scope.db is not None:
+            try:
+                connecteurs = await connector_tools.active_tools(
+                    scope.db, scope.tenant_id, scope.user_id
+                )
+            except Exception:  # noqa: BLE001 - un catalogue indisponible ne bloque pas la tâche
+                logger.warning("Outils de connecteurs indisponibles", exc_info=True)
+                connecteurs = []
+        definitions = definitions + connector_tools.definitions(connecteurs)
         # Un outil demandé mais absent du registre ne doit jamais être tenté.
         disponibles = {item["function"]["name"] for item in definitions}
         outils_agent = {s: t for t, s in TOOL_SKILL_MAP.items() if s in disponibles}
@@ -221,6 +239,7 @@ class AgentRuntime:
         started = time.monotonic()
         deadline = started + task.deadline_seconds
         appels = 0
+        relance_faite = False
         traces: list[TurnTrace] = []
         preuves: list[Evidence] = []
         actions: list[str] = []
@@ -242,6 +261,23 @@ class AgentRuntime:
 
                 calls = list(result.tool_calls or [])
                 if not calls:
+                    # Un agent qui possède des outils et conclut sans en appeler
+                    # un laisse un livrable sans preuve : on le relance une fois,
+                    # explicitement, avant d'accepter la réponse.
+                    if definitions and not preuves and not relance_faite:
+                        relance_faite = True
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Tu n'as appelé aucun outil alors que des outils sont "
+                                    "disponibles. Appelle celui qui permet de produire le livrable "
+                                    "attendu, puis réponds. Si aucun outil ne convient, dis "
+                                    "précisément pourquoi."
+                                ),
+                            }
+                        )
+                        continue
                     texte = (result.content or "").strip()
                     duree = int((time.monotonic() - started) * 1000)
                     statut = "completed" if preuves else "partial"
@@ -290,6 +326,56 @@ class AgentRuntime:
                                 ),
                             }
                         )
+                        continue
+
+                    if nom in connector_tools.TOOL_SPECS:
+                        debit = time.monotonic()
+                        trace.tools.append({"tool": nom, "status": "ok", "connector": True})
+                        try:
+                            sortie_connecteur = await connector_tools.call(
+                                nom,
+                                args,
+                                type(
+                                    "Ctx",
+                                    (),
+                                    {
+                                        "db": scope.db,
+                                        "settings": scope.settings or self.settings,
+                                        "tenant_id": scope.tenant_id,
+                                        "user_id": scope.user_id,
+                                    },
+                                )(),
+                            )
+                            duree_outil = int((time.monotonic() - debit) * 1000)
+                            preuves.extend(self._evidence(nom, sortie_connecteur))
+                            actions.append(f"{nom} exécuté")
+                            if scope.journal:
+                                await scope.journal.tool(
+                                    scope, nom, args, "ok", duration_ms=duree_outil,
+                                    output=sortie_connecteur,
+                                )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "name": nom,
+                                    "content": json.dumps(sortie_connecteur, ensure_ascii=False)[:8000],
+                                }
+                            )
+                        except connector_tools.ConnectorToolError as exc:
+                            trace.tools[-1] = {"tool": nom, "status": "error", "code": exc.code}
+                            if scope.journal:
+                                await scope.journal.tool(
+                                    scope, nom, args, "error", error_code=exc.code
+                                )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "name": nom,
+                                    "content": json.dumps(
+                                        {"error": str(exc), "code": exc.code}, ensure_ascii=False
+                                    ),
+                                }
+                            )
                         continue
 
                     ctx = SkillContext(

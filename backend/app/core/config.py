@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     public_api_url: str = "https://api.agent-kwes.com"
     #: Application web, destination après une connexion OAuth réussie.
     frontend_url: str = "https://kwes.vercel.app"
+    #: Supervision : sans DSN, aucune erreur n'est envoyée (statut affiché tel quel).
+    sentry_dsn: str = ""
+    sentry_environment: str = ""
+    #: Reprise automatique des missions interrompues (processus API).
+    mission_sweeper_enabled: bool = True
+    mission_sweeper_interval_seconds: int = 120
+    mission_sweeper_stale_seconds: int = 600
 
     # --- Authentification ----------------------------------------------
     dev_jwt_secret: str = DEFAULT_DEV_JWT_SECRET

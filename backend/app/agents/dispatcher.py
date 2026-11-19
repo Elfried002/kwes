@@ -180,10 +180,15 @@ def _best_agent_for(objective: str, catalogue: list[dict[str, Any]]) -> dict[str
     return catalogue[0]
 
 
-def _specialist_catalogue(agents: AgentRegistry) -> list[dict[str, Any]]:
+def _specialist_catalogue(
+    agents: AgentRegistry, disabled: set[str] | None = None
+) -> list[dict[str, Any]]:
     """Vue compacte des spécialistes réellement exécutables, pour le plan."""
+    desactives = disabled or set()
     catalogue: list[dict[str, Any]] = []
     for agent in agents.specialists():
+        if agent.agent_id in desactives:
+            continue
         outils = agent.executable_tools()
         if not outils:
             continue
@@ -383,7 +388,20 @@ class CoreDispatcher:
         await journal.event("mission.started", status="running", metadata={"objective": objectif[:300]})
 
         try:
-            catalogue = _specialist_catalogue(self.agents)
+            desactives: set[str] = set()
+            try:
+                from app.db.models import AgentOverride
+
+                async with self.db.session() as session:
+                    lignes = (
+                        await session.execute(
+                            select(AgentOverride).where(AgentOverride.enabled.is_(False))
+                        )
+                    ).scalars().all()
+                desactives = {ligne.agent_id for ligne in lignes}
+            except Exception:  # noqa: BLE001 - kill-switch indisponible ≠ mission bloquée
+                logger.warning("Kill-switch des agents illisible", exc_info=True)
+            catalogue = _specialist_catalogue(self.agents, desactives)
             async with self.db.session() as session:
                 mission = await session.get(Task, mission_id)
                 rows = (
@@ -537,6 +555,8 @@ class CoreDispatcher:
             mission_id=row.mission_id,
             agent_task_id=row.id,
             journal=journal,
+            db=self.db,
+            settings=self.settings,
         )
         row.status = "running"
         row.attempt += 1

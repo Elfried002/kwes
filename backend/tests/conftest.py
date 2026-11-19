@@ -112,6 +112,19 @@ def headers_other(settings: Settings, other_user_id: uuid.UUID) -> dict[str, str
 
 
 @pytest.fixture
+def grant_role(app, db_session_factory):
+    """Attribue un rôle de plateforme à un utilisateur (tests du cockpit)."""
+    from app.db.models import PlatformRole
+
+    def _grant(user_id: uuid.UUID, role: str) -> None:
+        with db_session_factory() as session:
+            session.merge(PlatformRole(user_id=user_id, role=role))
+            session.commit()
+
+    return _grant
+
+
+@pytest.fixture
 def db_session_factory(settings: Settings):
     """Session SQLAlchemy SYNCHRONE sur le même fichier SQLite (tests uniquement)."""
     url = settings.database_url.replace("+aiosqlite", "")

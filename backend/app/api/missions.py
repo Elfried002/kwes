@@ -15,7 +15,8 @@ from sqlalchemy import desc, select
 
 from app.agents.service import MissionService, mission_snapshot
 from app.api.deps import PageDep, SessionDep, TenantDep, UserDep
-from app.core.errors import NotFound
+from app.core import quotas
+from app.core.errors import NotFound, ValidationFailed
 from app.db.models import AgentTask, Task
 
 router = APIRouter(tags=["missions"])
@@ -47,6 +48,14 @@ async def create_mission(
     user: UserDep,
     tenant: TenantDep,
 ) -> MissionOut:
+    # Plafonds de l'espace : vérifiés avant création, refus explicite sinon.
+    try:
+        await quotas.check(request.app.state.db, tenant.id)
+    except quotas.TenantSuspended as exc:
+        raise ValidationFailed(str(exc)) from exc
+    except quotas.QuotaExceeded as exc:
+        raise ValidationFailed(f"{exc} {exc.details}") from exc
+
     mission = Task(
         tenant_id=tenant.id,
         user_id=user.id,

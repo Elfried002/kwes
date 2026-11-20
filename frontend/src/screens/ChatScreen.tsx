@@ -257,6 +257,12 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
           mode: 'auto',
         },
         {
+          // États intermédiaires : « je cherche… » s'affiche dès la première
+          // seconde, puis le texte réel remplace le libellé.
+          onMeta: (meta) => {
+            const label = (meta as { label?: string }).label;
+            if (label) setStreaming(label);
+          },
           onDelta: (delta) => {
             accumule += delta;
             setStreaming(accumule);

@@ -21,7 +21,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -220,6 +220,7 @@ class ChatToolRunner:
         history: Sequence[dict[str, Any]] | None = None,
         memories: Sequence[str] | None = None,
         language: str | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> ToolRun:
         definitions = tool_definitions(self.registry)
         if not definitions:
@@ -272,6 +273,14 @@ class ChatToolRunner:
             )
 
             calls = list(result.tool_calls or [])
+            if on_status and calls:
+                noms = {str(c.get("name") or "") for c in calls}
+                if noms & {"web_research"}:
+                    on_status("Je cherche sur le web…")
+                elif noms & {"browser_readonly"}:
+                    on_status("Je lis la page…")
+                else:
+                    on_status("J'utilise un outil…")
             if not calls:
                 answer = (result.content or "").strip()
                 if answer:

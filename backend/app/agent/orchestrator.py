@@ -548,13 +548,33 @@ class Orchestrator:
         tool_run = ToolRun(answer="")
         if intent == "outil" and self.tool_runner.available:
             try:
-                tool_run = await self.tool_runner.run(
-                    session=session,
-                    user_id=user.id,
-                    text=text,
-                    history=history,
-                    memories=memories,
+                # Retour immédiat puis états intermédiaires : sans cela, une
+                # recherche laissait l'écran muet jusqu'à 50 s.
+                yield ChatStreamEvent(
+                    "meta", {**base_meta, "label": "Je m'en occupe…", "intent": "outil"}
                 )
+                etats: asyncio.Queue[str] = asyncio.Queue()
+
+                def _etat(label: str) -> None:
+                    etats.put_nowait(label)
+
+                travail = asyncio.create_task(
+                    self.tool_runner.run(
+                        session=session,
+                        user_id=user.id,
+                        text=text,
+                        history=history,
+                        memories=memories,
+                        on_status=_etat,
+                    )
+                )
+                while not travail.done() or not etats.empty():
+                    try:
+                        label = await asyncio.wait_for(etats.get(), timeout=0.4)
+                    except asyncio.TimeoutError:
+                        continue
+                    yield ChatStreamEvent("meta", {**base_meta, "label": label, "intent": "outil"})
+                tool_run = await travail
             except LLMError as exc:
                 logger.warning("Boucle d'outils interrompue: %s", exc.code)
                 yield ChatStreamEvent(

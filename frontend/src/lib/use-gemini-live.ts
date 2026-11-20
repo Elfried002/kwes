@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildVoiceUrl, createVoiceTicket } from './api';
+import { getToken } from './auth';
 import { getPreferences } from './prefs';
 import type { VoiceSessionState } from './voice-session';
 
@@ -276,6 +277,15 @@ export function useGeminiLive(): GeminiLive {
         throw blocked;
       }
 
+      // La session peut être en cours de restauration au montage de l'écran :
+      // sans cette attente, le ticket partait sans jeton et l'ouverture échouait.
+      let jeton = getToken();
+      for (let attente = 0; attente < 16 && !jeton; attente += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        jeton = getToken();
+      }
+      if (!jeton) throw new Error('session-absente');
+
       // Deux tentatives : un ticket expiré ou une coupure réseau passagère à
       // l'ouverture ne doit pas laisser l'utilisateur devant « impossible de
       // démarrer ». Le micro est déjà ouvert, on ne le redemande pas.
@@ -372,6 +382,7 @@ export function useGeminiLive(): GeminiLive {
       const message = error instanceof Error ? error.message : '';
       const geste = nom === 'NotAllowedError' || nom === 'SecurityError';
       const reseau = message === 'voix-reseau' || message === 'ws';
+      const session = message === 'session-absente';
       setState((prev) => ({
         ...prev,
         active: false,
@@ -380,9 +391,11 @@ export function useGeminiLive(): GeminiLive {
         // (permission, audio suspendu) d'une panne réseau ou serveur.
         error: geste
           ? 'Micro bloqué par le navigateur.'
-          : reseau
-            ? 'Réseau vocal momentanément indisponible. Touchez pour réessayer.'
-            : 'Impossible de démarrer la conversation vocale.',
+          : session
+            ? 'Votre session a expiré. Reconnectez-vous pour parler à Kwes.'
+            : reseau
+              ? 'Réseau vocal momentanément indisponible. Touchez pour réessayer.'
+              : 'Impossible de démarrer la conversation vocale.',
         needsGesture: geste,
       }));
     }

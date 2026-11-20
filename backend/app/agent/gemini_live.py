@@ -170,7 +170,7 @@ def build_config(
     )
     from app.voice_languages import prompt_hint
 
-    hint = prompt_hint(language)
+    hint = prompt_hint(language or "fr")
     if hint:
         system += f"\n{hint}"
     if context_note.strip():

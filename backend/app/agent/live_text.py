@@ -122,11 +122,12 @@ class LiveTextClient:
 
     @property
     def model_fast(self) -> str:
-        return self.settings.google_live_model
+        # gemini-3.8-live refuse generate_content : modèle texte avec grounding.
+        return self.settings.google_text_model
 
     @property
     def model_thinking(self) -> str:
-        return self.settings.google_live_thinking_model
+        return self.settings.google_text_model
 
     def _sdk(self) -> Any:
         if self._client is None:
@@ -139,6 +140,42 @@ class LiveTextClient:
     def model_for(self, purpose: str) -> str:
         """Mission ou planification = modèle approfondi ; le reste = modèle rapide."""
         return self.model_thinking if purpose in {"plan", "mission"} else self.model_fast
+
+    async def _generate_grounded(
+        self,
+        model: str,
+        system: str,
+        turns: Sequence[Any],
+        tools: Sequence[dict[str, Any]] | None,
+        limit: float,
+    ) -> tuple[str, list[dict[str, Any]], str]:
+        """Un seul appel, avec recherche Google et appels de fonctions."""
+        from app.agent.gemini_live import build_tools  # évite un import circulaire
+
+        declarations = build_tools(tools)
+        outillage = list(declarations or [])
+        outillage.append(types.Tool(google_search=types.GoogleSearch()))
+        config = types.GenerateContentConfig(
+            system_instruction=system or None,
+            tools=outillage,
+            temperature=self.settings.gemini_temperature,
+        )
+        response = await asyncio.wait_for(
+            self._sdk().aio.models.generate_content(
+                model=model, contents=list(turns), config=config
+            ),
+            timeout=limit,
+        )
+        calls: list[dict[str, Any]] = []
+        for index, appel in enumerate(getattr(response, "function_calls", None) or []):
+            calls.append(
+                {
+                    "id": getattr(appel, "id", None) or f"call-{index}",
+                    "name": getattr(appel, "name", ""),
+                    "arguments": dict(getattr(appel, "args", None) or {}),
+                }
+            )
+        return (response.text or ""), calls, model
 
     async def generate(
         self,
@@ -154,6 +191,12 @@ class LiveTextClient:
         if not turns:
             return "", [], model
         limit = timeout or self.settings.gemini_timeout_seconds
+
+        # Recherche native : le modèle interroge Google lui-même. La session
+        # Live n'exécute pas ce grounding (vérifié en production), alors que
+        # generate_content le fait réellement.
+        if self.settings.native_search_enabled:
+            return await self._generate_grounded(model, system, turns, tools, limit)
 
         async def _run() -> tuple[str, list[dict[str, Any]]]:
             async with self._sdk().aio.live.connect(

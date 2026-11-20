@@ -92,7 +92,8 @@ class LiveReasoner:
 
     @property
     def model_fast(self) -> str:
-        return self.settings.google_live_model
+        # gemini-3.8-live n'accepte que le temps réel : modèle texte avec grounding.
+        return self.settings.google_text_model
 
     @property
     def model_thinking(self) -> str:
@@ -127,6 +128,40 @@ class LiveReasoner:
                 },
             )
         return self._client
+
+    async def _grounded(
+        self,
+        system: str,
+        turns: Sequence[Any],
+        tools: Sequence[dict[str, Any]] | None,
+    ) -> tuple[str, list[dict[str, Any]], str, dict[str, Any]]:
+        """Un seul appel avec recherche Google native : le modèle cherche lui-même."""
+        from app.agent.gemini_live import build_tools  # évite un import circulaire
+
+        model = self.settings.google_text_model
+        outillage = list(build_tools(tools or []) or [])
+        outillage.append(types.Tool(google_search=types.GoogleSearch()))
+        config = types.GenerateContentConfig(
+            system_instruction=system or None,
+            tools=outillage,
+            temperature=self.settings.gemini_temperature,
+        )
+        response = await asyncio.wait_for(
+            self._sdk().aio.models.generate_content(
+                model=model, contents=list(turns), config=config
+            ),
+            timeout=self.settings.gemini_timeout_seconds,
+        )
+        calls: list[dict[str, Any]] = []
+        for index, appel in enumerate(getattr(response, "function_calls", None) or []):
+            calls.append(
+                {
+                    "id": getattr(appel, "id", None) or f"call-{index}",
+                    "name": getattr(appel, "name", ""),
+                    "arguments": dict(getattr(appel, "args", None) or {}),
+                }
+            )
+        return (response.text or ""), calls, model, {}
 
     def _config(
         self,
@@ -171,6 +206,8 @@ class LiveReasoner:
         system, turns = _turns(messages)
         if not turns:
             return "", [], model, {}
+        if self.settings.native_search_enabled and purpose not in {"plan", "mission"}:
+            return await self._grounded(system, turns, tools)
         limit = timeout or self.settings.gemini_timeout_seconds
         # La réflexion n'est envoyée qu'au modèle qui la supporte.
         thinking = purpose in {"plan", "mission"} and model == self.model_thinking

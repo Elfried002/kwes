@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = 35.0
     gemini_total_timeout_seconds: float = 60.0
     gemini_temperature: float = 0.2
+    # La recherche passe par le grounding Google natif du modèle (generate_content)
+    # et non plus par un skill maison : le modèle interroge le web lui-même.
+    native_search_enabled: bool = True
+    # Le modèle « live » n'accepte que les sessions temps réel (400 sinon) :
+    # le texte utilise un modèle qui sait faire du grounding Google Search.
+    google_text_model: str = "gemini-3.8-flash"
 
     # --- API -------------------------------------------------------------
     cors_origins: str = DEFAULT_CORS_ORIGINS

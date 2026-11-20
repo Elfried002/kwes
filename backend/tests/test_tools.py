@@ -59,6 +59,14 @@ def test_tool_definitions_are_limited_to_conversational_skills(app) -> None:
         assert "$schema" not in item["function"]["parameters"]
 
 
+def test_la_recherche_web_n_est_plus_un_outil_de_chat() -> None:
+    """Gemini cherche lui-même : l'outil maison ne doit plus être proposé."""
+    from app.agent.tools import CHAT_TOOL_NAMES
+
+    assert "web_research" not in CHAT_TOOL_NAMES
+    assert "browser_readonly" not in CHAT_TOOL_NAMES
+
+
 def test_outil_mode_executes_web_research_and_uses_its_result(
     client: TestClient, app, headers, db_session_factory
 ) -> None:

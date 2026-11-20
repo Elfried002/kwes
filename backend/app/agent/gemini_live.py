@@ -173,6 +173,21 @@ def build_config(
     hint = prompt_hint(language or "fr")
     if hint:
         system += f"\n{hint}"
+    # Verrou de langue et de tenue de parole : le modèle dérivait vers
+    # l'espagnol et répétait ses propres phrases.
+    system += (
+        "\n\nLangue : réponds exclusivement en français ou en anglais, dans la langue "
+        "du dernier message de l'utilisateur. Aucune autre langue, pas même un mot "
+        "isolé. Ne répète jamais une phrase déjà prononcée dans ce tour ni le tour "
+        "précédent ; si une information te manque, dis-le une seule fois et propose "
+        "la suite."
+    )
+    system += (
+        "\n\nRecherche : pour toute information factuelle, récente ou vérifiable, "
+        "utilise la recherche Google disponible dans cette session et appuie ta "
+        "réponse sur les résultats obtenus. Ne dis jamais que tu n'as pas accès à "
+        "internet."
+    )
     if context_note.strip():
         # Bascule de mode en cours de conversation : on réinjecte les derniers
         # échanges pour ne pas repartir de zéro.
@@ -200,7 +215,7 @@ def build_config(
             activity_handling=types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS,
             turn_coverage=types.TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
         ),
-        tools=build_tools(definitions),
+        tools=_with_google_search(build_tools(definitions)),
         # Reprise de session : Gemini coupe une connexion audio au bout d'un moment.
         # `transparent=True` n'existe qu'en mode Enterprise ; sur l'API développeur
         # on renvoie le handle reçu (`session_resumption_update`) à la reconnexion.
@@ -210,6 +225,17 @@ def build_config(
             sliding_window=types.SlidingWindow(target_tokens=16000),
         ),
     )
+
+
+def _with_google_search(tools: list[types.Tool] | None) -> list[types.Tool]:
+    """Ajoute la recherche Google native de Gemini aux outils de la session.
+
+    Elle remplace l'outil maison : c'est le modèle lui-même qui interroge le
+    web et répond avec ses sources, sans aller-retour supplémentaire.
+    """
+    base = list(tools or [])
+    base.append(types.Tool(google_search=types.GoogleSearch()))
+    return base
 
 
 class GeminiLiveSession:

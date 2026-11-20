@@ -37,9 +37,10 @@ logger = logging.getLogger("kwes.tools")
 
 # Outils utilisables pendant une conversation. Volontairement restreint aux
 # lectures et aux écritures locales réversibles (R0/R1).
+# La recherche web n'est plus un outil maison : Gemini interroge Google
+# lui-même (grounding natif) dans la même session. L'outil maison échouait
+# trop souvent et le modèle annonçait « outil indisponible ».
 CHAT_TOOL_NAMES: tuple[str, ...] = (
-    "web_research",
-    "browser_readonly",
     "remember",
     "document_write",
 )

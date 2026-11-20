@@ -152,7 +152,10 @@ class Settings(BaseSettings):
     google_live_model: str = "gemini-3.8-live"
     # Mode raisonnement approfondi : même API Live, modèle différent (vérifié
     # disponible sur la clé le 17/11 : gemini-3.8-live-extended-thinking).
-    google_live_thinking_model: str = "gemini-3.8-live-extended-thinking"
+    #: Un seul modèle pour la voix et les missions : le mode « thinking » pilote
+    #: le niveau de raisonnement, pas le modèle. Deux modèles différents
+    #: ajoutaient un aller-retour de sélection perceptible à l'ouverture.
+    google_live_thinking_model: str = "gemini-3.8-live"
     # Niveau exigé par le modèle : sans lui, l'API refuse la connexion
     # (« Thinking level must be specified for this model »).
     google_thinking_level: str = "HIGH"

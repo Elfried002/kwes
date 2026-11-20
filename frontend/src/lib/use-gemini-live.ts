@@ -276,7 +276,25 @@ export function useGeminiLive(): GeminiLive {
         throw blocked;
       }
 
-      const ticket = await createVoiceTicket(getPreferences().language);
+      // Deux tentatives : un ticket expiré ou une coupure réseau passagère à
+      // l'ouverture ne doit pas laisser l'utilisateur devant « impossible de
+      // démarrer ». Le micro est déjà ouvert, on ne le redemande pas.
+      let ticket: Awaited<ReturnType<typeof createVoiceTicket>> | null = null;
+      let derniereErreur: unknown = null;
+      for (let tentative = 0; tentative < 2; tentative += 1) {
+        try {
+          ticket = await createVoiceTicket(getPreferences().language);
+          break;
+        } catch (cause) {
+          derniereErreur = cause;
+          await new Promise((resolve) => setTimeout(resolve, 600 * (tentative + 1)));
+        }
+      }
+      if (!ticket) {
+        // Trace utile au support : aucune donnée sensible, seulement la cause.
+        console.warn('Voix : ticket indisponible', derniereErreur);
+        throw new Error('voix-reseau');
+      }
       const socket = new WebSocket(buildVoiceUrl(ticket.ticket));
       socketRef.current = socket;
       socket.onmessage = (event) => {
@@ -351,7 +369,9 @@ export function useGeminiLive(): GeminiLive {
       activeRef.current = false;
       teardown();
       const nom = error instanceof Error ? error.name : '';
+      const message = error instanceof Error ? error.message : '';
       const geste = nom === 'NotAllowedError' || nom === 'SecurityError';
+      const reseau = message === 'voix-reseau' || message === 'ws';
       setState((prev) => ({
         ...prev,
         active: false,
@@ -360,7 +380,9 @@ export function useGeminiLive(): GeminiLive {
         // (permission, audio suspendu) d'une panne réseau ou serveur.
         error: geste
           ? 'Micro bloqué par le navigateur.'
-          : 'Impossible de démarrer la conversation vocale.',
+          : reseau
+            ? 'Réseau vocal momentanément indisponible. Touchez pour réessayer.'
+            : 'Impossible de démarrer la conversation vocale.',
         needsGesture: geste,
       }));
     }

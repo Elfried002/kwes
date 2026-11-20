@@ -189,7 +189,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         db: Database = application.state.db
-        await db.create_all()
+        # Les migrations sont la source de vérité du schéma. `create_all` reste
+        # utile en développement (SQLite) mais ne doit jamais empêcher l'API de
+        # démarrer quand le rôle applicatif n'a pas le droit de créer des tables.
+        try:
+            await db.create_all()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("create_all ignoré (schéma géré par les migrations) : %s", exc)
         registry: SkillRegistry = application.state.registry
         await seed_skills(db, registry)
 

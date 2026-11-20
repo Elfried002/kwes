@@ -39,11 +39,11 @@ logger = logging.getLogger("kwes.voice_live")
 
 router = APIRouter(tags=["voice"])
 
-TICKET_TTL_SECONDS = 60
+TICKET_TTL_SECONDS = 300
 POLICY_VIOLATION = 1008
 TRY_AGAIN_LATER = 1013
 
-# Tickets en mémoire : une seule instance Alpha, durée de vie 60 s. Un ticket
+# Tickets en mémoire : une seule instance Alpha, durée de vie 300 s. Un ticket
 # consommé ne peut pas resservir, même en cas de reconnexion navigateur.
 _TICKETS: dict[str, tuple[uuid.UUID, float, str | None]] = {}
 

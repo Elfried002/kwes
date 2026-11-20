@@ -4,7 +4,8 @@ import {
   errorMessage,
   listConversations,
   listMessages,
-  sendChat,
+  streamChat,
+  type ChatStreamDone,
 } from '../lib/api';
 import { formatRelative, truncate } from '../lib/format';
 import { usePrefersReducedMotion } from '../lib/hooks';
@@ -243,10 +244,38 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     abortRef.current = controller;
 
     try {
-      const result = await sendChat(
-        { conversation_id: currentConversation, message: text, language: prefs.language, mode: 'auto' },
+      // Streaming : la réponse s'affiche au fil de l'eau. L'utilisateur voit
+      // les mots arriver pendant la recherche au lieu d'attendre 19 s devant
+      // un écran figé.
+      let accumule = '';
+      const fin: { courant: ChatStreamDone | null } = { courant: null };
+      await streamChat(
+        {
+          conversation_id: currentConversation,
+          message: text,
+          language: prefs.language,
+          mode: 'auto',
+        },
+        {
+          onDelta: (delta) => {
+            accumule += delta;
+            setStreaming(accumule);
+          },
+          onDone: (payload) => {
+            fin.courant = payload;
+          },
+          onError: (error) => {
+            throw error;
+          },
+        },
         controller.signal,
       );
+
+      const result = {
+        conversation_id: fin.courant?.conversation_id ?? currentConversation ?? '',
+        message_id: fin.courant?.message_id ?? '',
+        response: fin.courant?.response ?? accumule,
+      };
 
       setMessages((previous) =>
         previous.map((message) =>

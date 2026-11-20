@@ -44,7 +44,10 @@ CHAT_TOOL_NAMES: tuple[str, ...] = (
     "document_write",
 )
 
-TOOL_RESULT_CHARS = 6000
+# 6000 caractères par outil alourdissaient chaque tour du modèle (3 sources =
+# 18 000 caractères à relire) : la synthèse dépassait 20 s. 2500 suffisent pour
+# citer les faits utiles.
+TOOL_RESULT_CHARS = 2500
 
 SYSTEM_PROMPT = """Tu es Kwes, un agent personnel. Tu disposes d'outils réels et tu dois t'en servir
 au lieu de dire que tu ne peux pas.

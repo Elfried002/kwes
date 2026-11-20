@@ -185,10 +185,13 @@ class Settings(BaseSettings):
     searxng_url: str = "http://127.0.0.1:8888"
     research_cache_enabled: bool = True
     research_cache_ttl_seconds: int = 86_400  # 24 h
-    research_max_queries: int = 4
-    research_max_pages: int = 5
+    # Latence mesurée en production : 4 requêtes + 5 pages coûtaient ~20 s avant
+    # même la synthèse. Deux requêtes et trois pages suffisent pour une réponse
+    # conversationnelle sourcée ; la recherche approfondie reste demandable.
+    research_max_queries: int = 2
+    research_max_pages: int = 3
     research_provider_daily_limit: int = 500
-    research_provider_timeout_seconds: float = 15.0
+    research_provider_timeout_seconds: float = 8.0
     research_concurrency: int = 4
     research_pdf_max_bytes: int = 8_000_000
     research_pdf_max_pages: int = 40

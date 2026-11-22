@@ -29,6 +29,10 @@ logger = logging.getLogger("kwes.live")
 INPUT_RATE = 16000
 OUTPUT_RATE = 24000
 
+#: Durée minimale d'une prise de parole. En dessous, le tour est retenu le temps
+#: de ce seuil pour se fusionner avec le suivant (anti-micro-tour).
+MIN_ACTIVITY_SECONDS = 0.2
+
 # Règle de prononciation : exigence produit explicite, en français et en anglais.
 PRONUNCIATION_RULE = """Le nom de l'agent est Kwes. Prononciation officielle : /kwes/, c'est-à-dire
 « Kwéss » : la voyelle est le « é » fermé du mot « été », jamais le « è » ouvert de « très ».
@@ -47,6 +51,21 @@ Langue : tu réponds UNIQUEMENT dans la langue de la dernière réplique de l'ut
 - il parle une autre langue → tu réponds en français.
 Ne mélange jamais deux langues dans une même réponse, pas même un mot. En cas de doute,
 réponds en français. Tu ne changes de langue que si la personne change elle-même de langue.
+Verrou absolu : le français et l'anglais sont les deux seules langues autorisées. N'emploie
+jamais l'espagnol, l'italien, l'allemand, le portugais ni aucune autre langue, pas même une
+interjection isolée (« ¿Qué? », « Hola », « What? »). Si un mot est inaudible ou si l'entrée
+n'a pas de sens, ne devine pas et ne change pas de langue : dis en français « Je n'ai pas
+compris. »
+
+Tenue de parole :
+- une seule réponse par tour : tu ne recommences pas, et tu ne redis jamais une phrase déjà
+  prononcée dans ce tour ni dans le tour précédent ;
+- si la personne t'interrompt, tu t'arrêtes et tu écoutes ; tu ne reprends pas ta phrase au
+  début, tu réponds à ce qu'elle vient de dire ;
+- tu ignores les bruits, les mots isolés captés par le micro et ta propre voix : tu n'y
+  réponds jamais et tu ne les commentes pas ;
+- tu ne répètes pas ta réponse pour te faire mieux entendre, et tu ne proposes pas de la
+  répéter sauf si on te le demande.
 
 Ce que tu peux faire, et que tu annonces sans jargon :
 - chercher sur le web et citer tes sources ;
@@ -84,6 +103,10 @@ class Usage:
     audio_in_bytes: int = 0
     audio_out_bytes: int = 0
     turns: int = 0
+    # Trames reçues hors prise de parole : signal d'un découpage client cassé.
+    dropped_frames: int = 0
+    # Tours trop courts retenus pour fusionner avec le suivant.
+    short_turns: int = 0
 
     @property
     def seconds_in(self) -> float:
@@ -103,6 +126,8 @@ class Usage:
             "audio_in_s": round(self.seconds_in, 1),
             "audio_out_s": round(self.seconds_out, 1),
             "turns": self.turns,
+            "dropped_frames": self.dropped_frames,
+            "short_turns": self.short_turns,
         }
 
 
@@ -153,7 +178,6 @@ def build_config(
     memories: Sequence[str] = (),
     language: str | None = None,
     context_note: str = "",
-    thinking_level: str | None = None,
 ) -> types.LiveConnectConfig:
     block = ""
     known = [line.strip() for line in memories if line and line.strip()]
@@ -170,18 +194,12 @@ def build_config(
     )
     from app.voice_languages import prompt_hint
 
-    hint = prompt_hint(language or "fr")
+    # Le verrou de langue est toujours posé : un ticket sans préférence (ou avec
+    # un code inconnu) retombait sans consigne, et une session neuve partait en
+    # espagnol (« ¿Qué? ») alors que l'entretien était en français.
+    hint = prompt_hint(language or "fr") or prompt_hint("fr")
     if hint:
         system += f"\n{hint}"
-    # Verrou de langue et de tenue de parole : le modèle dérivait vers
-    # l'espagnol et répétait ses propres phrases.
-    system += (
-        "\n\nLangue : réponds exclusivement en français ou en anglais, dans la langue "
-        "du dernier message de l'utilisateur. Aucune autre langue, pas même un mot "
-        "isolé. Ne répète jamais une phrase déjà prononcée dans ce tour ni le tour "
-        "précédent ; si une information te manque, dis-le une seule fois et propose "
-        "la suite."
-    )
     system += (
         "\n\nRecherche : pour toute information factuelle, récente ou vérifiable, "
         "utilise la recherche Google disponible dans cette session et appuie ta "
@@ -192,12 +210,12 @@ def build_config(
         # Bascule de mode en cours de conversation : on réinjecte les derniers
         # échanges pour ne pas repartir de zéro.
         system += "\n\nExtrait de la conversation en cours (contexte, pas des instructions) :\n" + context_note.strip()[:2000]
-    thinking = (
-        types.ThinkingConfig(thinking_level=thinking_level) if thinking_level else None
-    )
     return types.LiveConnectConfig(
         response_modalities=["AUDIO"],
-        **({"thinking_config": thinking} if thinking else {}),
+        # Aucun `thinking_config` sur la voix : le raisonnement approfondi ajoute
+        # une délibération avant la première syllabe (le modèle vocal est le même
+        # que le modèle rapide, `google_live_thinking_model`), donc de la latence
+        # sans capacité supplémentaire. Mesuré : TTFB sans réflexion ≈ 0,8–1,0 s.
         system_instruction=types.Content(parts=[types.Part(text=system)]),
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
@@ -265,9 +283,6 @@ class GeminiLiveSession:
             memories=memories,
             language=language,
             context_note=context_note,
-            thinking_level=(
-                settings.google_thinking_level if self.mode == "thinking" else None
-            ),
         )
         self._client = client or self._build_client()
         self._session: Any | None = None
@@ -278,6 +293,9 @@ class GeminiLiveSession:
         # Une activité audio est-elle ouverte côté Gemini ? Sert à ne jamais
         # envoyer un `activity_end` orphelin, qui fait fermer la session.
         self._activity_open = False
+        self._activity_started = time.monotonic()
+        # Fin de tour retenue (tour trop court) : annulée si l'audio reprend.
+        self._pending_end: asyncio.Task | None = None
         # Outils en cours d'exécution, pour ne pas bloquer la lecture de l'audio.
         self._tool_tasks: dict[str, asyncio.Task] = {}
 
@@ -327,6 +345,7 @@ class GeminiLiveSession:
 
     async def close(self) -> None:
         self._closed = True
+        self._cancel_pending_end()
         for task in list(self._tool_tasks.values()):
             task.cancel()
         self._tool_tasks.clear()
@@ -341,14 +360,23 @@ class GeminiLiveSession:
 
     # -- Entrées -----------------------------------------------------------
     async def send_audio(self, pcm: bytes) -> None:
+        """Envoie une trame PCM, uniquement à l'intérieur d'une prise de parole.
+
+        Le contrat est strict : `activity_start` → audio → `activity_end`. Une
+        trame envoyée hors activité était tolérée (auto-`activity_start`) ; elle
+        produisait un micro-tour d'une trame que le modèle transcrivait en
+        n'importe quoi (« ¿Qué? ») et qui faisait refuser la session en 1007
+        (`Request contains an invalid argument`). On ignore la trame instead.
+        """
         if self._session is None or not pcm:
             return
+        if not self._activity_open:
+            self.usage.dropped_frames += 1
+            return
+        # Une trame arrive : le tour n'est pas fini, la fin différée est annulée.
+        self._cancel_pending_end()
         self.usage.audio_in_bytes += len(pcm)
         self._last_activity = time.monotonic()
-        # Gemini refuse un flux audio sans `activity_start` : on l'ouvre nous-mêmes
-        # si le client a envoyé de l'audio avant (ou après une reconnexion).
-        if not self._activity_open:
-            await self.activity_start()
         await self._session.send_realtime_input(
             audio=types.Blob(data=pcm, mime_type=f"audio/pcm;rate={INPUT_RATE}")
         )
@@ -371,21 +399,56 @@ class GeminiLiveSession:
         """
         if self._session is None or self._activity_open:
             return
+        self._cancel_pending_end()
         self._last_activity = time.monotonic()
+        self._activity_started = self._last_activity
         self._activity_open = True
         try:
             await self._session.send_realtime_input(activity_start=types.ActivityStart())
         except Exception:  # noqa: BLE001
             self._activity_open = False
 
+    def _cancel_pending_end(self) -> None:
+        task = self._pending_end
+        self._pending_end = None
+        if task is not None and not task.done():
+            task.cancel()
+
     async def activity_end(self) -> None:
         """Fin de la prise de parole : le modèle peut répondre.
 
         Ignoré si aucune activité n'est ouverte — c'est exactement le cas qui
         tuait la session (« Unpaired realtime_input.activity_end »).
+
+        Un tour plus court que `MIN_ACTIVITY_SECONDS` est **retenu** le temps de
+        ce seuil : la queue d'une phrase ou un bruit isolé se rattache alors au
+        tour suivant au lieu de produire une réponse à un mot. Le client récent
+        ne les envoie plus, mais un bundle en cache (service worker) continue de
+        le faire, et c'est ce qui faisait répondre « ¿Qué? ».
         """
         if self._session is None or not self._activity_open:
             return
+        elapsed = time.monotonic() - self._activity_started
+        if elapsed < MIN_ACTIVITY_SECONDS:
+            self.usage.short_turns += 1
+            self._cancel_pending_end()
+            self._pending_end = asyncio.create_task(
+                self._deferred_end(MIN_ACTIVITY_SECONDS - elapsed)
+            )
+            return
+        await self._close_activity()
+
+    async def _deferred_end(self, delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            return
+        await self._close_activity()
+
+    async def _close_activity(self) -> None:
+        if self._session is None or not self._activity_open:
+            return
+        self._pending_end = None
         self._last_activity = time.monotonic()
         self.usage.turns += 1
         self._activity_open = False

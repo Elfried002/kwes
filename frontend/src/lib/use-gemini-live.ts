@@ -15,6 +15,7 @@ import { buildVoiceUrl, createVoiceTicket } from './api';
 import { getToken } from './auth';
 import { getPreferences } from './prefs';
 import type { VoiceSessionState } from './voice-session';
+import { createVadState, pushVadFrame } from './voice-vad';
 
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
@@ -105,8 +106,10 @@ export function useGeminiLive(): GeminiLive {
   const reopenRef = useRef<() => void>(() => {});
   const pendingAnswerRef = useRef('');
   // VAD local : l'API développeur ne clôt pas un tour sur un flux continu,
-  // c'est donc le client qui signale début et fin de prise de parole.
-  const vadRef = useRef({ speaking: false, silenceMs: 0, preroll: [] as string[] });
+  // c'est donc le client qui signale début et fin de prise de parole. La machine
+  // à états est dans `voice-vad.ts` (pure, testée) : seuils, hystérésis de fin de
+  // tour, anti-écho et anti-micro-tour y sont réglés et vérifiables.
+  const vadRef = useRef(createVadState());
 
   const supported =
     typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia) && typeof WebSocket !== 'undefined';
@@ -127,6 +130,7 @@ export function useGeminiLive(): GeminiLive {
   const teardown = useCallback(() => {
     frameRef.current && cancelAnimationFrame(frameRef.current);
     frameRef.current = 0;
+    vadRef.current = createVadState();
     stopPlayback();
     processorRef.current?.disconnect();
     processorRef.current = null;
@@ -147,6 +151,9 @@ export function useGeminiLive(): GeminiLive {
   const ensureOutput = useCallback(() => {
     if (outCtxRef.current) return outCtxRef.current;
     const context = new AudioContext({ sampleRate: OUTPUT_RATE });
+    // Sur mobile, un contexte créé hors geste naît suspendu : sans reprise,
+    // chaque réponse est muette et l'utilisateur conclut que Kwes ne répond pas.
+    if (context.state === 'suspended') void context.resume().catch(() => undefined);
     const analyser = context.createAnalyser();
     analyser.fftSize = 1024;
     analyser.connect(context.destination);
@@ -361,36 +368,32 @@ export function useGeminiLive(): GeminiLive {
         let sum = 0;
         for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
         const rms = Math.sqrt(sum / samples.length);
-        const vad = vadRef.current;
         const frameMs = (CHUNK / INPUT_RATE) * 1000;
         const payload = toBase64(floatToPcm16(samples));
+        const output = outCtxRef.current;
+        const playing = output ? playingRef.current > output.currentTime + 0.02 : false;
 
-        if (!vad.speaking && rms > 0.015) {
-          vad.speaking = true;
-          vad.silenceMs = 0;
+        const decision = pushVadFrame(vadRef.current, {
+          rms,
+          frameMs,
+          nowMs: performance.now(),
+          playing,
+          payload,
+        });
+
+        if (decision.action === 'start') {
+          // Parler pendant la réponse coupe cette réponse : on arrête aussi la
+          // lecture locale, sinon l'écho du haut-parleur revient dans le micro.
+          if (decision.bargeIn) stopPlayback();
           socket_.send(JSON.stringify({ type: 'activity_start' }));
-          vad.preroll.forEach((buffered) => socket_.send(JSON.stringify({ type: 'audio', data: buffered })));
-          vad.preroll = [];
+          decision.flush.forEach((buffered) => socket_.send(JSON.stringify({ type: 'audio', data: buffered })));
+          return;
         }
-
-        if (vad.speaking) {
+        if (decision.send) {
           socket_.send(JSON.stringify({ type: 'audio', data: payload }));
-          if (rms < 0.008) {
-            vad.silenceMs += frameMs;
-            // 300 ms : le seuil de 380 ms ajoutait une demi-seconde perçue avant
-            // chaque réponse. Mesuré : premier son 720–900 ms côté serveur.
-            if (vad.silenceMs > 300) {
-              vad.speaking = false;
-              vad.silenceMs = 0;
-              socket_.send(JSON.stringify({ type: 'activity_end' }));
-            }
-          } else {
-            vad.silenceMs = 0;
-          }
-        } else {
-          // Pré-roll de 300 ms pour ne pas couper l'attaque du mot.
-          vad.preroll.push(payload);
-          if (vad.preroll.length > 5) vad.preroll.shift();
+        }
+        if (decision.action === 'end') {
+          socket_.send(JSON.stringify({ type: 'activity_end' }));
         }
       };
       source.connect(processor);

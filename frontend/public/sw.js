@@ -4,7 +4,7 @@
  * Mise à jour : la nouvelle version reste en attente jusqu'à l'accord de l'utilisateur
  * (message SKIP_WAITING envoyé par l'interface), jamais d'activation silencieuse.
  */
-const CACHE = 'kwes-shell-v5';
+const CACHE = 'kwes-shell-v6';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
+import json
 import logging
 import secrets
 import time
@@ -43,33 +46,63 @@ TICKET_TTL_SECONDS = 300
 POLICY_VIOLATION = 1008
 TRY_AGAIN_LATER = 1013
 
-# Tickets en mémoire : une seule instance Alpha, durée de vie 300 s. Un ticket
-# consommé ne peut pas resservir, même en cas de reconnexion navigateur.
-_TICKETS: dict[str, tuple[uuid.UUID, float, str | None]] = {}
+# Tickets signés, sans état : l'API tourne en `--workers 2`, et un ticket gardé
+# en mémoire n'était reconnu que par le worker qui l'avait émis. Mesuré avant
+# correctif : 9 ouvertures sur 12 refusées en 403 (`ticket_required`), soit une
+# session vocale qui échoue au démarrage une fois sur quatre après les deux
+# tentatives du client. La signature rend le ticket valable sur tous les workers
+# et après un redémarrage ; `_USED` ne sert qu'à refuser un rejeu immédiat.
+_USED: dict[str, float] = {}
 
 
 class TicketRequest(BaseModel):
     language: str | None = Field(default=None, max_length=16)
 
 
-def _issue_ticket(user_id: uuid.UUID, language: str | None = None) -> str:
+def _ticket_key(settings: Any) -> bytes:
+    """Clé de signature dérivée du secret JWT (jamais utilisée telle quelle)."""
+    base = (getattr(settings, "jwt_secret", "") or "").encode()
+    return hmac.new(base or b"kwes-voice-ticket", b"voice-ticket", hashlib.sha256).digest()
+
+
+def _sign(body: str, settings: Any) -> str:
+    return hmac.new(_ticket_key(settings), body.encode(), hashlib.sha256).hexdigest()[:43]
+
+
+def _issue_ticket(user_id: uuid.UUID, language: str | None = None, *, settings: Any = None) -> str:
     now = time.time()
-    for ticket, (_, expiry, _lang) in list(_TICKETS.items()):
+    for nonce, expiry in list(_USED.items()):
         if expiry <= now:
-            _TICKETS.pop(ticket, None)
-    ticket = secrets.token_urlsafe(32)
-    _TICKETS[ticket] = (user_id, now + TICKET_TTL_SECONDS, language)
-    return ticket
+            _USED.pop(nonce, None)
+    payload = {
+        "u": str(user_id),
+        "l": language or "fr",
+        "e": round(now + TICKET_TTL_SECONDS, 3),
+        "n": secrets.token_hex(8),
+    }
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    return f"{body}.{_sign(body, settings)}"
 
 
-def _consume_ticket(ticket: str) -> tuple[uuid.UUID, str | None] | None:
-    entry = _TICKETS.pop(ticket, None)
-    if entry is None:
+def _consume_ticket(ticket: str, *, settings: Any = None) -> tuple[uuid.UUID, str | None] | None:
+    try:
+        body, signature = ticket.split(".", 1)
+    except ValueError:
         return None
-    user_id, expiry, language = entry
-    if expiry <= time.time():
+    if not hmac.compare_digest(signature, _sign(body, settings)):
         return None
-    return user_id, language
+    try:
+        padded = body + "=" * (-len(body) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded))
+        user_id = uuid.UUID(str(payload["u"]))
+        expiry = float(payload["e"])
+        nonce = str(payload["n"])
+    except Exception:  # noqa: BLE001 — ticket malformé = ticket refusé
+        return None
+    if expiry <= time.time() or nonce in _USED:
+        return None
+    _USED[nonce] = expiry
+    return user_id, (str(payload.get("l") or "fr"))
 
 
 @router.get("/voice/config")
@@ -89,13 +122,23 @@ async def voice_config(settings: SettingsDep) -> dict[str, Any]:
 
 
 @router.post("/voice/ticket")
-async def voice_ticket(user: UserDep, payload: TicketRequest | None = None) -> dict[str, Any]:
-    language = resolve(payload.language if payload else None)
+async def voice_ticket(
+    user: UserDep, settings: SettingsDep, payload: TicketRequest | None = None
+) -> dict[str, Any]:
+    """Émet un ticket court. La langue par défaut est **le français**.
+
+    Un client qui n'envoie aucune préférence (ou un code inconnu) obtenait un
+    ticket sans langue, donc une session sans consigne : c'est par là que la
+    conversation partait en espagnol. Le défaut est désormais explicite, et il
+    est écrit dans le ticket pour que le journal de session le montre.
+    """
+    language = resolve(payload.language if payload else None) or resolve("fr")
+    code = language.code if language else "fr"
     return {
-        "ticket": _issue_ticket(user.id, language.code if language else None),
+        "ticket": _issue_ticket(user.id, code, settings=settings),
         "expires_in": TICKET_TTL_SECONDS,
         "url": "/api/v1/voice/live",
-        "language": language.code if language else None,
+        "language": code,
     }
 
 
@@ -179,7 +222,7 @@ async def voice_live(
         await websocket.close(code=POLICY_VIOLATION, reason="origin_not_allowed")
         return
 
-    consumed = _consume_ticket(ticket) if ticket else None
+    consumed = _consume_ticket(ticket, settings=settings) if ticket else None
     if consumed is None:
         await websocket.close(code=POLICY_VIOLATION, reason="ticket_required")
         return
@@ -236,6 +279,8 @@ async def voice_live(
         # complexe est terminée (le mode ne doit pas rester « collé »).
         "revert_pending": False,
         "answered": False,
+        # Reconstruction de la session Gemini : plafonnée pour ne pas boucler.
+        "revives": 0,
     }
     live = state["live"]
 
@@ -262,6 +307,69 @@ async def voice_live(
 
     started = time.monotonic()
     stop = asyncio.Event()
+
+    async def safe_send(payload: dict[str, Any]) -> None:
+        try:
+            await websocket.send_json(payload)
+        except Exception:  # noqa: BLE001 — le navigateur est parti
+            stop.set()
+
+    async def revive(reason: str) -> None:
+        """Reconstruit la session Gemini sans couper celle de l'utilisateur.
+
+        Une session Live meurt pour des raisons normales (durée de vie, 1007
+        quand un `activity_start` arrive pendant que le modèle élabore encore sa
+        réponse, coupure réseau). Avant, la pompe s'arrêtait et l'écran affichait
+        « Session vocale interrompue » : la conversation était perdue. Ici on
+        rouvre une session et on réinjecte les derniers échanges.
+        """
+        nonlocal pump
+        switching["value"] = True
+        state["revives"] += 1
+        usage_parts.append(state["live"].usage.as_dict())
+        try:
+            await state["live"].close()
+        except Exception:  # noqa: BLE001
+            pass
+        state["live"] = make_live(state["mode"])
+        try:
+            await state["live"].start()
+        except LiveUnavailable:
+            switching["value"] = False
+            await safe_send(
+                {
+                    "type": "error",
+                    "code": "VOICE_UNAVAILABLE",
+                    "message": "La voix s'est interrompue. Touchez pour reprendre.",
+                }
+            )
+            stop.set()
+            return
+        logger.info("Voix : session reconstruite (%s, essai %s)", reason, state["revives"])
+        await safe_send({"type": "reconnecting", "reason": reason})
+        await safe_send({"type": "state", "value": "listening"})
+        pump = asyncio.create_task(pump_gemini())
+        switching["value"] = False
+
+    def broken(reason: str) -> bool:
+        """Marque la session comme morte et planifie sa reconstruction, une fois."""
+        if switching["value"] or stop.is_set():
+            return False
+        if state["revives"] >= 3:
+            asyncio.create_task(
+                safe_send(
+                    {
+                        "type": "error",
+                        "code": "VOICE_STREAM_ENDED",
+                        "message": "La voix s'est interrompue. Touchez pour reprendre.",
+                    }
+                )
+            )
+            stop.set()
+            return False
+        switching["value"] = True  # le `finally` de la pompe ne doit pas couper
+        asyncio.create_task(revive(reason))
+        return True
 
     async def pump_gemini() -> None:
         current = state["live"]
@@ -290,12 +398,12 @@ async def voice_live(
         except Exception as exc:  # noqa: BLE001
             detail = str(exc).replace("\n", " ")[:300]
             logger.warning("Flux Gemini Live interrompu: %s — %s", type(exc).__name__, detail)
-            try:
-                await websocket.send_json(
-                    {"type": "error", "code": "VOICE_STREAM_ENDED", "message": "Session vocale interrompue."}
-                )
-            except Exception:  # noqa: BLE001
-                pass
+            if not stop.is_set() and not switching["value"] and broken("gemini_closed"):
+                # La reconstruction est planifiée : on ne coupe pas l'utilisateur.
+                return
+            await safe_send(
+                {"type": "error", "code": "VOICE_STREAM_ENDED", "message": "Session vocale interrompue."}
+            )
         finally:
             # Une bascule de mode annule volontairement la pompe : dans ce cas on
             # ne doit pas fermer la session vocale de l'utilisateur.
@@ -331,6 +439,15 @@ async def voice_live(
         nonlocal pump
         target = "thinking" if value == "thinking" else "fast"
         if target == state["mode"]:
+            return
+        if settings.google_live_thinking_model == settings.google_live_model:
+            # Même modèle des deux côtés et aucun `thinking_config` sur la voix :
+            # reconnecter la session ne changeait rien à la réponse, mais coûtait
+            # 1 à 2 s de silence et l'audio déjà généré. On répond simplement.
+            state["mode"] = target
+            await websocket.send_json(
+                {"type": "mode", "value": target, "model": state["live"].model_name, "reason": reason}
+            )
             return
         logger.info("Voix : bascule %s -> %s (%s)", state["mode"], target, reason)
         switching["value"] = True
@@ -383,24 +500,43 @@ async def voice_live(
             except WebSocketDisconnect:
                 break
             kind = str(message.get("type") or "")
-            if kind == "audio":
-                try:
-                    pcm = base64.b64decode(message.get("data") or "", validate=True)
-                except Exception:  # noqa: BLE001
+            try:
+                if kind == "audio":
+                    try:
+                        pcm = base64.b64decode(message.get("data") or "", validate=True)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    await state["live"].send_audio(pcm[:64_000])
+                elif kind == "text":
+                    text_in = str(message.get("text") or "")
+                    if settings.voice_auto_thinking and text_in.strip():
+                        await maybe_escalate(text_in)
+                    await state["live"].send_text(text_in)
+                elif kind == "activity_start":
+                    await state["live"].activity_start()
+                elif kind == "activity_end":
+                    await state["live"].activity_end()
+                elif kind == "stop_audio":
+                    await state["live"].end_audio()
+            except Exception as exc:  # noqa: BLE001 — session Gemini morte
+                # 1007 « Request contains an invalid argument » : un
+                # `activity_start` arrivé pendant que le modèle élaborait encore
+                # sa réponse fermait la session et coupait l'utilisateur. On
+                # reconstruit la session Gemini, celle du navigateur reste.
+                logger.warning(
+                    "Envoi Gemini refusé (%s) : %s — %s",
+                    kind,
+                    type(exc).__name__,
+                    str(exc).replace("\n", " ")[:160],
+                )
+                if switching["value"] and not stop.is_set():
+                    # Reconstruction en cours : la trame est perdue, pas la session.
                     continue
-                await state["live"].send_audio(pcm[:64_000])
-            elif kind == "text":
-                text_in = str(message.get("text") or "")
-                if settings.voice_auto_thinking and text_in.strip():
-                    await maybe_escalate(text_in)
-                await state["live"].send_text(text_in)
-            elif kind == "activity_start":
-                await state["live"].activity_start()
-            elif kind == "activity_end":
-                await state["live"].activity_end()
-            elif kind == "stop_audio":
-                await state["live"].end_audio()
-            elif kind == "mode":
+                if not broken(f"send_{kind}"):
+                    stop.set()
+                    break
+                continue
+            if kind == "mode":
                 requested = str(message.get("value") or "fast")
                 if requested == "thinking":
                     # Même en mode explicite, on redescend après la réponse :
@@ -408,7 +544,7 @@ async def voice_live(
                     state["revert_pending"] = True
                     state["answered"] = False
                 await switch_mode(requested)
-            elif kind == "close":
+            if kind == "close":
                 break
             if sum(u["elapsed_s"] for u in usage_parts) + state["live"].usage.elapsed > settings.google_live_max_session_seconds:
                 await websocket.send_json({"type": "closed", "reason": "max_duration"})
@@ -430,6 +566,8 @@ async def voice_live(
             "audio_in_s": round(sum(u["audio_in_s"] for u in usage_parts), 1),
             "audio_out_s": round(sum(u["audio_out_s"] for u in usage_parts), 1),
             "turns": sum(u["turns"] for u in usage_parts),
+            "dropped_frames": sum(u.get("dropped_frames", 0) for u in usage_parts),
+            "short_turns": sum(u.get("short_turns", 0) for u in usage_parts),
         }
         cost = estimate(usage["audio_in_s"], usage["audio_out_s"])
         logger.info(

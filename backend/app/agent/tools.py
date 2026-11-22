@@ -235,11 +235,6 @@ class ChatToolRunner:
         language: str | None = None,
         on_status: Callable[[str], None] | None = None,
     ) -> ToolRun:
-        # Grounding Google et appels de fonctions s'excluent (400 côté API).
-        # Une question d'information part sans outils pour que le modèle
-        # cherche lui-même ; seules les demandes d'écriture en déclarent.
-        if not _demande_ecriture(text):
-            return ToolRun(answer="")
         definitions = tool_definitions(self.registry)
         if not definitions:
             return ToolRun(answer="")
@@ -273,8 +268,15 @@ class ChatToolRunner:
             rounds = round_index + 1
             started = time.monotonic()
             try:
+                # Grounding Google et appels de fonctions s'excluent (400 côté
+                # API) : une question d'information part sans outils déclarés
+                # pour que le modèle cherche lui-même ; une demande d'écriture
+                # les déclare.
                 result = await self.llm.chat(
-                    messages, tools=definitions, max_tokens=900, purpose="chat"
+                    messages,
+                    tools=definitions if _demande_ecriture(text) else None,
+                    max_tokens=900,
+                    purpose="chat",
                 )
             except LLMError as exc:
                 logger.warning(

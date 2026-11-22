@@ -67,38 +67,6 @@ def test_la_recherche_web_n_est_plus_un_outil_de_chat() -> None:
     assert "browser_readonly" not in CHAT_TOOL_NAMES
 
 
-def test_outil_mode_executes_web_research_and_uses_its_result(
-    client: TestClient, app, headers, db_session_factory
-) -> None:
-    llm = ScriptedLLM(
-        [
-            _tool_call("web_research", {"query": "paiements mobiles Afrique de l'Ouest", "depth": "quick"}),
-            LLMResult(content="Les paiements mobiles progressent de 18 % par an selon la source citée."),
-        ]
-    )
-    _install(app, llm)
-
-    r = client.post(
-        "/api/v1/chat",
-        json={"message": "Cherche les chiffres des paiements mobiles", "mode": "outil"},
-        headers=headers,
-    )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert "18 %" in body["response"]
-    assert body["intent"] == "direct"
-
-    # L'outil a bien été proposé au modèle, puis exécuté.
-    assert [tool["function"]["name"] for tool in llm.seen[0]["tools"]] == list(CHAT_TOOL_NAMES)
-    with db_session_factory() as session:
-        message = session.get(Message, __import__("uuid").UUID(body["message_id"]))
-        assert message is not None
-        assert message.meta["tools"][0]["name"] == "web_research"
-        assert message.meta["tools"][0]["status"] == "executed"
-        audits = session.query(AuditLog).filter(AuditLog.action == "chat.tool.call").all()
-        assert audits and audits[0].decision == "allow"
-
-
 def test_tool_outside_chat_allowlist_is_refused(
     client: TestClient, app, headers
 ) -> None:

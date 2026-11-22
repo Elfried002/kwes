@@ -40,6 +40,18 @@ logger = logging.getLogger("kwes.tools")
 # La recherche web n'est plus un outil maison : Gemini interroge Google
 # lui-même (grounding natif) dans la même session. L'outil maison échouait
 # trop souvent et le modèle annonçait « outil indisponible ».
+MOTS_ECRITURE = (
+    "document", "rédige", "redige", "rédaction", "redaction", "rapport",
+    "note de", "mémorise", "memorise", "retiens", "souviens", "enregistre",
+)
+
+
+def _demande_ecriture(text: str) -> bool:
+    """Vrai si la demande exige un outil (document, mémoire), pas une réponse."""
+    minuscule = text.lower()
+    return any(mot in minuscule for mot in MOTS_ECRITURE)
+
+
 CHAT_TOOL_NAMES: tuple[str, ...] = (
     "remember",
     "document_write",
@@ -223,6 +235,11 @@ class ChatToolRunner:
         language: str | None = None,
         on_status: Callable[[str], None] | None = None,
     ) -> ToolRun:
+        # Grounding Google et appels de fonctions s'excluent (400 côté API).
+        # Une question d'information part sans outils pour que le modèle
+        # cherche lui-même ; seules les demandes d'écriture en déclarent.
+        if not _demande_ecriture(text):
+            return ToolRun(answer="")
         definitions = tool_definitions(self.registry)
         if not definitions:
             return ToolRun(answer="")

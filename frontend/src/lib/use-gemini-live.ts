@@ -98,6 +98,11 @@ export function useGeminiLive(): GeminiLive {
   const playingRef = useRef(0);
   const frameRef = useRef(0);
   const activeRef = useRef(false);
+  // Intention de l'utilisateur : la conversation doit rester ouverte même si
+  // la session Gemini tombe (durée de vie, réseau mobile, mise en veille).
+  const desiredRef = useRef(false);
+  const reconnectRef = useRef(0);
+  const reopenRef = useRef<() => void>(() => {});
   const pendingAnswerRef = useRef('');
   // VAD local : l'API développeur ne clôt pas un tour sur un flux continu,
   // c'est donc le client qui signale début et fin de prise de parole.
@@ -246,6 +251,7 @@ export function useGeminiLive(): GeminiLive {
 
   const activate = useCallback(async () => {
     if (activeRef.current || !supported) return;
+    desiredRef.current = true;
     activeRef.current = true;
     setState((prev) => ({
       ...prev,
@@ -315,17 +321,32 @@ export function useGeminiLive(): GeminiLive {
         }
       };
       socket.onclose = () => {
-        if (activeRef.current) {
-          setState((prev) => ({ ...prev, phase: 'idle', active: false, error: prev.error ?? null }));
-        }
+        const intention = desiredRef.current;
+        const etaitOuvert = activeRef.current;
         activeRef.current = false;
         teardown();
+        if (!intention) {
+          setState((prev) => ({ ...prev, phase: 'idle', active: false }));
+          return;
+        }
+        // Ouverture réussie puis fermeture : on rouvre sans rien demander.
+        // Première tentative en échec : on laisse le message d'erreur existant.
+        if (!etaitOuvert) {
+          setState((prev) => ({ ...prev, phase: 'idle', active: false }));
+          return;
+        }
+        setState((prev) => ({ ...prev, active: true, phase: 'idle', error: null }));
+        reconnectRef.current += 1;
+        const delai = Math.min(400 * reconnectRef.current, 4000);
+        window.setTimeout(() => {
+          if (desiredRef.current && !activeRef.current) reopenRef.current();
+        }, delai);
       };
       socket.onerror = () => {
         setState((prev) => ({ ...prev, error: 'Connexion vocale impossible.', phase: 'idle' }));
       };
       await new Promise<void>((resolve, reject) => {
-        socket.addEventListener('open', () => resolve(), { once: true });
+        socket.addEventListener('open', () => { reconnectRef.current = 0; resolve(); }, { once: true });
         socket.addEventListener('error', () => reject(new Error('ws')), { once: true });
       });
 
@@ -401,7 +422,25 @@ export function useGeminiLive(): GeminiLive {
     }
   }, [ensureOutput, handleMessage, supported, teardown]);
 
+  reopenRef.current = () => {
+    void activate();
+  };
+
+  // Mobile : la mise en arrière-plan coupe le micro et la session. Au retour,
+  // on rouvre sans que l'utilisateur ait à toucher quoi que ce soit.
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const auRetour = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!desiredRef.current || activeRef.current) return;
+      reopenRef.current();
+    };
+    document.addEventListener('visibilitychange', auRetour);
+    return () => document.removeEventListener('visibilitychange', auRetour);
+  }, []);
+
   const deactivate = useCallback(() => {
+    desiredRef.current = false;
     activeRef.current = false;
     const socket = socketRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {

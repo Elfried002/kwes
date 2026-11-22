@@ -46,6 +46,7 @@ pnpm-debug.log*
 # sessions et jetons de test (contiennent des jetons Supabase réels)
 .sb_session.json
 .sb_bearer
+.sb_bearer_verif
 # sauvegardes locales de .env (contiennent des clés en clair)
 .env.bak.*
 .env.before_*

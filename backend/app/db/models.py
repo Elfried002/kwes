@@ -294,6 +294,26 @@ class Memory(TimestampMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class UserOnboarding(TimestampMixin, Base):
+    """État de la phase de découverte (première conversation).
+
+    Une ligne par utilisateur. `step` compte les questions déjà posées (0..3) ;
+    `completed_at` non nul signifie que la séquence est terminée et qu'elle ne
+    doit plus jamais être rejouée, même dans une nouvelle conversation.
+    """
+
+    __tablename__ = "user_onboarding"
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    step: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Approval(Base):
     __tablename__ = "approvals"
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -819,6 +839,7 @@ ALL_MODELS = [
     Skill,
     SkillVersion,
     Memory,
+    UserOnboarding,
     Approval,
     Integration,
     AuditLog,

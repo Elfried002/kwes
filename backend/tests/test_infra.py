@@ -60,9 +60,11 @@ def test_all_tables_exist_with_expected_names() -> None:
         # Quotas et kill-switch (migration 0019)
         "tenant_quotas",
         "agent_overrides",
+        # Découverte du premier contact (migration 0021)
+        "user_onboarding",
     }
     assert set(Base.metadata.tables) == expected
-    assert len(ALL_MODELS) == 34
+    assert len(ALL_MODELS) == 35
 
 
 def test_task_columns_match_data_model() -> None:

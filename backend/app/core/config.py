@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     max_tool_rounds: int = 2
     max_tool_calls_per_round: int = 3
     max_memories_in_prompt: int = 12
+    # Apprentissage progressif : les faits durables énoncés par l'utilisateur
+    # sont extraits par règles à chaque tour (aucun appel modèle, quelques ms).
+    memory_autolearn: bool = True
     max_step_retries: int = 2
     step_retry_backoff_seconds: float = 0.25
     skill_default_timeout_seconds: float = 60.0

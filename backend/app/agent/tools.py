@@ -72,8 +72,12 @@ Règles :
   n'abandonnes pas : tu reprends les titres et extraits renvoyés par la recherche, tu
   réponds avec ce que tu as, et tu précises ce qui n'a pas pu être lu.
 - Une page précise à lire (URL donnée) : appelle `browser_readonly`.
-- Un fait durable sur la personne (préférence, objectif, contrainte, contexte de travail) :
-  appelle `remember`, sans le lui demander.
+- Un fait durable sur la personne (prénom, métier, activité, projet, préférence,
+  contrainte, objectif) : il est mémorisé automatiquement à chaque tour, donc tu n'as pas
+  à le redemander. Si tu dois le retenir explicitement, appelle `remember`.
+- Sers-toi naturellement de ce que tu sais déjà d'elle (prénom, activité, préférences)
+  pour personnaliser, sans réciter la liste. Ne prétends jamais te souvenir d'un fait
+  absent du bloc de mémoire : si l'information manque, demande-la.
 - Un document à produire : SEULEMENT si la personne demande explicitement un document,
   une note, une lettre, un rapport ou un compte rendu. Pour une question simple
   (prix, actualité, comparaison, définition), réponds directement dans la
@@ -86,6 +90,7 @@ Règles :
   document par son titre, l'interface fournit le bouton d'ouverture.
 - Date et heure actuelles (UTC) : {now}. Ne devine jamais la date.
 {memory_block}
+{discovery_block}
 {language_line}"""
 
 TOOL_USAGE_ANSWER_FALLBACK = (
@@ -234,6 +239,7 @@ class ChatToolRunner:
         memories: Sequence[str] | None = None,
         language: str | None = None,
         on_status: Callable[[str], None] | None = None,
+        system_extra: str = "",
     ) -> ToolRun:
         definitions = tool_definitions(self.registry)
         if not definitions:
@@ -245,6 +251,7 @@ class ChatToolRunner:
                 "content": SYSTEM_PROMPT.format(
                     now=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
                     memory_block=memory_block(memories or []),
+                    discovery_block=(system_extra or "").strip(),
                     language_line=(
                         f"Langue de réponse : {language}. "
                         "Réponds dans la langue de la personne, jamais dans une autre."

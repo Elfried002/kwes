@@ -140,7 +140,10 @@ class LiveReasoner:
 
         model = self.settings.google_text_model
         outillage = list(build_tools(tools or []) or [])
-        outillage.append(types.Tool(google_search=types.GoogleSearch()))
+        # Gemini refuse (400) le grounding Google et des déclarations de
+        # fonctions dans la même requête : on garde l'un ou l'autre.
+        if not outillage:
+            outillage.append(types.Tool(google_search=types.GoogleSearch()))
         config = types.GenerateContentConfig(
             system_instruction=system or None,
             tools=outillage,

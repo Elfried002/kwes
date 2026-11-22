@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import func, select
 
@@ -65,13 +65,44 @@ async def get_document(
 
 @router.get("/documents/{document_id}/download")
 async def download_document(
-    document_id: uuid.UUID, user: UserDep, tenant: TenantDep, session: SessionDep
-) -> PlainTextResponse:
+    document_id: uuid.UUID,
+    user: UserDep,
+    tenant: TenantDep,
+    session: SessionDep,
+    format: str | None = Query(default=None, pattern="^(docx|pdf)$"),
+) -> Response:
+    """Télécharge le document : texte brut par défaut, Word ou PDF à la demande.
+
+    La conversion est calculée ici, donc rien n'est dupliqué en base et un
+    document ancien profite immédiatement des nouveaux formats.
+    """
     row = await _owned_document(session, tenant, document_id)
     extension = EXTENSIONS.get(row.format, "txt")
     safe_title = "".join(
         char if char.isalnum() or char in " -_" else "-" for char in row.title
     ).strip() or "document"
+    demande = (format or "").lower()
+    if demande in {"docx", "pdf"}:
+        from app.documents.export import to_docx, to_pdf
+
+        try:
+            octets = to_docx(row.title, row.content) if demande == "docx" else to_pdf(row.title, row.content)
+        except Exception as erreur:  # noqa: BLE001
+            raise HTTPException(
+                status_code=500, detail="Conversion du document impossible."
+            ) from erreur
+        media = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if demande == "docx"
+            else "application/pdf"
+        )
+        return Response(
+            content=octets,
+            media_type=media,
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_title[:80]}.{demande}"'
+            },
+        )
     return PlainTextResponse(
         content=row.content,
         media_type=MEDIA_TYPES.get(row.format, "text/plain; charset=utf-8"),

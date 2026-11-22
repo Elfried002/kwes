@@ -154,7 +154,9 @@ class LiveTextClient:
 
         declarations = build_tools(tools)
         outillage = list(declarations or [])
-        outillage.append(types.Tool(google_search=types.GoogleSearch()))
+        # Grounding et appels de fonctions ne cohabitent pas (400) : l'un ou l'autre.
+        if not outillage:
+            outillage.append(types.Tool(google_search=types.GoogleSearch()))
         config = types.GenerateContentConfig(
             system_instruction=system or None,
             tools=outillage,

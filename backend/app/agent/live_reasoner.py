@@ -307,21 +307,37 @@ class LiveReasoner:
         purpose: str = "chat",
         timeout: float | None = None,
     ) -> AsyncIterator[str]:
-        model = self.model_for(purpose)
+        """Flux de texte d'une conversation.
+
+        Le flux passe par `generate_content_stream` sur le modèle **texte** :
+        une session Live est réservée à l'audio bidirectionnel et refuse un
+        modèle non-Live (`1008 … is not supported for bidiGenerateContent`),
+        ce qui faisait échouer chaque `/chat/stream` en
+        « service indisponible ». Le chemin est le même que la réponse non
+        streamée (`_grounded`) : même modèle, même recherche Google native.
+        """
         system, turns = _turns(messages)
         if not turns:
             return
-        async with self._sdk().aio.live.connect(
-            model=model, config=self._config(system, None, thinking=purpose in {"plan", "mission"})
-        ) as session:
-            await session.send_client_content(turns=turns[-1], turn_complete=True)
-            async for message in session.receive():
-                content = getattr(message, "server_content", None)
-                if content is None:
-                    continue
-                transcription = getattr(content, "output_transcription", None)
-                chunk = str(getattr(transcription, "text", "") or "") if transcription else ""
-                if chunk:
-                    yield chunk
-                if getattr(content, "turn_complete", False):
-                    return
+        model = self.settings.google_text_model
+        config = types.GenerateContentConfig(
+            system_instruction=system or None,
+            tools=(
+                [types.Tool(google_search=types.GoogleSearch())]
+                if self.settings.native_search_enabled
+                else None
+            ),
+            temperature=self.settings.gemini_temperature,
+        )
+        limit = timeout or self.settings.gemini_timeout_seconds
+        try:
+            async with asyncio.timeout(limit):
+                flux = await self._sdk().aio.models.generate_content_stream(
+                    model=model, contents=list(turns), config=config
+                )
+                async for chunk in flux:
+                    texte = str(getattr(chunk, "text", "") or "")
+                    if texte:
+                        yield texte
+        except TimeoutError as exc:
+            raise TimeoutError(f"Gemini ({model}) sans réponse en {limit:.0f} s.") from exc

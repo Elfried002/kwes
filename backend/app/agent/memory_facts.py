@@ -281,11 +281,30 @@ def _extract_constraint(text: str) -> str | None:
     )
 
 
+def _short_answer(value: str) -> str | None:
+    """Réponse courte à une question de découverte (« surtout… », « je fais… »)."""
+    cleaned = _clean(value)
+    cleaned = re.sub(
+        r"^(?:surtout|plut[oô]t|en fait|bah|ben|et bien|euh)\s+", "", cleaned, flags=re.IGNORECASE
+    )
+    if len(cleaned) < 3 or len(cleaned) > 160 or cleaned.endswith("?"):
+        return None
+    if _strip_accents(cleaned).lower() in {
+        "merci", "ok", "d'accord", "daccord", "oui", "non", "rien", "aucune idée",
+        "je ne sais pas", "sais pas", "comme tu veux", "peu importe",
+        "bonjour", "bonsoir", "salut", "hello", "ca va", "ça va",
+        "comment vas-tu", "comment vas tu", "comment allez-vous",
+    }:
+        return None
+    return cleaned
+
+
 def extract_facts(text: str, *, discovery_topic: str | None = None) -> list[Fact]:
     """Extrait les faits durables d'un message. Aucune écriture ici.
 
     `discovery_topic` indique la question de découverte posée au tour précédent,
-    ce qui permet d'interpréter une réponse courte (« Elfried ») comme un prénom.
+    ce qui permet d'interpréter une réponse courte (« Elfried », « surtout
+    répondre aux clients ») comme un prénom, une activité ou une priorité.
     """
     raw = (text or "").strip()
     if len(raw) < 2 or len(raw) > 4000:
@@ -319,6 +338,15 @@ def extract_facts(text: str, *, discovery_topic: str | None = None) -> list[Fact
     contrainte = _extract_constraint(raw)
     if contrainte:
         found["contrainte"] = contrainte
+
+    # Réponse directe à une question de découverte : la règle explicite n'a pas
+    # matché et aucun autre fait n'a été trouvé, mais la personne répond bien au
+    # sujet demandé. Sans cette condition, « je préfère… » deviendrait une
+    # activité au tour suivant.
+    if not found and discovery_topic in {"activite", "priorite"}:
+        answer = _short_answer(raw)
+        if answer:
+            found[discovery_topic] = answer
 
     facts: list[Fact] = []
     for key, value in found.items():

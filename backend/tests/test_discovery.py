@@ -328,5 +328,16 @@ def test_sensitive_data_is_never_stored(
     assert extract_facts("Je m'appelle Awa") != []
 
 
+def test_short_answers_to_discovery_questions_are_kept() -> None:
+    facts = extract_facts(
+        "Surtout m'aider à répondre à mes clients plus vite", discovery_topic="priorite"
+    )
+    assert [fact.content for fact in facts] == [
+        "Objectif prioritaire : m'aider à répondre à mes clients plus vite"
+    ]
+    assert extract_facts("Bonjour", discovery_topic="priorite") == []
+    assert extract_facts("Comment vas-tu ?", discovery_topic="activite") == []
+
+
 def test_autolearn_can_be_disabled(settings) -> None:
     assert settings.memory_autolearn is True

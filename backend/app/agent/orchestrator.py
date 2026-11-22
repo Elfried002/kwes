@@ -482,7 +482,10 @@ class Orchestrator:
             onboarding=onboarding,
         )
         step = onboarding.step if onboarding is not None else 0
-        topic = discovery.question_for(step) if active else None
+        # La réponse de l'utilisateur porte sur la question posée au tour
+        # précédent : c'est `step - 1`. `step` désigne, lui, la question à poser
+        # maintenant.
+        topic = discovery.question_for(step - 1) if active else None
 
         answered: set[str] = set()
         if self.settings.memory_autolearn:

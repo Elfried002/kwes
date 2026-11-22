@@ -106,6 +106,29 @@ class Settings(BaseSettings):
     # le texte utilise un modèle qui sait faire du grounding Google Search.
     google_text_model: str = "gemini-3.8-flash"
 
+    # --- Fournisseur secondaire : DeepSeek (recherche approfondie) --------
+    # Ajouté sur accord explicite : il ne remplace pas Gemini et n'est jamais un
+    # repli automatique. Il sert uniquement à la synthèse multi-sources, où le
+    # parcours réel (plusieurs requêtes + plusieurs pages lues) demande un
+    # modèle de texte à contexte long. La clé est lue depuis l'environnement
+    # (DEEPSEEK_API_KEY), jamais écrite dans le code ni journalisée.
+    deepseek_api_key: str = ""
+    #: Modèle réellement exposé par la clé de production (vérifié le 22/11 :
+    #: `GET /models` renvoie `deepseek-flash` et `deepseek-v4-pro` ;
+    #: `deepseek-chat` n'y figure pas et répond « Model Not Exist »).
+    deepseek_model: str = "deepseek-flash"
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_timeout_seconds: float = 60.0
+    deepseek_temperature: float = 0.2
+    #: Plafond de sortie : le raisonnement interne du modèle consomme une part
+    #: du budget. 1400 laissait un contenu vide sur une synthèse longue.
+    deepseek_max_output_tokens: int = 2600
+    #: Parcours « recherche approfondie » : plusieurs requêtes, plusieurs pages.
+    deep_research_max_queries: int = 4
+    deep_research_max_pages: int = 5
+    #: Caractères d'extrait par source envoyés au modèle (5 × 2000 ≈ 2 500 jetons).
+    deep_research_source_chars: int = 2000
+
     # --- API -------------------------------------------------------------
     cors_origins: str = DEFAULT_CORS_ORIGINS
     max_request_body_bytes: int = 1_500_000
@@ -247,6 +270,27 @@ class Settings(BaseSettings):
     def voice_backend(self) -> str:
         """Fournisseur vocal actif, sans ambiguïté : gemini ou dégradé."""
         return "gemini" if self.gemini_api_key else "indisponible"
+
+    @property
+    def deepseek_key(self) -> str:
+        """Clé DeepSeek en clair, jamais journalisée.
+
+        En environnement `test`, aucune clé n'est résolue : un `.env` de
+        production présent sur le poste ne doit pas transformer la suite en
+        appel payant (même garde-fou que `gemini_api_key`).
+        """
+        if self.app_env == "test":
+            return ""
+        explicit = (self.deepseek_api_key or "").strip()
+        if explicit:
+            return explicit
+        from app.core.secrets import resolve_secret
+
+        return resolve_secret("DEEPSEEK_API_KEY").strip()
+
+    @property
+    def deepseek_available(self) -> bool:
+        return bool(self.deepseek_key)
 
     @property
     def effective_database_url(self) -> str:

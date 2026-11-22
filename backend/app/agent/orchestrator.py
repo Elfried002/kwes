@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agent.audit import record_audit
+from app.agent.deep_research import DeepResearchResult, DeepResearchRunner
 from app.agent.llm import (
     GeminiTextClient,
     _classify,
@@ -53,7 +55,7 @@ from app.db.models import (
     Task,
     TaskStep,
 )
-from app.agent.tools import ChatToolRunner, ToolRun
+from app.agent.tools import ChatToolRunner, ToolInvocation, ToolRun
 from app.skills.base import FetchFn, SkillContext, SkillError, SkillResult
 from app.skills.fetch import make_fetcher
 from app.skills.registry import SkillRegistry
@@ -146,6 +148,7 @@ class Orchestrator:
         events: EventBus | None = None,
         controls: TaskControl | None = None,
         fetcher: FetchFn | None = None,
+        deep_research: DeepResearchRunner | None = None,
     ) -> None:
         self.settings = settings
         self.db = db
@@ -165,6 +168,13 @@ class Orchestrator:
             llm=llm,
             fetcher=self.fetcher,
             db=db,
+        )
+        # Parcours explicite « recherche approfondie » : plusieurs requêtes,
+        # plusieurs pages lues, synthèse DeepSeek citée. Le fetcher est délégué
+        # (pas capturé) pour suivre un rebranchement ultérieur — sinon un test
+        # ou un remplacement de fetcher laisserait un client réseau parallèle.
+        self.deep_research = deep_research or DeepResearchRunner(
+            settings, fetcher=lambda url: self.fetcher(url)
         )
 
     # ==================================================================
@@ -213,6 +223,9 @@ class Orchestrator:
             intent = "direct"
         elif mode == "outil":
             intent = "outil"
+        elif mode in ("recherche", "deep"):
+            # Parcours explicite demandé par l'appelant : pas de classification.
+            intent = "recherche"
         else:
             # Classification instantanée : une session Live de plus coûtait 2 à 4 s.
             intent = _classify(text)
@@ -260,11 +273,19 @@ class Orchestrator:
 
         memories = await self._load_memories(session, user.id)
         tool_run = ToolRun(answer="")
-        if intent == "outil" and self.tool_runner.available:
-            # Langue réellement imposée : celle du message, sinon déduite.
-            langue_outil = language if language in {"fr", "en"} else (
-                "en" if _looks_english(text) else "fr"
+        research: DeepResearchResult | None = None
+        langue_outil = language if language in {"fr", "en"} else (
+            "en" if _looks_english(text) else "fr"
+        )
+        if intent == "recherche":
+            tool_run, research = await self._run_deep_research(
+                session=session, user=user, text=text, language=langue_outil
             )
+            response = tool_run.answer.strip()
+            if not response:
+                response = await self._direct_reply(text, history, language, memories=memories)
+        elif intent == "outil" and self.tool_runner.available:
+            # Langue réellement imposée : celle du message, sinon déduite.
             tool_run = await self.tool_runner.run(
                 session=session,
                 user_id=user.id,
@@ -286,9 +307,10 @@ class Orchestrator:
             content=response,
             content_type="text",
             meta={
-                "intent": "direct" if intent == "outil" else intent,
+                "intent": "direct" if intent in ("outil", "recherche") else intent,
                 "mock": self.settings.llm_is_mock,
                 "tools": [item.as_dict() for item in tool_run.invocations],
+                **({"research": research.meta()} if research is not None else {}),
             },
         )
         session.add(assistant_message)
@@ -317,8 +339,73 @@ class Orchestrator:
             response=response,
             # Un appel d'outil reste une réponse conversationnelle côté contrat public ;
             # le détail des outils est dans message.meta["tools"].
-            intent="direct" if intent == "outil" else intent,
+            intent="direct" if intent in ("outil", "recherche") else intent,
         )
+
+    async def _run_deep_research(
+        self,
+        *,
+        session: AsyncSession,
+        user: CurrentUser,
+        text: str,
+        language: str,
+        on_status: Any = None,
+    ) -> tuple[ToolRun, DeepResearchResult]:
+        """Exécute le parcours approfondi et le journalise comme un appel d'outil.
+
+        Le parcours est réel : requêtes de recherche, lecture de pages, synthèse
+        citée. Ce qui n'a pas pu être lu est dit ; aucun résultat n'est simulé.
+        """
+        started = time.monotonic()
+        try:
+            result = await self.deep_research.run(text, language=language, on_status=on_status)
+        except Exception as exc:  # noqa: BLE001 — un défaut ne doit pas couper la conversation
+            logger.exception("Recherche approfondie en échec")
+            message = (
+                "La recherche approfondie a échoué avant de produire une synthèse "
+                f"({type(exc).__name__}). Aucun résultat n'est inventé ; réessayez ou "
+                "reformulez la demande."
+            )
+            invocation = ToolInvocation(
+                name="deep_research",
+                arguments={"query": text[:200]},
+                status="error",
+                summary=message,
+                code="RESEARCH_FAILED",
+            )
+            return ToolRun(answer=message, invocations=[invocation], rounds=1), DeepResearchResult(
+                answer=message, queries=[], error="RESEARCH_FAILED"
+            )
+
+        await record_audit(
+            session,
+            user_id=user.id,
+            action="chat.research.deep",
+            decision="error" if result.error else "allow",
+            actor_type="agent",
+            resource_type="skill",
+            resource_id="deep_research",
+            metadata={
+                "queries": len(result.queries),
+                "pages_read": result.read_count,
+                "sources_cited": result.cited_count,
+                "model": result.model,
+                "duration_ms": int((time.monotonic() - started) * 1000),
+                **({"code": result.error} if result.error else {}),
+            },
+        )
+        invocation = ToolInvocation(
+            name="deep_research",
+            arguments={"query": text[:200]},
+            status="error" if result.error else "executed",
+            summary=(
+                f"{result.read_count} page(s) lue(s), {result.cited_count} source(s) citée(s)"
+                + (f" — {result.error}" if result.error else "")
+            ),
+            code=result.error,
+            output=result.meta(),
+        )
+        return ToolRun(answer=result.answer, invocations=[invocation], rounds=1), result
 
     async def _load_memories(self, session: AsyncSession, user_id: uuid.UUID) -> list[str]:
         """Faits mémorisés du tenant actif, injectés dans le prompt de conversation.
@@ -489,6 +576,8 @@ class Orchestrator:
             intent = "direct"
         elif mode == "outil":
             intent = "outil"
+        elif mode in ("recherche", "deep"):
+            intent = "recherche"
         else:
             # Classification instantanée : une session Live de plus coûtait 2 à 4 s.
             intent = _classify(text)
@@ -546,7 +635,49 @@ class Orchestrator:
         chunks: list[str] = []
         tool_invocations: list[dict[str, Any]] = []
         tool_run = ToolRun(answer="")
-        if intent == "outil" and self.tool_runner.available:
+        research: DeepResearchResult | None = None
+        if intent == "recherche":
+            # Parcours approfondi : les états réels (requêtes, pages lues,
+            # synthèse) sont poussés pendant que le travail tourne, pour que
+            # l'attente ne soit pas un écran muet.
+            yield ChatStreamEvent(
+                "meta", {**base_meta, "label": "Recherche approfondie…", "intent": "recherche"}
+            )
+            etats: asyncio.Queue[str] = asyncio.Queue()
+
+            def _etat_recherche(label: str) -> None:
+                etats.put_nowait(label)
+
+            langue_outil = language if language in {"fr", "en"} else (
+                "en" if _looks_english(text) else "fr"
+            )
+            travail = asyncio.create_task(
+                self._run_deep_research(
+                    session=session,
+                    user=user,
+                    text=text,
+                    language=langue_outil,
+                    on_status=_etat_recherche,
+                )
+            )
+            while not travail.done() or not etats.empty():
+                try:
+                    label = await asyncio.wait_for(etats.get(), timeout=0.4)
+                except asyncio.TimeoutError:
+                    continue
+                yield ChatStreamEvent(
+                    "meta", {**base_meta, "label": label, "intent": "recherche"}
+                )
+            tool_run, research = await travail
+            tool_invocations = [item.as_dict() for item in tool_run.invocations]
+            answer = tool_run.answer.strip()
+            if answer:
+                chunks = chunk_for_stream(answer, size=180)
+                for chunk in chunks:
+                    yield ChatStreamEvent(
+                        "delta", {**base_meta, "delta": chunk, "intent": "direct"}
+                    )
+        elif intent == "outil" and self.tool_runner.available:
             try:
                 # Retour immédiat puis états intermédiaires : sans cela, une
                 # recherche laissait l'écran muet jusqu'à 50 s.
@@ -642,6 +773,7 @@ class Orchestrator:
                 "mock": self.settings.llm_is_mock,
                 "streamed": True,
                 "tools": tool_invocations,
+                **({"research": research.meta()} if research is not None else {}),
             },
         )
         session.add(assistant_message)

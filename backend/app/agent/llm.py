@@ -436,6 +436,22 @@ def _classify(text: str) -> str:
     Une demande d'information simple doit passer par les outils, pas par un plan.
     """
     lowered = text.lower()
+    # Une recherche approfondie est un parcours à part : plusieurs requêtes,
+    # plusieurs pages lues, synthèse citée. Elle doit être reconnue AVANT les
+    # marqueurs de mission, sinon « compare plusieurs sources » créait une
+    # mission dont le plan ne lisait aucune page.
+    deep_research_markers = (
+        "recherche approfondie", "recherche multi-source", "recherche multi source",
+        "recherche multisource", "multi-sources", "multi sources", "sources multiples",
+        "plusieurs sources", "croise les sources", "croiser les sources",
+        "compare plusieurs sources", "comparaison de sources", "comparaison de plusieurs",
+        "recherche documentée", "recherche documentee", "recherche poussée",
+        "recherche poussee", "recherche large", "deep research", "deep dive",
+        "étude comparative", "etude comparative", "synthèse documentée",
+        "synthese documentee", "synthèse sourcée", "synthese sourcee",
+    )
+    if any(marker in lowered for marker in deep_research_markers) and len(text.strip()) > 12:
+        return "recherche"
     # Une mission suppose plusieurs étapes explicites, pas une simple question.
     multi_step_markers = (
         "mission", "rapport", "plan d'action", "stratégie", "strategie",
